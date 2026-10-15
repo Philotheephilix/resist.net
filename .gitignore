@@ -10,3 +10,5 @@ offline-cache/
 *.db
 docs/
 .agents/
+.claude/
+skills-lock.json
