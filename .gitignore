@@ -8,3 +8,4 @@ dist/
 cache/
 offline-cache/
 *.db
+docs/
