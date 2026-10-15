@@ -1,0 +1,18 @@
+{
+  "name": "@resist/proxy-client",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@resist/shared": "*",
+    "ethers": "^6.0.0",
+    "wrtc": "^0.4.7"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}
