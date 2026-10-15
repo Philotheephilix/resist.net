@@ -9,3 +9,4 @@ cache/
 offline-cache/
 *.db
 docs/
+.agents/
