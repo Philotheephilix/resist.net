@@ -17,6 +17,12 @@ export default function NodeCount() {
   const prevLiveProbesRef = useRef<number | null>(null)
 
   useEffect(() => {
+    if (stale && liveRef.current) {
+      liveRef.current.textContent = 'Network statistics may be outdated — connection issue detected'
+    }
+  }, [stale])
+
+  useEffect(() => {
     let mounted = true
     let consecutiveFailures = 0
     let abortController = new AbortController()
@@ -29,10 +35,10 @@ export default function NodeCount() {
       const callSeq = ++seq
       try {
         const res = await fetch('/api/probe-events?stats=true', { signal })
-        if (!mounted) return
+        if (!mounted || callSeq !== seq) return
         if (res.ok) {
           const data = await res.json()
-          if (!mounted) return
+          if (!mounted || callSeq !== seq) return
           setStats(data)
           setStale(false)
           consecutiveFailures = 0

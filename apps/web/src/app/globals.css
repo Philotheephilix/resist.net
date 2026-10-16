@@ -4,7 +4,7 @@
 @tailwind utilities;
 
 :root {
-  font-family: "TWK Lausanne", system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
 }
 
 body {
@@ -54,14 +54,17 @@ body {
 }
 
 .event-item {
-  animation: fadeInUp 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fadeInUp 240ms cubic-bezier(0.16, 1, 0.3, 1) var(--animation-delay, 0ms) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .skeleton-shimmer,
   .live-dot,
-  .event-item {
-    animation: none;
+  .event-item,
+  .leaflet-container *,
+  [style*="slideInFromTop"] {
+    animation: none !important;
+    transform: none !important;
   }
 }
 

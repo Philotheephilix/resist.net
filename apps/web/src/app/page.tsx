@@ -5,6 +5,7 @@ import { useState, useMemo, useSyncExternalStore } from 'react'
 import BlockEventList from '../components/BlockEventList'
 import FilterBar, { FilterType } from '../components/FilterBar'
 import NodeCount from '../components/NodeCount'
+import VolunteerCount from '../components/VolunteerCount'
 import { useBlockEvents } from '../hooks/useBlockEvents'
 
 // Leaflet must be client-only — no SSR
@@ -68,10 +69,16 @@ export default function HomePage() {
       style={{ backgroundColor: '#0a0a0a', color: '#ffffff' }}
     >
       <a
-        href="#events-panel"
+        href="#map-region"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
       >
-        Skip to events
+        Skip to map
+      </a>
+      <a
+        href="#events-panel"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
+      >
+        Skip to events list
       </a>
       {/* ─── Top bar ── glass morphism header ── */}
       <header
@@ -112,10 +119,11 @@ export default function HomePage() {
 
         {/* Stats + sidebar toggle */}
         <div className="flex items-center gap-2.5">
+          <VolunteerCount />
           <NodeCount />
           <button
             onClick={() => setSidebarOpen((v) => !v)}
-            className="rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+            className="rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] min-w-[44px]"
             style={sidebarOpen
               ? { background: 'rgba(255,255,255,0.12)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.16)' }
               : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.08)' }
@@ -131,6 +139,8 @@ export default function HomePage() {
 
       {/* ─── Filter bar ── */}
       <div
+        role="search"
+        aria-label="Event filters"
         className="z-10 flex-shrink-0 px-5 py-2.5"
         style={{
           background: '#0d0d0f',
@@ -141,7 +151,7 @@ export default function HomePage() {
       </div>
 
       {/* ─── Main content ── */}
-      <main className="relative flex min-h-0 flex-1">
+      <main id="map-region" className="relative flex min-h-0 flex-1">
         {/* Map */}
         <div className="relative flex-1">
           <CensorshipMap events={events} sidebarOpen={sidebarOpen} />
@@ -239,7 +249,6 @@ export default function HomePage() {
         <aside
           id="events-panel"
           aria-label="Recent block events"
-          {...(!sidebarOpen ? { 'aria-hidden': 'true' as const } : {})}
           className="flex w-80 flex-shrink-0 flex-col overflow-hidden"
           style={{
             display: sidebarOpen ? undefined : 'none',
@@ -249,7 +258,7 @@ export default function HomePage() {
             borderLeft: '1px solid rgba(255,255,255,0.07)',
           }}
         >
-          <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />
+          {isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
         </aside>
       </main>
 
@@ -257,8 +266,7 @@ export default function HomePage() {
       <div
         role="region"
         className="flex-shrink-0 sm:hidden"
-        aria-label="Recent block events (mobile)"
-        {...(isDesktop || sidebarOpen ? { inert: true } : {})}
+        aria-label="Recent block events"
         style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
       >
         <div
@@ -269,7 +277,7 @@ export default function HomePage() {
             WebkitBackdropFilter: 'blur(20px)',
           }}
         >
-          <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />
+          {!isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
         </div>
       </div>
     </div>

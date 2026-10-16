@@ -45,7 +45,12 @@ async function queryArkivProbeEvents(opts: {
   includeRawWallets?: boolean
 }) {
   const rpcUrl = process.env['ARKIV_RPC_URL']
-  if (!rpcUrl) return null
+  if (!rpcUrl) {
+    if (process.env['NODE_ENV'] !== 'development') {
+      console.warn('[probe-events] ARKIV_RPC_URL not set — returning empty dataset')
+    }
+    return null
+  }
 
   try {
     const { ArkivReadClient } = await import('@resist/arkiv-sdk/src/client.js')
@@ -62,7 +67,7 @@ async function queryArkivProbeEvents(opts: {
       // Normalise blockType against known-good set — Arkiv rows written by adversarial
       // nodes could contain arbitrary strings; ensure only documented values reach clients.
       blockType: (r.blocktype && VALID_BLOCK_TYPES.has(r.blocktype) ? r.blocktype : null) as string | null,
-      geohash: r.geohash,
+      geohash: /^[a-z0-9]{1,12}$/.test(r.geohash ?? '') ? r.geohash : null,
       timestamp: r.timestamp,
       // Stats queries receive the raw wallet so distinct-node counting is accurate.
       // Non-stats (map/list) queries receive truncated wallets to prevent operator
@@ -100,8 +105,8 @@ function checkRateLimit(ip: string): boolean {
         }
       }
       if (rateLimitMap.size >= RATE_LIMIT_MAP_MAX) {
-        const oldest = [...rateLimitMap.entries()].sort((a, b) => a[1].windowStart - b[1].windowStart)[0]
-        if (oldest) rateLimitMap.delete(oldest[0])
+        const oldestKey = rateLimitMap.keys().next().value
+        if (oldestKey !== undefined) rateLimitMap.delete(oldestKey)
       }
     }
     rateLimitMap.set(ip, { count: 1, windowStart: now })
@@ -113,7 +118,8 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const ip = request.headers.get('x-real-ip') ?? '127.0.0.1'
+  const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
+  const ip = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : '127.0.0.1'
   if (!checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,

@@ -159,6 +159,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
         <h2
+          id="events-list-heading"
           className="text-[11px] font-semibold uppercase tracking-widest"
           style={{ color: 'rgba(255,255,255,0.65)', margin: 0 }}
         >
@@ -193,13 +194,13 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
             No events yet
           </div>
         ) : (
-          <ul aria-label="Recent censorship events, sorted newest first" className="px-3 py-2">
+          <ul aria-labelledby="events-list-heading" className="px-3 py-2">
             {sorted.map((event, i) => (
               <li
                 key={event.id}
-                className="event-item rounded-2xl px-3 py-3 transition-colors duration-100 hover:bg-white/5"
+                className="event-item rounded-2xl px-3 py-3 transition-[background-color] duration-100 hover:bg-white/5"
                 style={{
-                  animationDelay: `${Math.min(i * 30, 300)}ms`,
+                  ['--animation-delay' as string]: `${Math.min(i * 30, 300)}ms`,
                   borderBottom: i < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
                   borderRadius: 0,
                 }}
@@ -215,8 +216,16 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                       style={{ color: 'rgba(255,255,255,0.88)' }}
                       title={event.targetUrl}
                     >
-                      <span aria-hidden="true">{cachedTruncateUrl(event.targetUrl)}</span>
-                      <span className="sr-only">{event.targetUrl}</span>
+                      <a
+                        href={event.targetUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:underline focus:outline-none focus:underline"
+                        style={{ color: 'inherit' }}
+                      >
+                        <span aria-hidden="true">{cachedTruncateUrl(event.targetUrl)}</span>
+                        <span className="sr-only">{event.targetUrl}</span>
+                      </a>
                     </p>
                     <p
                       className="mt-0.5 font-mono text-[11px]"

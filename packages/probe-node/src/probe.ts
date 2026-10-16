@@ -138,16 +138,15 @@ async function probeTarget(url: string, config: { wallet: string; geohash: strin
   // immediately — in both cases running them would hit an untrusted or unknown IP.
   const httpAbort = new AbortController();
   const tcpAbort = new AbortController();
-  const [dnsRes, httpResRaw, tcpResRaw] = await Promise.all([
-    dnsCheck(domain).then(r => {
-      if (r.poisoned || r.expected === null) {
-        httpAbort.abort();
-        tcpAbort.abort();
-      }
-      return r;
-    }),
+  const dnsRes = await dnsCheck(domain);
+  if (dnsRes.poisoned || dnsRes.expected === null) {
+    httpAbort.abort();
+    tcpAbort.abort();
+  }
+  const resolvedIp = dnsRes.received ?? dnsRes.expected ?? domain;
+  const [httpResRaw, tcpResRaw] = await Promise.all([
     httpCheck(url, httpAbort.signal),
-    tcpCheck(domain, 443, tcpAbort.signal),
+    tcpCheck(resolvedIp, 443, tcpAbort.signal),
   ]);
   let httpRes: { reachable: boolean; status: number | null; ms: number | null }
   let tcpRes: { connected: boolean; rstInjected: boolean; ms: number | null }

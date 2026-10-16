@@ -305,6 +305,10 @@ function handleProxyChannel(channel: RTCDataChannel): void {
       let hostname: string
       let port: number
       const ipv6BracketMatch = /^\[(.+?)\](?::(\d+))?$/.exec(hostVal)
+      if (!ipv6BracketMatch && (hostVal.match(/:/g)?.length ?? 0) > 1) {
+        try { channel.send("HTTP/1.1 400 Bad Request\r\n\r\n"); channel.close() } catch { /* ignore */ }
+        return
+      }
       if (ipv6BracketMatch) {
         hostname = ipv6BracketMatch[1]!             // bare IPv6 address without brackets
         port = ipv6BracketMatch[2] ? parseInt(ipv6BracketMatch[2], 10) : 80
@@ -441,7 +445,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
     return { peer, sdpOfferJson, entityKey }
   }
 
-  const { peer: mainPeer, entityKey } = await createOffer()
+  let { peer: mainPeer, entityKey } = await createOffer()
   console.log(`[volunteer] Proxy active. Wallet: ${config.wallet}  Geohash: ${config.geohash}`)
 
   // Refresh TTL every 4 min
@@ -474,6 +478,22 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
     } catch (err) {
       console.error("[volunteer] Poll failed:", redactErrMsg(err, config.rpcUrl))
       return
+    }
+
+    if (
+      mainPeer.signalingState === "closed" ||
+      mainPeer.connectionState === "failed" ||
+      mainPeer.connectionState === "closed"
+    ) {
+      console.warn("[volunteer] mainPeer is in terminal state; creating fresh peer")
+      try {
+        const result = await createOffer()
+        mainPeer = result.peer
+        currentEntityKey = result.entityKey
+      } catch (err) {
+        console.error("[volunteer] Failed to recreate mainPeer:", redactErrMsg(err, config.rpcUrl))
+        return
+      }
     }
 
     // Evict stale entries from the TTL map on every poll cycle
@@ -551,7 +571,8 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         // resolution (each hostname lookup up to 30s with system default timeout).
         const MAX_CANDIDATES = 50
         const MAX_HOSTNAME_CANDIDATES = 5
-        const candidateLineCount = answerDesc.sdp.split("\n").filter(l => l.startsWith("a=candidate:")).length
+        const sdpLines = answerDesc.sdp.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
+        const candidateLineCount = sdpLines.filter(l => l.startsWith("a=candidate:")).length
         if (candidateLineCount > MAX_CANDIDATES) {
           console.error(`[volunteer] SDP from ${clientWallet} has ${candidateLineCount} candidates (max ${MAX_CANDIDATES}), skipping`)
           continue
@@ -559,7 +580,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         let candidateRejected = false
         let hostnameCandidateCount = 0
         const sanitizedLines: string[] = []
-        for (const line of answerDesc.sdp.split("\n")) {
+        for (const line of sdpLines) {
           if (!line.startsWith("a=candidate:")) {
             // Sanitize non-candidate address-bearing lines to prevent private IP leakage
             // via c= (connection) and a=rtcp: lines. Modern DataChannel-only connections
@@ -688,13 +709,13 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
           }
         }
         if (candidateRejected) {
-          peer.close()
+          if (peer !== mainPeer) { peer.close() }
           peers.delete(clientWallet)
           continue
         }
         const sanitizedAnswer: RTCSessionDescriptionInit = {
           type: answerDesc.type,
-          sdp: sanitizedLines.join("\n"),
+          sdp: sanitizedLines.join("\r\n"),
         }
         await peer.setRemoteDescription(sanitizedAnswer)
         console.log(`[volunteer] Handshake complete with ${clientWallet}`)

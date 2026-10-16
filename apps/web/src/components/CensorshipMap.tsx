@@ -1,5 +1,6 @@
 'use client'
 
+import 'leaflet/dist/leaflet.css'
 import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { geohashToLatLng, blockTypeLabel, markerColorForBlockType } from '@resist/map-ui'
 import type { ProbeResultRow } from './BlockEventList'
@@ -62,7 +63,7 @@ const esc = (s: string): string => {
 const TILE_URL =
   'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png'
 const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  '&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps<span class="sr-only"> (opens in new tab)</span></a> &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles<span class="sr-only"> (opens in new tab)</span></a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 
 // Resolved token values for Leaflet canvas — CSS variables cannot be used in canvas.
 // These MUST match design-system/tokens.css.
@@ -141,6 +142,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
   // NOT restore focus when the user Tabbed out of the popup (focus left the popup
   // intentionally; restoring it would yank focus backward against user intent).
   const popupClosedByActionRef = useRef(false)
+  const popupIsOpenRef = useRef(false)
   // liveRegionClearTimeoutRef: handle for the 1500ms clear after "Popup closed" announcement.
   // Stored so it can be cancelled when the next popup opens before the 1500ms fires,
   // preventing the stale clear from silencing the new popup's announcement.
@@ -201,7 +203,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           <button
             data-popup-close
             aria-label="Close popup"
-            style="display:block;width:100%;padding:4px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:transparent;color:var(--wld-gray-300,#d1d5db);font-size:11px;cursor:pointer;"
+            style="display:block;width:100%;padding:13px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:transparent;color:var(--wld-gray-300,#d1d5db);font-size:11px;cursor:pointer;"
           >Close</button>
         </div>
       `
@@ -376,13 +378,15 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     const batchMarkers: any[] = []
     for (const event of newEvents) {
       const marker = createMarker(leaflet, event)
-      if (useBatch) (marker as any)._batchPatch = true
+      ;(marker as any)._batchPatch = true
       markersLayerRef.current.addLayer(marker)
       markerMapRef.current.set(event.id, marker)
-      if (useBatch) batchMarkers.push(marker)
+      batchMarkers.push(marker)
     }
     if (useBatch && mapRef.current) {
       markersLayerRef.current.addTo(mapRef.current)
+    }
+    if (batchMarkers.length > 0) {
       if (typeof requestAnimationFrame !== 'undefined') {
         requestAnimationFrame(() => {
           for (const m of batchMarkers) {
@@ -399,6 +403,11 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     }
   }, [createMarker])  // createMarker is stable (empty dep array) — this is also stable
 
+  const renderMarkersRef = useRef(renderMarkers)
+  useLayoutEffect(() => {
+    renderMarkersRef.current = renderMarkers
+  })
+
   // Initialize map once on mount
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return
@@ -408,16 +417,6 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     const init = async () => {
       const leaflet = leafletRef.current ?? await import('leaflet')
       leafletRef.current = leaflet
-      if (!document.querySelector('link[href*="leaflet.css"]')) {
-        const link = document.createElement('link')
-        link.rel = 'stylesheet'
-        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
-        // SRI hash prevents a compromised unpkg CDN from serving a malicious stylesheet.
-        link.integrity = 'sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H'
-        link.crossOrigin = 'anonymous'
-        document.head.appendChild(link)
-      }
-
       if (!mounted || !mapContainerRef.current) return
 
       const map = leaflet.map(mapContainerRef.current, {
@@ -446,6 +445,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       // (user opens marker A, then marker B within 60ms) cancel the previous pending
       // timer before scheduling a new one, preventing listener accumulation.
       map.on('popupopen', (ev: any) => {
+        popupIsOpenRef.current = true
         if (!hasEverOpenedPopupRef.current) {
           hasEverOpenedPopupRef.current = true
           // Update the aria-label synchronously so the Escape hint is present
@@ -509,11 +509,15 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         }, 60)
       })
 
+      map.on('popupclose', () => {
+        popupIsOpenRef.current = false
+      })
+
       // Apply any events that arrived while Leaflet was still initializing.
       // Without this, the first batch of events is silently dropped because the
       // events effect fires before mapRef/markersLayerRef are set.
       if (pendingEventsRef.current.length > 0) {
-        renderMarkers(leaflet, pendingEventsRef.current)
+        renderMarkersRef.current(leaflet, pendingEventsRef.current)
       }
     }
 
@@ -522,7 +526,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     return () => {
       mounted = false
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   // Update markers when events change
   useEffect(() => {
@@ -591,7 +595,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
   }, [])
 
   return (
-    <div className="relative h-full w-full">
+    <div className="relative h-full w-full group">
       {/* Skip link — always in DOM so the Escape handler always has a focus target.
           When sidebar is open: navigates to #events-panel.
           When sidebar is closed: a button that moves focus past the map to the
@@ -600,7 +604,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         <a
           href="#events-panel"
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-xs focus:font-semibold"
-          style={{ backgroundColor: 'var(--wld-gray-0)', color: 'var(--wld-gray-900)' }}
+          style={{ backgroundColor: 'var(--wld-gray-0, #ffffff)', color: 'var(--wld-gray-900, #111827)' }}
           data-map-escape-target
         >
           Skip to events list
@@ -609,7 +613,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         <button
           type="button"
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-xs focus:font-semibold"
-          style={{ backgroundColor: 'var(--wld-gray-0)', color: 'var(--wld-gray-900)' }}
+          style={{ backgroundColor: 'var(--wld-gray-0, #ffffff)', color: 'var(--wld-gray-900, #111827)' }}
           data-map-escape-target
           onClick={() => {
             // Move focus to the first interactive element outside the map container
@@ -635,9 +639,18 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           Announces "no events" only when a filter change zeros the results. */}
       <div ref={filterLiveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
 
+      <p
+        id="map-keyboard-instructions"
+        className="sr-only group-focus-within:not-sr-only group-focus-within:absolute group-focus-within:bottom-2 group-focus-within:left-1/2 group-focus-within:-translate-x-1/2 group-focus-within:z-50 group-focus-within:rounded group-focus-within:px-3 group-focus-within:py-1 group-focus-within:text-xs group-focus-within:font-medium group-focus-within:pointer-events-none"
+        style={{ backgroundColor: 'var(--wld-gray-900)', color: 'var(--wld-gray-0)' }}
+      >
+        Use arrow keys to pan, +/− to zoom, Tab to cycle markers, Escape to exit
+      </p>
+
       <div
         ref={mapContainerRef}
         role="application"
+        aria-describedby="map-keyboard-instructions"
         className="h-full w-full"
         style={{ minHeight: 300 }}
         onKeyDown={(e) => {
@@ -645,7 +658,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
             // If a popup is open, close it first so popupclose fires, then focus the
             // escape target. Without closePopup() the popup stays open, popupclose never
             // fires, and popupClosedByActionRef stays true — stale — for the next cycle.
-            if (document.querySelector('[data-popup-content]') && mapRef.current) {
+            if (popupIsOpenRef.current && mapRef.current) {
               popupClosedByActionRef.current = true
               mapRef.current.closePopup()
             }

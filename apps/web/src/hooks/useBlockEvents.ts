@@ -3,7 +3,6 @@ import type { ProbeResultRow } from '../components/BlockEventList'
 
 interface BlockEventFilters {
   blockType?: string
-  geohash?: string
 }
 
 export function useBlockEvents(filters: BlockEventFilters) {
@@ -19,8 +18,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
     if (
       next.length === prev.length &&
       next.length > 0 &&
-      next[0]!.id === prev[0]!.id &&
-      next[next.length - 1]!.id === prev[prev.length - 1]!.id
+      next.every((e, i) => e.id === prev[i]!.id)
     ) return
     prevEventsRef.current = next
     setEvents(next)
@@ -47,7 +45,6 @@ export function useBlockEvents(filters: BlockEventFilters) {
       try {
         const params = new URLSearchParams()
         if (filters.blockType) params.set('blockType', filters.blockType)
-        if (filters.geohash) params.set('geohash', filters.geohash)
 
         const res = await window.fetch(`/api/probe-events?${params}`, { signal })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -79,41 +76,38 @@ export function useBlockEvents(filters: BlockEventFilters) {
       setLoading(false)
     }
 
-    // Skip polling when the tab is hidden — saves network + CPU with no user benefit.
-    // Resume immediately when the tab becomes visible again. Reset the interval on
-    // tab-show so the next scheduled tick fires 30s after the immediate fetch, not
-    // independently (prevents double-fetch within the same 30s window).
-    let intervalId = setInterval(() => {
-      if (document.visibilityState === 'hidden') return
-      fetchEvents()
-    }, 30_000)
+    let intervalId: ReturnType<typeof setInterval> | undefined
 
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return
-      // Set loading so the UI shows skeleton instead of "No events yet" during refresh
-      setLoading(true)
-      // Clear the existing interval BEFORE fetching. Start the new interval inside
-      // fetchEvents's finally block (via the chained resetInterval) so it fires 30s
-      // after the fetch completes — not 30s from now — preventing a double-fetch
-      // within the same window if the fetch is slow.
-      clearInterval(intervalId)
-      const resetInterval = () => {
-        clearInterval(intervalId)
-        intervalId = setInterval(() => {
-          if (document.visibilityState === 'hidden') return
-          fetchEvents()
-        }, 30_000)
-      }
-      fetchEvents().then(() => { if (!cancelled) resetInterval() }, () => { if (!cancelled) resetInterval() })
+    const startInterval = () => {
+      intervalId = setInterval(() => { fetchEvents() }, 30_000)
     }
-    document.addEventListener('visibilitychange', onVisible)
+
+    const stopInterval = () => {
+      clearInterval(intervalId)
+      intervalId = undefined
+    }
+
+    if (document.visibilityState !== 'hidden') {
+      startInterval()
+    }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        stopInterval()
+      } else {
+        stopInterval()
+        setLoading(true)
+        fetchEvents().finally(() => { if (!cancelled) startInterval() })
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       cancelled = true
       abortController.abort()
-      clearInterval(intervalId)
-      document.removeEventListener('visibilitychange', onVisible)
+      stopInterval()
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [filters.blockType, filters.geohash])
+  }, [filters.blockType])
 
   return { events, loading, error }
 }

@@ -2,6 +2,17 @@
 const path = require('path')
 const isDev = process.env.NODE_ENV !== 'production'
 
+const arkivRpcOrigin = (() => {
+  const raw = process.env.NEXT_PUBLIC_ARKIV_RPC_URL || process.env.ARKIV_RPC_URL
+  if (!raw) return 'https://*.arkiv.network'
+  try {
+    const u = new URL(raw)
+    return u.origin
+  } catch {
+    return 'https://*.arkiv.network'
+  }
+})()
+
 const nextConfig = {
   transpilePackages: ['@resist/shared', '@resist/arkiv-sdk', '@resist/map-ui'],
   webpack: (config) => {
@@ -34,10 +45,10 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+              `script-src 'self'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline' https://unpkg.com",
               "img-src 'self' data: https://tiles.stadiamaps.com",
-              "connect-src 'self' https://tiles.stadiamaps.com https://rpc.tiramisu.db-chain.testnet.arkiv.network",
+              `connect-src 'self' https://tiles.stadiamaps.com ${arkivRpcOrigin}`,
               "font-src 'self'",
               "frame-src 'none'",
               "object-src 'none'",
