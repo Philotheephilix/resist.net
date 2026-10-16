@@ -111,7 +111,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
 
   return (
     <>
-      <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
+      <div ref={liveRef} aria-live="polite" className="sr-only" />
 
       <div
         role="img"

@@ -84,20 +84,20 @@ export async function loadConfig(): Promise<Config> {
   fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true })
 
   if (!fs.existsSync(CONFIG_PATH)) {
-    const wallet = ethers.Wallet.createRandom()
     const { geohash, isp } = await detectLocation()
-    const config: Config = {
-      wallet: wallet.address,
-      privateKey: wallet.privateKey,
-      geohash,
-      isp,
-      networkType: "unknown",
-      prevHash: "0".repeat(64),
-    }
     // Use 'wx' (exclusive create) flag so only one process can create the file.
     // If two processes race on first start (e.g. systemd respawn), the loser gets
     // EEXIST and falls through to read the winner's config, preventing wallet fork.
     try {
+      const wallet = ethers.Wallet.createRandom()
+      const config: Config = {
+        wallet: wallet.address,
+        privateKey: wallet.privateKey,
+        geohash,
+        isp,
+        networkType: "unknown",
+        prevHash: "0".repeat(64),
+      }
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600, flag: "wx" })
       return config
     } catch (e) {

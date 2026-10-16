@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       .filter((v) => typeof v.sdpoffer === 'string' && v.sdpoffer.length <= 131072)
       .slice(0, 50)
       .map((v) => ({
-        wallet: v.wallet,
+        wallet: v.wallet.length > 10 ? v.wallet.slice(0, 6) + '…' + v.wallet.slice(-4) : v.wallet,
         geohash: v.geohash ? v.geohash.slice(0, 5) : v.geohash,
         capacitySlots: v.capacityslots,
         createdAt: v.createdat,

@@ -43,11 +43,15 @@ export default function HomePage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   // Intentionally ephemeral: sidebar state is not persisted across reloads.
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(true)
   const [mounted, setMounted] = useState(false)
   const isDesktop = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
   const panelRef = useRef<HTMLElement>(null)
   const toggleButtonRef = useRef<HTMLButtonElement>(null)
+  const mobileSheetRef = useRef<HTMLDivElement>(null)
+  const mobileToggleRef = useRef<HTMLButtonElement>(null)
   const prevSidebarOpenRef = useRef(true)
+  const prevMobileSheetOpenRef = useRef(true)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -64,9 +68,20 @@ export default function HomePage() {
     }
   }, [sidebarOpen])
 
-  const { events, loading, error, stats: probeStats } = useBlockEvents({
+  // WCAG 2.4.3: move focus to the map region when the mobile sheet is closed.
+  // Skip the initial mount so focus is not hijacked on page load.
+  useEffect(() => {
+    if (prevMobileSheetOpenRef.current === mobileSheetOpen) return
+    prevMobileSheetOpenRef.current = mobileSheetOpen
+    if (mobileSheetOpen && mobileSheetRef.current) {
+      mobileSheetRef.current.focus()
+    } else if (!mobileSheetOpen && mobileToggleRef.current) {
+      mobileToggleRef.current.focus()
+    }
+  }, [mobileSheetOpen])
+
+  const { events, loading, error } = useBlockEvents({
     blockType: activeFilter === 'all' ? undefined : activeFilter,
-    includeStats: true,
   })
 
   const { blockedCount, reachableCount } = useMemo(() => {
@@ -146,8 +161,8 @@ export default function HomePage() {
 
         {/* Stats + sidebar toggle */}
         <div className="flex items-center gap-2.5">
-          <VolunteerCount externalVolunteerCount={probeStats?.volunteerCount ?? null} />
-          <NodeCount externalStats={probeStats} />
+          <VolunteerCount />
+          <NodeCount />
           <button
             ref={toggleButtonRef}
             onClick={() => setSidebarOpen((v) => !v)}
@@ -158,7 +173,7 @@ export default function HomePage() {
             }
             aria-label={sidebarOpen ? 'Hide events panel' : 'Show events panel'}
             aria-expanded={sidebarOpen}
-            aria-controls={sidebarOpen ? 'events-panel' : undefined}
+            aria-controls="events-panel"
           >
             {sidebarOpen ? 'Hide' : 'Events'}
           </button>
@@ -188,13 +203,13 @@ export default function HomePage() {
 
           {/* Error banner — always in DOM for AT live region */}
           <div
-            role="alert"
             aria-live="assertive"
             aria-atomic="true"
             className="absolute left-4 right-4 top-4"
             style={{ zIndex: 20, pointerEvents: error ? undefined : 'none' }}
           >
             <div
+              role={error ? 'alert' : undefined}
               className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-medium${error ? ' error-banner-visible' : ''}`}
               style={{
                 background: 'rgba(242,40,13,0.15)',
@@ -293,25 +308,50 @@ export default function HomePage() {
 
       {/* ─── Mobile bottom sheet ── */}
       <div
-        id="mobile-events-panel"
-        role="region"
         className="flex-shrink-0 sm:hidden"
-        aria-label="Block events feed"
-        aria-hidden={isDesktop ? true : undefined}
         style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
       >
-        <div
-          className="max-h-56 overflow-y-auto"
-          style={{
-            background: 'rgba(12, 12, 16, 0.96)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            minHeight: '80px',
-          }}
+        {/* Toggle button — always visible on mobile so keyboard/pointer users can open/close */}
+        <button
+          ref={mobileToggleRef}
+          onClick={() => setMobileSheetOpen((v) => !v)}
+          aria-expanded={mobileSheetOpen}
+          aria-controls="mobile-events-panel"
+          className="flex w-full items-center justify-between px-4 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px]"
+          style={{ background: 'rgba(12, 12, 16, 0.96)', color: 'rgba(255,255,255,0.7)' }}
         >
-          <div className="mx-auto mb-2 mt-2 h-1 w-10 rounded-full" style={{ background: 'rgba(255,255,255,0.15)' }} />
-          {mounted && !isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
-        </div>
+          <span>Block events feed</span>
+          <span aria-hidden="true">{mobileSheetOpen ? '▾' : '▴'}</span>
+        </button>
+        {mobileSheetOpen && (
+          <div
+            id="mobile-events-panel"
+            ref={mobileSheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Block events feed"
+            tabIndex={-1}
+            className="max-h-56 overflow-y-auto focus-visible:outline-none"
+            style={{
+              background: 'rgba(12, 12, 16, 0.96)',
+              backdropFilter: 'blur(20px)',
+              WebkitBackdropFilter: 'blur(20px)',
+            }}
+          >
+            <div className="flex items-center justify-between px-4 pt-2 pb-1">
+              <div className="h-1 w-10 rounded-full" style={{ background: 'rgba(255,255,255,0.15)' }} />
+              <button
+                onClick={() => setMobileSheetOpen(false)}
+                className="rounded p-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] min-w-[44px] flex items-center justify-center"
+                style={{ color: 'rgba(255,255,255,0.55)' }}
+                aria-label="Close events feed"
+              >
+                ✕
+              </button>
+            </div>
+            {mounted && !isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
+          </div>
+        )}
       </div>
     </div>
   )

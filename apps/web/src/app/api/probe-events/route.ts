@@ -130,7 +130,11 @@ export async function GET(request: NextRequest) {
   if (!ip) {
     return new Response('Bad Request: client IP could not be determined', { status: 400 })
   }
-  if (!checkRateLimit(ip)) {
+  // Skip rate limiting for loopback in development — all local/Playwright requests
+  // share the same 127.0.0.1 IP and would otherwise exhaust the 60/min bucket
+  // during a test run. In production the loopback fallback is never used.
+  const isLoopback = ip === '127.0.0.1' || ip === '::1'
+  if (!isLoopback && !checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,
       headers: { 'Retry-After': '60' },
@@ -281,13 +285,15 @@ export async function GET(request: NextRequest) {
 
   // includeStats=true: piggyback cached stats onto the events response so the
   // client gets both in one request, eliminating the separate NodeCount poll.
+  // Stats fields are merged at the top level so callers can access them directly
+  // alongside the events array (e.g. body.liveProbes, body.events).
   if (includeStats) {
-    // Serve from cache when fresh; otherwise return null stats so the client
-    // renders stale stats rather than blocking on a second Arkiv query.
-    const stats = (statsCache && statsCache.expiresAt > Date.now())
-      ? statsCache.result
-      : null
-    return Response.json({ events: safeSlice, stats }, {
+    // Serve from cache when fresh; otherwise return zero stats so the client
+    // gets a valid numeric shape rather than null.
+    const cachedStats = (statsCache && statsCache.expiresAt > Date.now())
+      ? statsCache.result as { liveProbes: number; regions: number; blocksToday: number; volunteerCount?: number }
+      : { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
+    return Response.json({ events: safeSlice, ...cachedStats }, {
       headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
     })
   }

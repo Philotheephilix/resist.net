@@ -53,7 +53,7 @@ const esc = (s: string): string => {
     escCache.set(s, r)
     return r
   }
-  r = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  r = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;')
   if (escCache.size >= ESC_CACHE_MAX) escCache.delete(escCache.keys().next().value!)
   escCache.set(s, r)
   return r

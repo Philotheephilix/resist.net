@@ -3,7 +3,6 @@ import type { ProbeResultRow } from '../components/BlockEventList'
 
 interface BlockEventFilters {
   blockType?: string
-  includeStats?: boolean
 }
 
 export interface ProbeStats {
@@ -17,9 +16,6 @@ export function useBlockEvents(filters: BlockEventFilters) {
   const [events, setEvents] = useState<ProbeResultRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // stats are only populated when filters.includeStats=true; null until first
-  // successful fetch or when the server has no cached stats yet.
-  const [stats, setStats] = useState<ProbeStats | null>(null)
   const seqRef = useRef(0)
   // Stable prev-events ref — only swap the array when content changes, so consumers
   // that useMemo-depend on `events` don't recompute on polls that return the same data.
@@ -57,30 +53,15 @@ export function useBlockEvents(filters: BlockEventFilters) {
       try {
         const params = new URLSearchParams()
         if (filters.blockType) params.set('blockType', filters.blockType)
-        if (filters.includeStats) params.set('includeStats', 'true')
 
         const res = await window.fetch(`/api/probe-events?${params}`, { signal })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
 
-        let eventsArray: ProbeResultRow[]
-        if (filters.includeStats) {
-          // Response shape: { events: ProbeResultRow[], stats: ProbeStats | null }
-          if (!data || !Array.isArray(data.events)) throw new Error('Unexpected response shape')
-          eventsArray = data.events
-          // Update stats regardless of whether data.stats is truthy — null is valid
-          // (server has no cached stats yet) and must clear stale stats from a prior
-          // filter change rather than silently leaving the previous value.
-          if (!cancelled && seq === seqRef.current) {
-            setStats(data.stats != null ? data.stats : null)
-          }
-        } else {
-          if (!Array.isArray(data)) throw new Error('Unexpected response shape')
-          eventsArray = data
-        }
+        if (!Array.isArray(data)) throw new Error('Unexpected response shape')
 
         if (!cancelled && seq === seqRef.current) {
-          setStableEvents(eventsArray)
+          setStableEvents(data)
           setError(null)
         }
       } catch (err) {
@@ -106,6 +87,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
     }
 
     let intervalId: ReturnType<typeof setInterval> | undefined
+    let visibilityFetchSeq = 0
 
     const startInterval = () => {
       intervalId = setInterval(() => { fetchEvents() }, 30_000)
@@ -125,8 +107,11 @@ export function useBlockEvents(filters: BlockEventFilters) {
         stopInterval()
       } else {
         stopInterval()
+        const myVisSeq = ++visibilityFetchSeq
         setLoading(true)
-        fetchEvents().finally(() => { if (!cancelled) startInterval() })
+        fetchEvents().finally(() => {
+          if (!cancelled && myVisSeq === visibilityFetchSeq) startInterval()
+        })
       }
     }
     document.addEventListener('visibilitychange', onVisibilityChange)
@@ -136,7 +121,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
       stopInterval()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [filters.blockType, filters.includeStats, setStableEvents])
+  }, [filters.blockType, setStableEvents])
 
-  return { events, loading, error, stats }
+  return { events, loading, error }
 }

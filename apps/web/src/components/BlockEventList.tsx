@@ -91,20 +91,30 @@ interface BlockEventListProps {
   sortedEvents?: ProbeResultRow[]
 }
 
-const timeAgoCache = new Map<string, string>()
+const timeAgoCache = new Map<number, { bucket: number; value: string }>()
 function timeAgo(ts: number, now: number): string {
   const bucket = Math.floor(now / 60_000)
-  const key = `${ts}:${bucket}`
-  let s = timeAgoCache.get(key)
-  if (s !== undefined) return s
+  const cached = timeAgoCache.get(ts)
+  if (cached !== undefined && cached.bucket === bucket) return cached.value
   const diffMs = now - ts
   const mins = Math.floor(diffMs / 60_000)
+  let s: string
   if (mins < 1) s = 'just now'
   else if (mins < 60) s = `${mins}m ago`
   else { const hrs = Math.floor(mins / 60); s = hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago` }
-  if (timeAgoCache.size >= URL_CACHE_MAX) timeAgoCache.delete(timeAgoCache.keys().next().value!)
-  timeAgoCache.set(key, s)
+  if (timeAgoCache.size >= URL_CACHE_MAX && !timeAgoCache.has(ts)) timeAgoCache.delete(timeAgoCache.keys().next().value!)
+  timeAgoCache.set(ts, { bucket, value: s })
   return s
+}
+
+const BLOCK_TYPE_LABELS: Record<string, string> = {
+  dns_poisoning: 'DNS Poisoning',
+  tcp_rst: 'TCP Reset',
+  http_block: 'HTTP Block',
+  full_unreachable: 'Unreachable',
+}
+function blockTypeLabel(blockType: BlockType): string {
+  return (blockType && BLOCK_TYPE_LABELS[blockType]) ?? 'Reachable'
 }
 
 function truncateWallet(wallet: string): string {
@@ -233,7 +243,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                         style={{ color: 'inherit' }}
                       >
                         <span aria-hidden="true">{cachedTruncateUrl(event.targetUrl)}</span>
-                        <span className="sr-only">{event.targetUrl} (opens in new tab)</span>
+                        <span className="sr-only">{event.targetUrl} — {blockTypeLabel(event.blockType)} (opens in new tab)</span>
                       </a>
                     </p>
                     <p

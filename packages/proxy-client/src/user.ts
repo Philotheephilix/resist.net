@@ -255,9 +255,17 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
         try {
           const res = await fetch(bootstrapUrl, { signal: AbortSignal.timeout(5000) })
           if (res.ok) {
-            const cl = parseInt(res.headers.get('content-length') ?? '0', 10)
-            if (cl > 1_048_576) throw new Error('Bootstrap URL response too large')
-            const data = (await res.json()) as Array<{
+            const reader = res.body!.getReader()
+            let total = 0
+            const chunks: Uint8Array[] = []
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              total += value.length
+              if (total > 1_048_576) { reader.cancel(); throw new Error('Bootstrap URL response too large') }
+              chunks.push(value)
+            }
+            const data = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Array<{
               wallet: string
               sdpOffer: string
               geohash: string

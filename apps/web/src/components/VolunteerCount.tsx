@@ -75,9 +75,11 @@ export default function VolunteerCount({ externalVolunteerCount }: VolunteerCoun
 
   return (
     <>
-      <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
+      <div ref={liveRef} aria-live="polite" className="sr-only" />
       {count === null && isResolved ? null : count === null ? (
         <div
+          role="img"
+          aria-label="Loading volunteer count"
           className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' }}
         >
