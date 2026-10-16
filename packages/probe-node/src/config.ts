@@ -55,11 +55,12 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
   }
 }
 
-export async function savePrevHash(prevHash: string): Promise<void> {
+export async function savePrevHash(config: Config, prevHash: string): Promise<void> {
   try {
-    const stored = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) as Config
-    stored.prevHash = prevHash
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(stored, null, 2), { mode: 0o600 })
+    // Caller already holds config in memory — skip the readFileSync/JSON.parse round-trip
+    // and write the in-memory config with the updated prevHash directly.
+    const updated = { ...config, prevHash }
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
   } catch {
     // Non-fatal: if we can't persist prevHash the chain just resets from this point
   }

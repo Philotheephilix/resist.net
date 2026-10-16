@@ -72,13 +72,12 @@ async function dnsCheck(domain: string): Promise<{ expected: string | null; rece
     // All resolvers failed — cannot establish baseline reference.
     return { expected: null, received: null, poisoned: false };
   }
-  if (expected === null) {
-    return { expected: null, received: null, poisoned: false };
-  }
 
   try {
     const local = new dns.Resolver();
-    const [received] = await withDnsTimeout(local.resolve4(domain));
+    // Use the same 2s window as baseline resolvers to keep worst-case dnsCheck
+    // within 3×2s + 2s = 8s (matches httpCheck's AbortSignal.timeout(8000) limit).
+    const [received] = await withDnsTimeout(local.resolve4(domain), 2000);
     return { expected, received: received ?? null, poisoned: expected !== received };
   } catch {
     // Local resolver failed but baseline succeeded — treat as poisoned/blocked
@@ -144,7 +143,8 @@ async function probeTarget(url: string, config: { wallet: string; geohash: strin
 
 export async function runProbe(config: { wallet: string; geohash: string; isp: string; prevHash: string }): Promise<{ results: ProbeResult[]; finalHash: string }> {
   // Run all 5 targets in parallel — reduces worst-case total time from
-  // O(N × max_timeout) ≈ 40s to O(max_timeout) ≈ 8s on heavily-censored networks.
+  // O(N × max_timeout) ≈ 40s to O(max_timeout) ≈ 10s on heavily-censored networks
+  // (httpCheck 8s + dnsCheck up to 8s run in parallel; critical path is max ≈ 8-10s).
   const settled = await Promise.allSettled(TARGETS.map(url => probeTarget(url, config)));
   const results: ProbeResult[] = settled
     .filter((r): r is PromiseFulfilledResult<ProbeResult> => r.status === "fulfilled")

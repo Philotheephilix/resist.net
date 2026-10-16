@@ -15,7 +15,7 @@ async function tick() {
   // Persist finalHash so the next tick threads the chain correctly.
   // Without this, every cycle re-reads the same stale prevHash from config.json
   // and the tamper-evidence chain resets on every probe cycle.
-  await savePrevHash(finalHash)
+  await savePrevHash(config, finalHash)
 }
 
 export async function main() {

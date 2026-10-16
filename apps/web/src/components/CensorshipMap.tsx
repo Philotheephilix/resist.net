@@ -34,9 +34,20 @@ function cachedGeohashToLatLng(hash: string): [number, number] {
   return latlng
 }
 
-// HTML-escape for injecting user-controlled strings into popup innerHTML
-const esc = (s: string) =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+// HTML-escape for injecting user-controlled strings into popup innerHTML.
+// Module-level LRU cache: targetUrl/label/wallet repeat heavily across markers
+// for the same blocked site — cache hit rate is high in real censorship datasets.
+const ESC_CACHE_MAX = 500
+const escCache = new Map<string, string>()
+const esc = (s: string): string => {
+  let r = escCache.get(s)
+  if (r === undefined) {
+    r = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    if (escCache.size >= ESC_CACHE_MAX) escCache.delete(escCache.keys().next().value!)
+    escCache.set(s, r)
+  }
+  return r
+}
 
 // Stadia Alidade Smooth Dark — no API key required for open source / non-commercial projects
 const TILE_URL =
@@ -104,6 +115,11 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
   // cancelled when another popup opens before the 60ms fires, preventing listener
   // accumulation on the same popup div across rapid opens.
   const mapPopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // popupClosedByActionRef: true when the popup was closed by Escape or the Close button.
+  // The popupclose handler only restores focus to the marker when this is true — it must
+  // NOT restore focus when the user Tabbed out of the popup (focus left the popup
+  // intentionally; restoring it would yank focus backward against user intent).
+  const popupClosedByActionRef = useRef(false)
 
   // Create a single marker DOM element and bind events. Extracted so it can be called
   // for both incremental adds (new event IDs) and full re-init.
@@ -215,7 +231,12 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
         if (lastFocusedMarkerElRef.current && !document.contains(lastFocusedMarkerElRef.current)) {
           lastFocusedMarkerElRef.current = null
         }
-        if (!mapContainerRef.current?.contains(document.activeElement)) {
+        // Only restore focus when the popup was closed via Escape or the Close button.
+        // When the user Tabs out of the popup, focus has already moved to the next element
+        // in page order — restoring it to the marker would yank focus backward against intent.
+        const wasAction = popupClosedByActionRef.current
+        popupClosedByActionRef.current = false
+        if (wasAction && !mapContainerRef.current?.contains(document.activeElement)) {
           lastFocusedMarkerElRef.current?.focus()
         }
       })
@@ -322,6 +343,7 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
           const closeBtn = immediatePopup.querySelector<HTMLButtonElement>('[data-popup-close]')
           if (closeBtn) {
             closeBtn.onclick = () => {
+              popupClosedByActionRef.current = true
               map.closePopup()
               lastFocusedMarkerElRef.current?.focus()
             }
@@ -339,6 +361,7 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
           const onKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
               e.stopPropagation()
+              popupClosedByActionRef.current = true
               map.closePopup()
               lastFocusedMarkerElRef.current?.focus()
             }

@@ -125,18 +125,27 @@ export async function syncToArkiv(
   const cutoffMs = Date.now() - 48 * 3600 * 1000
   stmtEvict!.run(cutoffMs)
 
-  // --- drain offline cache first (batch of 50 rows per cycle) ---
-  // Batching prevents unbounded memory allocation and stalls when the backlog is large.
-  // Successful rows are deleted in a single transaction after the batch completes to
-  // minimize the number of individual DELETE statements sent to SQLite.
+  // --- drain offline cache first (batch of 100 rows per cycle) ---
+  // Writes are parallelized in chunks of 10 to reduce drain time ~10x vs sequential
+  // (100ms avg per write × 10 concurrent = ~1s per chunk instead of ~10s sequential)
+  // while keeping memory usage bounded (10 in-flight objects at a time).
+  // Successful rows are deleted in a single transaction after the batch completes.
+  const DRAIN_CONCURRENCY = 10
   const pending = stmtSelectPending!.all() as { id: string; payload: string }[]
   const successfulIds: string[] = []
 
-  for (const row of pending) {
-    const result = JSON.parse(row.payload) as ProbeResult
-    if (client) {
-      const ok = await writeToArkiv(client, result)
-      if (ok) successfulIds.push(row.id)
+  if (client && pending.length > 0) {
+    for (let i = 0; i < pending.length; i += DRAIN_CONCURRENCY) {
+      const chunk = pending.slice(i, i + DRAIN_CONCURRENCY)
+      const outcomes = await Promise.allSettled(
+        chunk.map(row => writeToArkiv(client!, JSON.parse(row.payload) as ProbeResult))
+      )
+      for (let j = 0; j < outcomes.length; j++) {
+        const outcome = outcomes[j]
+        if (outcome && outcome.status === "fulfilled" && outcome.value) {
+          successfulIds.push(chunk[j]!.id)
+        }
+      }
     }
   }
 
