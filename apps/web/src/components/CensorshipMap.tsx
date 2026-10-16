@@ -147,6 +147,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
   // Stored so it can be cancelled when the next popup opens before the 1500ms fires,
   // preventing the stale clear from silencing the new popup's announcement.
   const liveRegionClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const batchRafRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null)
 
   // Keep sidebarOpenRef in sync via useLayoutEffect so it is only written after
   // React commits the render. Writing directly in the render body could update the
@@ -263,7 +264,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       marker.on('add', () => {
         if ((marker as any)._batchPatch) return
         if (typeof requestAnimationFrame !== 'undefined') {
-          requestAnimationFrame(patchMarkerElement)
+          ;(marker as any)._addRafId = requestAnimationFrame(patchMarkerElement)
         } else {
           patchMarkerElement()
         }
@@ -388,7 +389,9 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     }
     if (batchMarkers.length > 0) {
       if (typeof requestAnimationFrame !== 'undefined') {
-        requestAnimationFrame(() => {
+        if (batchRafRef.current !== null) cancelAnimationFrame(batchRafRef.current)
+        batchRafRef.current = requestAnimationFrame(() => {
+          batchRafRef.current = null
           for (const m of batchMarkers) {
             const patch = m._patchElement as (() => void) | undefined
             if (patch) patch()
@@ -413,6 +416,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     if (!mapContainerRef.current || mapRef.current) return
 
     let mounted = true
+    let localMap: any = null
 
     const init = async () => {
       const leaflet = leafletRef.current ?? await import('leaflet')
@@ -437,6 +441,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         .addTo(map)
 
       markersLayerRef.current = leaflet.layerGroup().addTo(map)
+      localMap = map
       mapRef.current = map
 
       // Map-level popup keyboard handler: Escape inside a popup closes it and
@@ -525,6 +530,8 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
 
     return () => {
       mounted = false
+      localMap?.remove()
+      localMap = null
     }
   }, [])
 
@@ -544,7 +551,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     }
 
     updateMarkers()
-  }, [events]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [events, renderMarkers])
 
   // Announce empty-map state to AT after a filter change zeroes the results.
   // Uses a SEPARATE live region (filterLiveRef) from the popup announcement region
@@ -574,10 +581,12 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       if (mapPopupTimeoutRef.current !== null) { clearTimeout(mapPopupTimeoutRef.current); mapPopupTimeoutRef.current = null }
       if (focusTimeoutRef.current !== null) { clearTimeout(focusTimeoutRef.current); focusTimeoutRef.current = null }
       if (liveRegionClearTimeoutRef.current !== null) { clearTimeout(liveRegionClearTimeoutRef.current); liveRegionClearTimeoutRef.current = null }
+      if (batchRafRef.current !== null) { cancelAnimationFrame(batchRafRef.current); batchRafRef.current = null }
       // Explicitly remove keydown listeners stored on each marker's SVG element.
       // Relying solely on Leaflet's map.remove() to free them is safe in real browsers
       // but leaks in jsdom test environments where the SVG container may be retained.
       markerMapRef.current.forEach(m => {
+        if ((m as any)._addRafId) { cancelAnimationFrame((m as any)._addRafId); (m as any)._addRafId = null }
         const el = m.getElement?.() as any
         if (el && el._keydownHandler) { el.removeEventListener('keydown', el._keydownHandler); el._keydownHandler = null }
       })
@@ -650,6 +659,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       <div
         ref={mapContainerRef}
         role="application"
+        aria-label="Censorship events world map"
         aria-describedby="map-keyboard-instructions"
         className="h-full w-full"
         style={{ minHeight: 300 }}

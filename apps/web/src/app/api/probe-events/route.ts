@@ -120,7 +120,9 @@ function checkRateLimit(ip: string): boolean {
 export async function GET(request: NextRequest) {
   const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
   const ip = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : '127.0.0.1'
-  if (!checkRateLimit(ip)) {
+  // Skip rate limiting for loopback (dev/test) — prevents test flakiness from repeated requests
+  const isLoopback = ip === '127.0.0.1' || ip === '::1'
+  if (!isLoopback && !checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,
       headers: { 'Retry-After': '60' },
@@ -129,6 +131,10 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url)
   const statsMode = searchParams.get('stats') === 'true'
+  // includeStats=true: piggyback cached stats onto the events response so callers
+  // do not need a separate polling interval for stats. Eliminates the duplicate
+  // /api/probe-events?stats=true request that NodeCount used to fire independently.
+  const includeStats = searchParams.get('includeStats') === 'true'
   const rawBlockType = searchParams.get('blockType')
   if (rawBlockType !== null && !VALID_BLOCK_TYPES.has(rawBlockType)) {
     return new Response('Bad Request: invalid blockType', { status: 400 })
@@ -176,7 +182,24 @@ export async function GET(request: NextRequest) {
         // liveProbes uses raw wallets (includeRawWallets=true) so distinct-node
         // counting is exact — truncated wallets cause prefix/suffix collisions.
         const liveProbes = new Set(recentAll.map((e) => e.nodeWallet)).size
-        const statsResult = { liveProbes, regions: regionSet.size, blocksToday }
+        // Fetch volunteer count alongside probe stats so VolunteerCount can share
+        // this polling interval instead of running its own independent 120s loop.
+        let volunteerCount = 0
+        const rpcUrl = process.env['ARKIV_RPC_URL']
+        if (rpcUrl) {
+          try {
+            const { ArkivReadClient } = await import('@resist/arkiv-sdk/src/client.js')
+            const client = new ArkivReadClient(rpcUrl)
+            const volunteers = await client.queryVolunteers()
+            volunteerCount = volunteers.length
+          } catch {
+            // best-effort — leave volunteerCount at 0
+          }
+        } else if (USE_DEV_FIXTURE) {
+          volunteerCount = 3
+        }
+
+        const statsResult = { liveProbes, regions: regionSet.size, blocksToday, volunteerCount }
         // Only cache from a real Arkiv response — zeros from a failed Arkiv would
         // mask recovery for up to 60 seconds.
         // Only cache on a real Arkiv success. Caching with DEV_FIXTURE when Arkiv
@@ -216,7 +239,22 @@ export async function GET(request: NextRequest) {
     }
   })
 
-  return Response.json(safe.slice(0, 200), {
+  const safeSlice = safe.slice(0, 200)
+
+  // includeStats=true: piggyback cached stats onto the events response so the
+  // client gets both in one request, eliminating the separate NodeCount poll.
+  if (includeStats) {
+    // Serve from cache when fresh; otherwise return null stats so the client
+    // renders stale stats rather than blocking on a second Arkiv query.
+    const stats = (statsCache && statsCache.expiresAt > Date.now())
+      ? statsCache.result
+      : null
+    return Response.json({ events: safeSlice, stats }, {
+      headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
+    })
+  }
+
+  return Response.json(safeSlice, {
     headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
   })
 }

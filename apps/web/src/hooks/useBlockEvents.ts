@@ -3,12 +3,22 @@ import type { ProbeResultRow } from '../components/BlockEventList'
 
 interface BlockEventFilters {
   blockType?: string
+  includeStats?: boolean
+}
+
+export interface ProbeStats {
+  liveProbes: number
+  regions: number
+  blocksToday: number
 }
 
 export function useBlockEvents(filters: BlockEventFilters) {
   const [events, setEvents] = useState<ProbeResultRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // stats are only populated when filters.includeStats=true; null until first
+  // successful fetch or when the server has no cached stats yet.
+  const [stats, setStats] = useState<ProbeStats | null>(null)
   const seqRef = useRef(0)
   // Stable prev-events ref — only swap the array when content changes, so consumers
   // that useMemo-depend on `events` don't recompute on polls that return the same data.
@@ -45,13 +55,27 @@ export function useBlockEvents(filters: BlockEventFilters) {
       try {
         const params = new URLSearchParams()
         if (filters.blockType) params.set('blockType', filters.blockType)
+        if (filters.includeStats) params.set('includeStats', 'true')
 
         const res = await window.fetch(`/api/probe-events?${params}`, { signal })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
-        if (!Array.isArray(data)) throw new Error('Unexpected response shape')
+
+        let eventsArray: ProbeResultRow[]
+        if (filters.includeStats) {
+          // Response shape: { events: ProbeResultRow[], stats: ProbeStats | null }
+          if (!data || !Array.isArray(data.events)) throw new Error('Unexpected response shape')
+          eventsArray = data.events
+          if (data.stats && !cancelled && seq === seqRef.current) {
+            setStats(data.stats)
+          }
+        } else {
+          if (!Array.isArray(data)) throw new Error('Unexpected response shape')
+          eventsArray = data
+        }
+
         if (!cancelled && seq === seqRef.current) {
-          setStableEvents(data)
+          setStableEvents(eventsArray)
           setError(null)
         }
       } catch (err) {
@@ -107,7 +131,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
       stopInterval()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [filters.blockType])
+  }, [filters.blockType, filters.includeStats, setStableEvents])
 
-  return { events, loading, error }
+  return { events, loading, error, stats }
 }

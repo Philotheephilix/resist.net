@@ -1,35 +1,48 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-
-interface VolunteerEntry {
-  wallet: string
-  geohash: string | null
-  capacitySlots: number
-  createdAt: string
-}
+import { useEffect, useRef, useState } from 'react'
 
 export default function VolunteerCount() {
   const [count, setCount] = useState<number | null>(null)
+  const liveRef = useRef<HTMLDivElement>(null)
+  const prevCountRef = useRef<number | null>(null)
 
   useEffect(() => {
     let mounted = true
+    let abortController = new AbortController()
+
+    // Fetch volunteerCount from the shared stats endpoint so this component
+    // does not run an independent polling loop. NodeCount polls the same
+    // endpoint on a 62s interval; the server caches the response for 60s,
+    // so both components share a single effective request cadence.
     const fetchVolunteers = async () => {
+      abortController.abort()
+      abortController = new AbortController()
+      const { signal } = abortController
       try {
-        const res = await fetch('/api/bootstrap')
+        const res = await fetch('/api/probe-events?stats=true', { signal })
         if (!mounted) return
         if (res.ok) {
-          const data: VolunteerEntry[] = await res.json()
-          if (mounted) setCount(data.length)
+          const data: { volunteerCount?: number } = await res.json()
+          if (mounted) {
+            const newCount = data.volunteerCount ?? 0
+            if (prevCountRef.current !== newCount && liveRef.current) {
+              liveRef.current.textContent = `${newCount} volunteer ${newCount === 1 ? 'node' : 'nodes'} now active`
+            }
+            prevCountRef.current = newCount
+            setCount(newCount)
+          }
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') return
         // silently ignore — volunteer count is best-effort
       }
     }
     fetchVolunteers()
-    const interval = setInterval(fetchVolunteers, 120_000)
+    const interval = setInterval(fetchVolunteers, 62_000)
     return () => {
       mounted = false
+      abortController.abort()
       clearInterval(interval)
     }
   }, [])
@@ -37,7 +50,10 @@ export default function VolunteerCount() {
   if (count === null) return null
 
   return (
+    <>
+    <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
     <div
+      role="img"
       className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
       style={{
         background: 'rgba(255,255,255,0.07)',
@@ -56,5 +72,6 @@ export default function VolunteerCount() {
         <span style={{ color: 'rgba(255,255,255,0.60)' }}> volunteers</span>
       </span>
     </div>
+    </>
   )
 }

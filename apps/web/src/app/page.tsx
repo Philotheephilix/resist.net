@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useState, useMemo, useSyncExternalStore } from 'react'
+import { useState, useMemo, useSyncExternalStore, useEffect, useRef } from 'react'
 import BlockEventList from '../components/BlockEventList'
 import FilterBar, { FilterType } from '../components/FilterBar'
 import NodeCount from '../components/NodeCount'
@@ -43,9 +43,19 @@ export default function HomePage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const isDesktop = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  const panelRef = useRef<HTMLElement>(null)
 
-  const { events, loading, error } = useBlockEvents({
+  // WCAG 2.4.3: move focus into the panel when it opens so keyboard users
+  // know where the new content appeared.
+  useEffect(() => {
+    if (sidebarOpen && panelRef.current) {
+      panelRef.current.focus()
+    }
+  }, [sidebarOpen])
+
+  const { events, loading, error, stats: probeStats } = useBlockEvents({
     blockType: activeFilter === 'all' ? undefined : activeFilter,
+    includeStats: true,
   })
 
   const { blockedCount, reachableCount } = useMemo(() => {
@@ -75,7 +85,7 @@ export default function HomePage() {
         Skip to map
       </a>
       <a
-        href="#events-panel"
+        href={isDesktop ? '#events-panel' : '#mobile-events-panel'}
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
       >
         Skip to events list
@@ -120,7 +130,7 @@ export default function HomePage() {
         {/* Stats + sidebar toggle */}
         <div className="flex items-center gap-2.5">
           <VolunteerCount />
-          <NodeCount />
+          <NodeCount externalStats={probeStats} />
           <button
             onClick={() => setSidebarOpen((v) => !v)}
             className="rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] min-w-[44px]"
@@ -166,14 +176,13 @@ export default function HomePage() {
             style={{ zIndex: 20, pointerEvents: error ? undefined : 'none' }}
           >
             <div
-              className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-medium"
+              className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-medium${error ? ' error-banner-visible' : ''}`}
               style={{
                 background: 'rgba(242,40,13,0.15)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
                 border: '1px solid rgba(242,40,13,0.35)',
                 color: '#ff6b55',
-                animation: error ? 'slideInFromTop 280ms cubic-bezier(0.16,1,0.3,1)' : undefined,
                 visibility: error ? 'visible' : 'hidden',
               }}
             >
@@ -248,13 +257,15 @@ export default function HomePage() {
         {/* ─── Sidebar ── glass panel ── */}
         <aside
           id="events-panel"
+          ref={panelRef}
+          tabIndex={-1}
           aria-label="Recent block events"
-          className="flex w-80 flex-shrink-0 flex-col overflow-hidden"
+          className="flex w-80 flex-shrink-0 flex-col overflow-hidden focus-visible:outline-none"
           style={{
             display: sidebarOpen ? undefined : 'none',
             background: 'rgba(12, 12, 16, 0.92)',
-            backdropFilter: 'blur(24px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
             borderLeft: '1px solid rgba(255,255,255,0.07)',
           }}
         >
@@ -264,9 +275,10 @@ export default function HomePage() {
 
       {/* ─── Mobile bottom sheet ── */}
       <div
+        id="mobile-events-panel"
         role="region"
         className="flex-shrink-0 sm:hidden"
-        aria-label="Recent block events"
+        aria-label="Block events feed"
         style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
       >
         <div

@@ -471,7 +471,11 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
   }, REFRESH_INTERVAL_MS)
 
   // Poll for incoming SDP answers
+  let pollRunning = false
   const pollInterval = setInterval(async () => {
+    if (pollRunning) return
+    pollRunning = true
+    try {
     let answers
     try {
       answers = await arkiv.querySignalExchange(config.wallet)
@@ -479,6 +483,8 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
       console.error("[volunteer] Poll failed:", redactErrMsg(err, config.rpcUrl))
       return
     }
+    // Cap answers to prevent a flooded signal exchange from stalling the loop
+    answers = answers.slice(0, 20)
 
     if (
       mainPeer.signalingState === "closed" ||
@@ -578,8 +584,73 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
           continue
         }
         let candidateRejected = false
-        let hostnameCandidateCount = 0
         const sanitizedLines: string[] = []
+
+        // --- Pass 1: collect hostname candidates for parallel DNS resolution ---
+        // Extract up to MAX_HOSTNAME_CANDIDATES unique hostnames so we can fire
+        // all lookups simultaneously rather than serially (which would block the
+        // poll loop for up to MAX_HOSTNAME_CANDIDATES * 2 * DNS_TIMEOUT seconds).
+        type HostnameCandidate = { hostname: string; lineIdx: number }
+        const hostnameCandidates: HostnameCandidate[] = []
+        let tooManyHostnames = false
+        for (let i = 0; i < sdpLines.length; i++) {
+          const line = sdpLines[i]!
+          if (!line.startsWith("a=candidate:")) continue
+          const m = /a=candidate:[^\s]+ [^\s]+ [^\s]+ [^\s]+ ([^\s]+) /.exec(line)
+          if (!m) continue
+          const addr = m[1]!
+          if (addr.endsWith(".local")) continue
+          const isIpv4 = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(addr)
+          const isIpv6 = /^[0-9a-fA-F:]+$/.test(addr) && addr.includes(":")
+          if (!isIpv4 && !isIpv6) {
+            hostnameCandidates.push({ hostname: addr, lineIdx: i })
+            if (hostnameCandidates.length > MAX_HOSTNAME_CANDIDATES) {
+              tooManyHostnames = true
+              break
+            }
+          }
+        }
+        if (tooManyHostnames) {
+          console.error(`[volunteer] Too many hostname candidates from ${clientWallet}, skipping SDP`)
+          if (peer !== mainPeer) { peer.close() }
+          peers.delete(clientWallet)
+          continue
+        }
+
+        // Resolve all hostname candidates in parallel, each with a 5 s timeout.
+        type DnsResult = { resolved4: string | null; resolved6: string | null }
+        const dnsResults = new Map<string, DnsResult>()
+        if (hostnameCandidates.length > 0) {
+          const uniqueHostnames = [...new Set(hostnameCandidates.map(c => c.hostname))]
+          const lookupResults = await Promise.allSettled(
+            uniqueHostnames.map(async (hostname) => {
+              let timer4: ReturnType<typeof setTimeout> | null = null
+              let timer6: ReturnType<typeof setTimeout> | null = null
+              const [v4, v6] = await Promise.allSettled([
+                Promise.race([
+                  dns.lookup(hostname, { family: 4 }).finally(() => { if (timer4 !== null) { clearTimeout(timer4); timer4 = null } }),
+                  new Promise<never>((_, reject) => { timer4 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
+                ]),
+                Promise.race([
+                  dns.lookup(hostname, { family: 6 }).finally(() => { if (timer6 !== null) { clearTimeout(timer6); timer6 = null } }),
+                  new Promise<never>((_, reject) => { timer6 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
+                ]),
+              ])
+              return {
+                hostname,
+                resolved4: v4.status === "fulfilled" ? v4.value.address : null,
+                resolved6: v6.status === "fulfilled" ? v6.value.address : null,
+              }
+            })
+          )
+          for (const r of lookupResults) {
+            if (r.status === "fulfilled") {
+              dnsResults.set(r.value.hostname, { resolved4: r.value.resolved4, resolved6: r.value.resolved6 })
+            }
+          }
+        }
+
+        // --- Pass 2: build sanitized SDP using pre-resolved DNS results ---
         for (const line of sdpLines) {
           if (!line.startsWith("a=candidate:")) {
             // Sanitize non-candidate address-bearing lines to prevent private IP leakage
@@ -635,7 +706,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
           // Accept dotted-decimal IPv4 (contains dots) or colon-notation IPv6 (contains colons).
           // Reject any hex-only string with no separators — it cannot be safely classified as
           // an IPv4 or IPv6 literal and may be a hex-encoded IPv4 (e.g. 7f000001 = 127.0.0.1).
-          const isIpv4Literal = /^[\d.]+$/.test(candidateAddr)
+          const isIpv4Literal = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(candidateAddr)
           const isIpv6Literal = /^[0-9a-fA-F:]+$/.test(candidateAddr) && candidateAddr.includes(":")
           const isIpLiteral = isIpv4Literal || isIpv6Literal
           if (!isIpLiteral && /^[0-9a-fA-F]+$/.test(candidateAddr)) {
@@ -658,54 +729,34 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
             const sanitizedLine = line.replace(/ raddr [^\s]+ rport \d+/g, ` raddr ${raddrReplacement}`)
             sanitizedLines.push(sanitizedLine)
           } else {
-            // Hostname candidate — resolve BOTH A and AAAA records to prevent
-            // IPv6 ULA bypass (a hostname can have a public A record but private AAAA).
-            // Regardless, strip the line: replacing the hostname with the resolved IP
-            // prevents the WebRTC engine from re-resolving it (DNS TOCTOU).
-            hostnameCandidateCount++
-            if (hostnameCandidateCount > MAX_HOSTNAME_CANDIDATES) {
-              console.error(`[volunteer] Too many hostname candidates from ${clientWallet}, skipping rest`)
+            // Hostname candidate — use pre-resolved DNS result from parallel pass above.
+            // Replacing hostname with resolved IP prevents WebRTC engine from re-resolving (DNS TOCTOU).
+            const dnsResult = dnsResults.get(candidateAddr)
+            if (!dnsResult) {
+              console.error(`[volunteer] Dropping unresolvable hostname candidate from ${clientWallet}: ${candidateAddr}`)
+              // Drop — do not push
+              continue
+            }
+            const { resolved4, resolved6 } = dnsResult
+            if (resolved4 && isPrivateIp(resolved4)) {
+              console.error(`[volunteer] Dropping hostname with private IPv4 from ${clientWallet}: ${candidateAddr} → ${resolved4}`)
               candidateRejected = true
               break
             }
-            try {
-              let timer4: ReturnType<typeof setTimeout> | null = null
-              let timer6: ReturnType<typeof setTimeout> | null = null
-              const [v4, v6] = await Promise.allSettled([
-                Promise.race([
-                  dns.lookup(candidateAddr, { family: 4 }).finally(() => { if (timer4 !== null) { clearTimeout(timer4); timer4 = null } }),
-                  new Promise<never>((_, reject) => { timer4 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
-                ]),
-                Promise.race([
-                  dns.lookup(candidateAddr, { family: 6 }).finally(() => { if (timer6 !== null) { clearTimeout(timer6); timer6 = null } }),
-                  new Promise<never>((_, reject) => { timer6 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
-                ]),
-              ])
-              const resolved4 = v4.status === "fulfilled" ? v4.value.address : null
-              const resolved6 = v6.status === "fulfilled" ? v6.value.address : null
-              if (resolved4 && isPrivateIp(resolved4)) {
-                console.error(`[volunteer] Dropping hostname with private IPv4 from ${clientWallet}: ${candidateAddr} → ${resolved4}`)
-                candidateRejected = true
-                break
-              }
-              if (resolved6 && isPrivateIp(resolved6)) {
-                console.error(`[volunteer] Dropping hostname with private IPv6 from ${clientWallet}: ${candidateAddr} → ${resolved6}`)
-                candidateRejected = true
-                break
-              }
-              // Replace ALL occurrences of hostname with resolved IP to eliminate TOCTOU
-              // re-resolution. String.replace replaces only the first match; replaceAll
-              // ensures a crafted SDP that repeats the hostname elsewhere (e.g. in the
-              // foundation field) cannot leave a surviving hostname for the WebRTC engine.
-              const resolvedAddr = resolved4 ?? resolved6
-              if (resolvedAddr) {
-                sanitizedLines.push(line.replaceAll(candidateAddr, resolvedAddr))
-              }
-              // If neither resolved, silently drop (unresolvable hostname)
-            } catch {
-              console.error(`[volunteer] Dropping unresolvable hostname candidate from ${clientWallet}: ${candidateAddr}`)
-              // Drop — do not push
+            if (resolved6 && isPrivateIp(resolved6)) {
+              console.error(`[volunteer] Dropping hostname with private IPv6 from ${clientWallet}: ${candidateAddr} → ${resolved6}`)
+              candidateRejected = true
+              break
             }
+            // Replace ALL occurrences of hostname with resolved IP to eliminate TOCTOU
+            // re-resolution. String.replace replaces only the first match; replaceAll
+            // ensures a crafted SDP that repeats the hostname elsewhere (e.g. in the
+            // foundation field) cannot leave a surviving hostname for the WebRTC engine.
+            const resolvedAddr = resolved4 ?? resolved6
+            if (resolvedAddr) {
+              sanitizedLines.push(line.replaceAll(candidateAddr, resolvedAddr))
+            }
+            // If neither resolved, silently drop (unresolvable hostname)
           }
         }
         if (candidateRejected) {
@@ -725,6 +776,9 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         console.error(`[volunteer] setRemoteDescription failed for ${clientWallet}:`, redactErrMsg(err, config.rpcUrl))
         peers.delete(clientWallet)
       }
+    }
+    } finally {
+      pollRunning = false
     }
   }, POLL_INTERVAL_MS)
 

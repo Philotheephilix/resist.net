@@ -1,4 +1,5 @@
 import { ethers } from "ethers"
+import crypto from "crypto"
 import fs from "fs"
 import os from "os"
 import path from "path"
@@ -61,7 +62,7 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
 }
 
 export async function savePrevHash(config: Config, prevHash: string): Promise<void> {
-  const tmp = CONFIG_PATH + ".tmp." + process.pid
+  const tmp = CONFIG_PATH + ".tmp." + process.pid + "." + crypto.randomBytes(4).toString("hex")
   try {
     // Caller already holds config in memory — skip the readFileSync/JSON.parse round-trip
     // and write the in-memory config with the updated prevHash directly.
@@ -125,7 +126,7 @@ export async function loadConfig(): Promise<Config> {
     // Atomic write: temp file + rename, matching savePrevHash's pattern.
     // A crash between truncate and write-complete would leave a corrupt config.json
     // and lose the private key on next startup if we wrote directly to CONFIG_PATH.
-    const tmp = CONFIG_PATH + ".tmp." + process.pid
+    const tmp = CONFIG_PATH + ".tmp." + process.pid + "." + crypto.randomBytes(4).toString("hex")
     try {
       fs.writeFileSync(tmp, JSON.stringify(stored, null, 2), { mode: 0o600 })
       fs.chmodSync(tmp, 0o600)

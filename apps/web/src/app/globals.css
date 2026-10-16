@@ -14,6 +14,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ── FilterBar focus fallback for Firefox < 121 (no :has() support) ── */
+/* The label's has-[:focus-visible]:ring-* handles modern browsers;
+   this sibling rule covers the hidden radio input → span path for older Firefox. */
+.filter-option input.sr-only:focus-visible + span {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+  border-radius: 9999px;
+}
+
 /* ── Alert slide-in ── */
 @keyframes slideInFromTop {
   from { transform: translateY(-12px) scale(0.97); opacity: 0; }
@@ -57,12 +66,16 @@ body {
   animation: fadeInUp 240ms cubic-bezier(0.16, 1, 0.3, 1) var(--animation-delay, 0ms) both;
 }
 
+.error-banner-visible {
+  animation: slideInFromTop 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .skeleton-shimmer,
   .live-dot,
   .event-item,
   .leaflet-container *,
-  [style*="slideInFromTop"] {
+  .error-banner-visible {
     animation: none !important;
     transform: none !important;
   }
@@ -74,9 +87,7 @@ body {
 }
 
 .leaflet-popup-content-wrapper {
-  background: rgba(16, 16, 20, 0.96) !important;
-  backdrop-filter: blur(24px) saturate(180%) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+  background: rgba(16, 16, 20, 0.97) !important;
   color: #ffffff !important;
   border-radius: 16px !important;
   box-shadow: 0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.10) !important;

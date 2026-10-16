@@ -44,7 +44,7 @@ export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
         return (
           <label
             key={key}
-            className="flex-shrink-0 cursor-pointer rounded-full select-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-white/40"
+            className="filter-option flex-shrink-0 cursor-pointer rounded-full select-none has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-white/40"
             style={isActive ? LABEL_STYLE_ACTIVE : LABEL_STYLE_INACTIVE}
           >
             {/* Visually hidden radio input — clicking the label activates it */}

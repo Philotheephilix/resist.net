@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import type { ProbeStats } from '../hooks/useBlockEvents'
 
 interface Stats {
   liveProbes: number
@@ -8,13 +9,37 @@ interface Stats {
   blocksToday: number
 }
 
-export default function NodeCount() {
+interface NodeCountProps {
+  // When provided by the parent (via useBlockEvents includeStats), NodeCount
+  // renders these stats directly and skips its own /api/probe-events polling.
+  externalStats?: ProbeStats | null
+}
+
+export default function NodeCount({ externalStats }: NodeCountProps = {}) {
   const [stats, setStats] = useState<Stats>({ liveProbes: 0, regions: 0, blocksToday: 0 })
   const [loading, setLoading] = useState(true)
   const [stale, setStale] = useState(false)
   const liveRef = useRef<HTMLDivElement>(null)
   const announcedRef = useRef(false)
   const prevLiveProbesRef = useRef<number | null>(null)
+
+  // When the parent supplies stats from the shared useBlockEvents poll, apply
+  // them directly and skip the standalone polling effect below.
+  useEffect(() => {
+    if (externalStats == null) return
+    setStats(externalStats)
+    setLoading(false)
+    setStale(false)
+    const probesChanged = prevLiveProbesRef.current !== null && prevLiveProbesRef.current !== externalStats.liveProbes
+    if ((!announcedRef.current || probesChanged) && liveRef.current) {
+      announcedRef.current = true
+      prevLiveProbesRef.current = externalStats.liveProbes
+      liveRef.current.textContent =
+        `${externalStats.liveProbes} live probes across ${externalStats.regions} regions, ${externalStats.blocksToday} blocks today`
+    } else {
+      prevLiveProbesRef.current = externalStats.liveProbes
+    }
+  }, [externalStats])
 
   useEffect(() => {
     if (stale && liveRef.current) {
@@ -23,6 +48,11 @@ export default function NodeCount() {
   }, [stale])
 
   useEffect(() => {
+    // Skip standalone polling when the parent is supplying stats externally.
+    // This eliminates the duplicate /api/probe-events?stats=true request that
+    // used to fire every 62s independently of the 30s useBlockEvents interval.
+    if (externalStats !== undefined) return
+
     let mounted = true
     let consecutiveFailures = 0
     let abortController = new AbortController()
@@ -71,7 +101,7 @@ export default function NodeCount() {
       abortController.abort()
       clearInterval(interval)
     }
-  }, [])
+  }, [externalStats])
 
   return (
     <>

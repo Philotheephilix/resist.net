@@ -30,7 +30,8 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const ip = request.headers.get('x-real-ip') ?? '127.0.0.1'
+  const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
+  const ip = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : '127.0.0.1'
   if (!checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,

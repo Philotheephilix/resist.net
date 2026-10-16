@@ -224,7 +224,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                         style={{ color: 'inherit' }}
                       >
                         <span aria-hidden="true">{cachedTruncateUrl(event.targetUrl)}</span>
-                        <span className="sr-only">{event.targetUrl}</span>
+                        <span className="sr-only">{event.targetUrl} (opens in new tab)</span>
                       </a>
                     </p>
                     <p
