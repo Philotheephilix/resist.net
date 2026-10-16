@@ -7,42 +7,6 @@ import FilterBar, { FilterType } from '../components/FilterBar'
 import NodeCount from '../components/NodeCount'
 import { useBlockEvents } from '../hooks/useBlockEvents'
 
-// Hoisted static style objects — stable identity avoids recreating them on every render.
-const SIDEBAR_BTN_STATIC: React.CSSProperties = {
-  color: '#181818',
-  border: '1px solid #ebecef',
-  backgroundColor: 'transparent',
-}
-const SIDEBAR_BTN_ACTIVE: React.CSSProperties = {
-  color: '#ffffff',
-  backgroundColor: '#181818',
-  border: '1px solid #181818',
-}
-const LOADING_PILL_STYLE: React.CSSProperties = {
-  backgroundColor: '#ffffff',
-  color: '#717680',
-  border: '1px solid #ebecef',
-}
-const LOADING_DOT_STYLE: React.CSSProperties = { backgroundColor: '#00c230' }
-const STATUS_VISIBLE_STYLE: React.CSSProperties = {
-  backgroundColor: '#ffffff',
-  color: '#181818',
-  border: '1px solid #ebecef',
-  zIndex: 5,
-  pointerEvents: 'none',
-}
-const STATUS_HIDDEN_STYLE: React.CSSProperties = {
-  position: 'absolute',
-  width: '1px',
-  height: '1px',
-  padding: 0,
-  margin: '-1px',
-  overflow: 'hidden',
-  clip: 'rect(0,0,0,0)',
-  whiteSpace: 'nowrap',
-  border: 0,
-}
-
 // Leaflet must be client-only — no SSR
 const CensorshipMap = dynamic(() => import('../components/CensorshipMap'), {
   ssr: false,
@@ -51,14 +15,17 @@ const CensorshipMap = dynamic(() => import('../components/CensorshipMap'), {
       role="status"
       aria-label="Loading map"
       className="flex h-full w-full items-center justify-center"
-      style={{ backgroundColor: '#111827' }}
+      style={{ backgroundColor: '#0a0a0a' }}
     >
-      <span style={{ color: '#9ca3af', fontSize: 14 }}>Loading map…</span>
+      <div className="flex items-center gap-3 rounded-full px-5 py-2.5 text-sm"
+        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.5)' }}>
+        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ backgroundColor: '#00c230' }} />
+        Loading map…
+      </div>
     </div>
   ),
 })
 
-// Track whether we're on a small (mobile) viewport where sm:hidden is inactive.
 let mq: MediaQueryList | undefined
 function getMq(): MediaQueryList {
   if (!mq) mq = window.matchMedia('(min-width: 640px)')
@@ -98,35 +65,39 @@ export default function HomePage() {
   return (
     <div
       className="flex h-screen w-full flex-col overflow-hidden"
-      style={{ backgroundColor: '#f3f4f5', color: '#181818' }}
+      style={{ backgroundColor: '#0a0a0a', color: '#ffffff' }}
     >
-      {/* ─── Top bar ──────────────────────────────────────────── */}
+      {/* ─── Top bar ── glass morphism header ── */}
       <header
-        className="z-10 flex flex-shrink-0 items-center justify-between gap-4 px-4 py-3"
+        className="z-20 flex flex-shrink-0 items-center justify-between gap-4 px-5 py-3"
         style={{
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid #ebecef',
+          background: '#111113',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}
       >
         {/* Brand */}
         <div className="flex items-center gap-3">
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold"
-            style={{ backgroundColor: '#f2280d', color: '#ffffff' }}
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
+            style={{
+              background: 'linear-gradient(135deg, #f2280d 0%, #ff6b35 100%)',
+              color: '#ffffff',
+              boxShadow: '0 2px 12px rgba(242,40,13,0.45)',
+            }}
             aria-hidden
           >
             R
           </div>
-          <div>
+          <div className="flex items-baseline gap-2">
             <h1
-              className="text-base font-semibold tracking-tight"
-              style={{ color: '#181818', margin: 0 }}
+              className="text-sm font-semibold tracking-tight"
+              style={{ color: '#ffffff', margin: 0, letterSpacing: '-0.01em' }}
             >
               resist.net
             </h1>
             <span
-              className="ml-2 hidden text-xs sm:inline"
-              style={{ color: '#717680' }}
+              className="hidden text-xs sm:inline"
+              style={{ color: 'rgba(255,255,255,0.35)' }}
             >
               Community Censorship Monitor
             </span>
@@ -134,12 +105,15 @@ export default function HomePage() {
         </div>
 
         {/* Stats + sidebar toggle */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <NodeCount />
           <button
             onClick={() => setSidebarOpen((v) => !v)}
-            className="rounded-full px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181818]/30"
-            style={sidebarOpen ? SIDEBAR_BTN_ACTIVE : SIDEBAR_BTN_STATIC}
+            className="rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20"
+            style={sidebarOpen
+              ? { background: 'rgba(255,255,255,0.12)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.16)' }
+              : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.08)' }
+            }
             aria-label={sidebarOpen ? 'Hide events panel' : 'Show events panel'}
             aria-expanded={sidebarOpen}
             aria-controls="events-panel"
@@ -149,40 +123,40 @@ export default function HomePage() {
         </div>
       </header>
 
-      {/* ─── Filter bar ───────────────────────────────────────── */}
+      {/* ─── Filter bar ── */}
       <div
-        className="z-10 flex-shrink-0 px-4 py-2"
+        className="z-10 flex-shrink-0 px-5 py-2.5"
         style={{
-          backgroundColor: '#f9fafb',
-          borderBottom: '1px solid #ebecef',
+          background: '#0d0d0f',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
         }}
       >
         <FilterBar active={activeFilter} onChange={setActiveFilter} />
       </div>
 
-      {/* ─── Main content area ────────────────────────────────── */}
+      {/* ─── Main content ── */}
       <main className="relative flex min-h-0 flex-1">
-        {/* Map — always dark (Leaflet dark tile layer) */}
+        {/* Map */}
         <div className="relative flex-1">
           <CensorshipMap events={events} sidebarOpen={sidebarOpen} />
 
-          {/* Error banner — role=alert always in DOM for AT live region registration.
-              Inner child uses visibility:hidden when no error to prevent spurious
-              empty announcement on mount. */}
+          {/* Error banner — always in DOM for AT live region */}
           <div
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
             className="absolute left-4 right-4 top-4"
-            style={{ zIndex: 10, pointerEvents: error ? undefined : 'none' }}
+            style={{ zIndex: 20, pointerEvents: error ? undefined : 'none' }}
           >
             <div
-              className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs"
+              className="flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-medium"
               style={{
-                backgroundColor: '#fee9e7',
-                border: '1px solid #f2280d',
-                color: '#c2200a',
-                animation: error ? 'slideInFromTop 300ms cubic-bezier(0,0,0.2,1)' : undefined,
+                background: 'rgba(242,40,13,0.15)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(242,40,13,0.35)',
+                color: '#ff6b55',
+                animation: error ? 'slideInFromTop 280ms cubic-bezier(0.16,1,0.3,1)' : undefined,
                 visibility: error ? 'visible' : 'hidden',
               }}
             >
@@ -191,72 +165,105 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Loading overlay on map */}
+          {/* Loading overlay */}
           <div
             className="absolute inset-0 flex items-center justify-center"
             style={{
-              backgroundColor: loading && events.length === 0 ? 'rgba(17,24,39,0.7)' : 'transparent',
+              backgroundColor: loading && events.length === 0 ? 'rgba(10,10,10,0.75)' : 'transparent',
+              backdropFilter: loading && events.length === 0 ? 'blur(4px)' : 'none',
               zIndex: loading && events.length === 0 ? 5 : -1,
               pointerEvents: loading && events.length === 0 ? undefined : 'none',
+              transition: 'opacity 200ms ease',
             }}
             role="status"
             aria-label="Loading probe events"
             aria-hidden={loading && events.length === 0 ? undefined : 'true'}
           >
             {loading && events.length === 0 && (
-              <div className="flex items-center gap-2 rounded-full px-4 py-2 text-xs" style={LOADING_PILL_STYLE}>
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={LOADING_DOT_STYLE} />
+              <div
+                className="flex items-center gap-2.5 rounded-full px-5 py-2.5 text-sm"
+                style={{
+                  background: 'rgba(255,255,255,0.08)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.7)',
+                }}
+              >
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full live-dot" style={{ backgroundColor: '#00c230' }} />
                 Fetching probe events…
               </div>
             )}
           </div>
 
-          {/* Event count live region */}
+          {/* Event count badge */}
           <div
             role="status"
             aria-live="polite"
             aria-atomic="true"
             className={!loading && events.length > 0
-              ? 'absolute bottom-4 left-4 rounded-full px-3 py-1.5 text-xs font-semibold'
+              ? 'absolute bottom-5 left-5 rounded-full px-4 py-2 text-xs font-semibold'
               : undefined}
-            style={!loading && events.length > 0 ? STATUS_VISIBLE_STYLE : STATUS_HIDDEN_STYLE}
+            style={!loading && events.length > 0 ? {
+              background: 'rgba(255,255,255,0.09)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255,255,255,0.13)',
+              color: 'rgba(255,255,255,0.8)',
+              zIndex: 5,
+              pointerEvents: 'none',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+            } : {
+              position: 'absolute',
+              width: '1px', height: '1px',
+              padding: 0, margin: '-1px',
+              overflow: 'hidden',
+              clip: 'rect(0,0,0,0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+            }}
             aria-label={!loading && events.length > 0
               ? `${blockedCount} blocked, ${reachableCount} reachable`
               : undefined}
           >
             {!loading && events.length > 0
-              ? <>{blockedCount} blocked<span aria-hidden="true"> • </span>{reachableCount} reachable</>
+              ? <>{blockedCount} blocked<span aria-hidden="true" style={{ color: 'rgba(255,255,255,0.25)' }}> · </span>{reachableCount} reachable</>
               : ''}
           </div>
         </div>
 
-        {/* Sidebar — events list */}
+        {/* ─── Sidebar ── glass panel ── */}
         <aside
           id="events-panel"
           aria-label="Recent block events"
           {...(!sidebarOpen ? { 'aria-hidden': 'true' as const } : {})}
-          className="flex w-80 flex-col flex-shrink-0 overflow-hidden"
+          className="flex w-80 flex-shrink-0 flex-col overflow-hidden"
           style={{
             display: sidebarOpen ? undefined : 'none',
-            backgroundColor: '#ffffff',
-            borderLeft: '1px solid #ebecef',
+            background: 'rgba(12, 12, 16, 0.92)',
+            backdropFilter: 'blur(24px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+            borderLeft: '1px solid rgba(255,255,255,0.07)',
           }}
         >
           <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />
         </aside>
       </main>
 
-      {/* ─── Mobile bottom sheet (small screens) ─────────────── */}
+      {/* ─── Mobile bottom sheet ── */}
       <div
         role="region"
         className="flex-shrink-0 sm:hidden"
         aria-label="Recent block events (mobile)"
         aria-hidden={isDesktop || sidebarOpen ? 'true' : undefined}
-        style={{ borderTop: '1px solid #ebecef' }}
+        style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
       >
         <div
           className="max-h-56 overflow-y-auto"
-          style={{ backgroundColor: '#ffffff' }}
+          style={{
+            background: 'rgba(12, 12, 16, 0.96)',
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+          }}
         >
           <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />
         </div>

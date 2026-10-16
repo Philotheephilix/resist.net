@@ -155,17 +155,17 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: '1px solid #ebecef' }}
+        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
         <h2
-          className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: '#717680', margin: 0 }}
+          className="text-[11px] font-semibold uppercase tracking-widest"
+          style={{ color: 'rgba(255,255,255,0.3)', margin: 0 }}
         >
           Recent Events
         </h2>
         <div
-          className="rounded-full border px-2 py-0.5 text-xs font-medium"
-          style={{ backgroundColor: '#f3f4f5', borderColor: '#ebecef', color: '#717680' }}
+          className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+          style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.35)' }}
           aria-hidden="true"
         >
           {sorted.length}
@@ -179,39 +179,47 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
-                className="h-16 animate-pulse rounded-xl"
-                style={{ backgroundColor: '#f3f4f5' }}
+                className="h-16 rounded-2xl skeleton-shimmer"
+                style={{ animationDelay: `${i * 80}ms` }}
               />
             ))}
           </div>
         ) : sorted.length === 0 ? (
           <div
             className="flex h-32 items-center justify-center text-sm"
-            style={{ color: '#717680' }}
+            style={{ color: 'rgba(255,255,255,0.25)' }}
           >
             No events yet
           </div>
         ) : (
-          <ul aria-label="Recent censorship events, sorted newest first" className="px-4 py-2">
-            {sorted.map((event) => (
-              <li key={event.id} className="py-3" style={{ borderBottom: '1px solid #ebecef' }}>
+          <ul aria-label="Recent censorship events, sorted newest first" className="px-3 py-2">
+            {sorted.map((event, i) => (
+              <li
+                key={event.id}
+                className="event-item rounded-2xl px-3 py-3 transition-colors duration-100 hover:bg-white/5"
+                style={{
+                  animationDelay: `${Math.min(i * 30, 300)}ms`,
+                  borderBottom: i < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  borderRadius: 0,
+                }}
+              >
                 <div className="flex items-start justify-between gap-3">
                   {/* Left: chip + url */}
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1.5 flex items-center gap-2">
+                    <div className="mb-1.5">
                       <StatusChip blockType={event.blockType} />
                     </div>
                     <p
-                      className="truncate text-sm font-medium"
-                      style={{ color: '#181818' }}
+                      className="truncate text-[13px] font-medium leading-snug"
+                      style={{ color: 'rgba(255,255,255,0.88)' }}
                       title={event.targetUrl}
                     >
                       <span aria-hidden="true">{cachedTruncateUrl(event.targetUrl)}</span>
                       <span className="sr-only">{event.targetUrl}</span>
                     </p>
                     <p
-                      className="mt-0.5 text-xs"
-                      style={{ color: '#717680' }}
+                      className="mt-0.5 font-mono text-[11px]"
+                      style={{ color: 'rgba(255,255,255,0.28)' }}
                       title={event.nodeWallet}
                     >
                       <span aria-hidden="true">{truncateWallet(event.nodeWallet)}</span>
@@ -223,8 +231,8 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                   <time
                     dateTime={cachedTsIso(event.timestamp)}
                     title={cachedTsLocale(event.timestamp)}
-                    className="flex-shrink-0 pt-0.5 text-xs"
-                    style={{ color: '#717680' }}
+                    className="flex-shrink-0 pt-0.5 text-[11px]"
+                    style={{ color: 'rgba(255,255,255,0.28)' }}
                   >
                     {timeAgo(event.timestamp)}
                   </time>

@@ -17,18 +17,18 @@ const FILTERS: { key: FilterType; label: string }[] = [
   { key: 'full_unreachable', label: 'Unreachable' },
 ]
 
-// World UI Kit Pill pattern — active: dark fill, inactive: transparent with border
 const LABEL_STYLE_ACTIVE: React.CSSProperties = {
-  backgroundColor: '#181818',
+  background: 'rgba(255,255,255,0.14)',
   color: '#ffffff',
-  border: '1px solid #181818',
-  transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1)',
+  border: '1px solid rgba(255,255,255,0.20)',
+  boxShadow: '0 1px 6px rgba(0,0,0,0.25)',
+  transition: 'all 150ms cubic-bezier(0.16,1,0.3,1)',
 }
 const LABEL_STYLE_INACTIVE: React.CSSProperties = {
-  backgroundColor: 'transparent',
-  color: '#181818',
-  border: '1px solid #ebecef',
-  transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1)',
+  background: 'rgba(255,255,255,0.04)',
+  color: 'rgba(255,255,255,0.45)',
+  border: '1px solid rgba(255,255,255,0.07)',
+  transition: 'all 150ms cubic-bezier(0.16,1,0.3,1)',
 }
 
 export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
@@ -44,7 +44,7 @@ export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
         return (
           <label
             key={key}
-            className="flex-shrink-0 cursor-pointer rounded-full"
+            className="flex-shrink-0 cursor-pointer rounded-full select-none"
             style={isActive ? LABEL_STYLE_ACTIVE : LABEL_STYLE_INACTIVE}
           >
             {/* Visually hidden radio input — clicking the label activates it */}
@@ -56,7 +56,7 @@ export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
               onChange={() => onChange(key)}
               className="sr-only"
             />
-            <span className="block px-3 py-1.5 text-xs font-semibold focus-within:ring-2 focus-within:ring-[#181818]/30 focus-within:rounded-full">
+            <span className="block px-3.5 py-1.5 text-xs font-semibold tracking-wide focus-within:ring-2 focus-within:ring-white/20 focus-within:rounded-full">
               {label}
             </span>
           </label>
