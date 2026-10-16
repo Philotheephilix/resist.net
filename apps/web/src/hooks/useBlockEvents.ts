@@ -24,9 +24,12 @@ export function useBlockEvents(filters: BlockEventFilters) {
     const prev = prevEventsRef.current
     if (next.length === 0 && prev.length === 0) return
     if (next.length === prev.length && next.length > 0) {
-      const prevIds = new Set<string>()
-      for (const e of prev) prevIds.add(e.id)
-      if (next.every(e => prevIds.has(e.id))) return
+      const prevMap = new Map<string, ProbeResultRow>()
+      for (const e of prev) prevMap.set(e.id, e)
+      if (next.every(e => {
+        const p = prevMap.get(e.id)
+        return p !== undefined && p.blockType === e.blockType
+      })) return
     }
     prevEventsRef.current = next
     setEvents(next)

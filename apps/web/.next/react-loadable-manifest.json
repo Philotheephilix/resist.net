@@ -1,0 +1,15 @@
+{
+  "app/page.tsx -> ../components/CensorshipMap": {
+    "id": "app/page.tsx -> ../components/CensorshipMap",
+    "files": [
+      "static/css/_app-pages-browser_src_components_CensorshipMap_tsx.css",
+      "static/chunks/_app-pages-browser_src_components_CensorshipMap_tsx.js"
+    ]
+  },
+  "components/CensorshipMap.tsx -> leaflet": {
+    "id": "components/CensorshipMap.tsx -> leaflet",
+    "files": [
+      "static/chunks/_app-pages-browser_node_modules_leaflet_dist_leaflet-src_js.js"
+    ]
+  }
+}

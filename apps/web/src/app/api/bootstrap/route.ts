@@ -1,5 +1,11 @@
 import { NextRequest } from 'next/server'
 
+// WARNING (deployment): rateLimitMap is process-scoped. On Vercel/Lambda each
+// concurrent invocation is an isolated process — an attacker can bypass the 120 req/min
+// limit by triggering parallel cold starts. For production, add a distributed rate
+// limiter (e.g. Vercel Edge Middleware + Upstash Redis, or Cloudflare Rate Limiting)
+// that shares state across instances. This map remains as a secondary defence for
+// within-instance burst traffic.
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 120
 const rateLimitMap = new Map<string, { count: number; windowStart: number }>()

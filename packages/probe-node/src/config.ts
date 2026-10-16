@@ -42,7 +42,7 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
     if (data.lat < -90 || data.lat > 90 || data.lon < -180 || data.lon > 180) {
       throw new Error("ip-api returned out-of-range coordinates")
     }
-    const geohash = ngeohash.encode(data.lat, data.lon, 7)
+    const geohash = ngeohash.encode(data.lat, data.lon, 5)
     // Cap ISP length before writing to disk — a MITM on ip-api.com could return
     // an arbitrarily large ISP string that grows config.json unboundedly.
     const rawIsp = data.isp ?? data.org ?? "unknown"

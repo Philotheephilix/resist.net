@@ -126,12 +126,11 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
   // leafletRef caches the leaflet module after the first async import so subsequent
   // events-change effects don't re-import on every render.
   const leafletRef = useRef<any>(null)
-  // markerMapRef: eventId → Leaflet marker. Enables incremental diffing so each
+  // markerMapRef: eventId → { marker, event }. Enables incremental diffing so each
   // poll cycle only adds new markers and removes gone ones — not a full O(N) teardown.
-  const markerMapRef = useRef<Map<string, any>>(new Map())
-  // mapPopupTimeoutRef: handle for the map-level popupopen setTimeout so it can be
-  // cancelled when another popup opens before the 60ms fires, preventing listener
-  // accumulation on the same popup div across rapid opens.
+  // Storing the full event allows detecting field changes (e.g. blockType) on re-poll.
+  const markerMapRef = useRef<Map<string, { marker: any; event: ProbeResultRow }>>(new Map())
+  // mapPopupTimeoutRef: reserved timeout handle for popup-related deferred work (currently unused).
   const mapPopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // hasEverOpenedPopupRef: tracks whether any popup has been opened this session.
   // Used to add popup-Escape instructions to the map container aria-label only after
@@ -353,19 +352,22 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     const newIds = new Set<string>()
     for (const e of eventsToRender) newIds.add(e.id)
 
-    // Remove stale markers
+    // Remove stale markers (gone IDs) and markers whose popup-relevant fields changed.
     for (const id of markerMapRef.current.keys()) {
-      if (!newIds.has(id)) {
-        const staleMarker = markerMapRef.current.get(id)
-        if (staleMarker) {
-          // If the focused-marker ref points to a marker we're about to evict,
-          // null it so the popupclose handler doesn't try to focus a detached element.
-          const staleEl = staleMarker.getElement?.() as HTMLElement | undefined
-          if (staleEl && lastFocusedMarkerElRef.current === staleEl) {
-            lastFocusedMarkerElRef.current = null
-          }
-          markersLayerRef.current.removeLayer(staleMarker)
+      const entry = markerMapRef.current.get(id)!
+      const isGone = !newIds.has(id)
+      const isChanged = !isGone && (() => {
+        const incoming = eventsToRender.find(e => e.id === id)
+        return incoming !== undefined && incoming.blockType !== entry.event.blockType
+      })()
+      if (isGone || isChanged) {
+        // If the focused-marker ref points to a marker we're about to evict,
+        // null it so the popupclose handler doesn't try to focus a detached element.
+        const staleEl = entry.marker.getElement?.() as HTMLElement | undefined
+        if (staleEl && lastFocusedMarkerElRef.current === staleEl) {
+          lastFocusedMarkerElRef.current = null
         }
+        markersLayerRef.current.removeLayer(entry.marker)
         markerMapRef.current.delete(id)
       }
     }
@@ -383,7 +385,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         ;(marker as any)._batchPatch = true
       }
       markersLayerRef.current.addLayer(marker)
-      markerMapRef.current.set(event.id, marker)
+      markerMapRef.current.set(event.id, { marker, event })
       batchMarkers.push(marker)
     }
     if (useBatch && mapRef.current) {
@@ -448,9 +450,6 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
 
       // Map-level popup keyboard handler: Escape inside a popup closes it and
       // returns focus to the marker that opened it — prevents keyboard trap (WCAG 2.1.2).
-      // We store the timeout handle in mapPopupTimeoutRef so rapid popup-open cycles
-      // (user opens marker A, then marker B within 60ms) cancel the previous pending
-      // timer before scheduling a new one, preventing listener accumulation.
       map.on('popupopen', (ev: any) => {
         popupIsOpenRef.current = true
         if (!hasEverOpenedPopupRef.current) {
@@ -487,12 +486,11 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
             }
           }
         }
-        // Defer the Escape keydown listener by 60ms to avoid picking up the same keydown
-        // that opened the popup (e.g. Enter/Space on marker triggers popupopen synchronously).
-        mapPopupTimeoutRef.current = setTimeout(() => {
-          mapPopupTimeoutRef.current = null
-          const popup = immediatePopup
-          if (!popup) return
+        // Attach the Escape listener immediately — no deferral needed because the handler
+        // only responds to Escape, which cannot be the same keydown that opened the popup
+        // (Enter/Space opens it). The 60ms deferral was overly broad.
+        const popup = immediatePopup
+        if (popup) {
           // Remove any stale listener from a prior cycle before adding a fresh one.
           const prevHandler = (popup as any)._escHandler as ((e: KeyboardEvent) => void) | undefined
           if (prevHandler) popup.removeEventListener('keydown', prevHandler)
@@ -513,7 +511,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           // regardless of key. A Tab press while the popup is open would silently absorb
           // the listener, so a subsequent Escape would not set popupClosedByActionRef.
           popup.addEventListener('keydown', onKeyDown)
-        }, 60)
+        }
       })
 
       map.on('popupclose', () => {
@@ -591,7 +589,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       // Explicitly remove keydown listeners stored on each marker's SVG element.
       // Relying solely on Leaflet's map.remove() to free them is safe in real browsers
       // but leaks in jsdom test environments where the SVG container may be retained.
-      markerMapRef.current.forEach(m => {
+      markerMapRef.current.forEach(({ marker: m }) => {
         if ((m as any)._addRafId) { cancelAnimationFrame((m as any)._addRafId); (m as any)._addRafId = null }
         const el = m.getElement?.() as any
         if (el && el._keydownHandler) { el.removeEventListener('keydown', el._keydownHandler); el._keydownHandler = null }

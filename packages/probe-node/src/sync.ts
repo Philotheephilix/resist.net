@@ -118,6 +118,12 @@ async function writeHeartbeat(
   }
 }
 
+export function getPendingRowCount(): number {
+  const db = getDb()
+  const row = db.prepare("SELECT COUNT(*) AS cnt FROM pending").get() as { cnt: number }
+  return row.cnt
+}
+
 export async function syncToArkiv(
   results: ProbeResult[],
   config?: {
@@ -195,10 +201,11 @@ export async function syncToArkiv(
   // Up to 5 results per tick; Promise.allSettled lets all complete regardless of
   // individual failures, mirroring the drain path's concurrent write pattern.
   await Promise.allSettled(results.map(async result => {
+    const safeResult = { ...result, geohash: result.geohash.slice(0, 5) }
     let wrote = false
     if (client) {
       try {
-        wrote = await writeToArkiv(client, result)
+        wrote = await writeToArkiv(client, safeResult)
       } catch {
         // 429 rate-limit: writeToArkiv re-throws; treat as a cache miss so
         // the result is queued locally rather than silently dropped.
@@ -208,12 +215,12 @@ export async function syncToArkiv(
     if (!wrote) {
       // Use wall-clock insert time (not result.timestamp) so the 48h eviction
       // window starts from when the row was actually cached, not when the probe ran.
-      stmtInsert!.run(result.id, JSON.stringify(result), Date.now())
+      stmtInsert!.run(safeResult.id, JSON.stringify(safeResult), Date.now())
     }
   }))
 
   // --- NodeIdentity heartbeat (30-minute TTL per spec) ---
   if (client && config) {
-    await writeHeartbeat(client, config)
+    await writeHeartbeat(client, { ...config, geohash: config.geohash.slice(0, 5) })
   }
 }

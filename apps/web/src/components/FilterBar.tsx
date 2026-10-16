@@ -34,11 +34,10 @@ const LABEL_STYLE_INACTIVE: React.CSSProperties = {
 export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
   return (
     <fieldset
+      aria-label="Filter events by block type"
       className="flex items-center gap-2 overflow-x-auto pb-1"
-      style={{ scrollbarWidth: 'none', border: 'none', padding: 0, margin: 0 }}
+      style={{ scrollbarWidth: 'none', border: 'none', padding: 0, margin: 0, minWidth: 0 }}
     >
-      <legend className="sr-only">Filter events by block type</legend>
-
       {FILTERS.map(({ key, label }) => {
         const isActive = active === key
         return (

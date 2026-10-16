@@ -83,7 +83,7 @@ export default function VolunteerCount({ externalVolunteerCount }: VolunteerCoun
           className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs"
           style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' }}
         >
-          <span className="inline-block h-1.5 w-24 rounded-full skeleton-shimmer" />
+          <span aria-hidden="true" className="inline-block h-1.5 w-24 rounded-full skeleton-shimmer" />
         </div>
       ) : (
         <div

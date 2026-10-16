@@ -87,6 +87,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .skeleton-shimmer,
   .live-dot,
+  .live-dot::after,
   .event-item,
   .leaflet-container *,
   .error-banner-visible {

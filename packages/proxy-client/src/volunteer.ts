@@ -449,7 +449,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         entityKey = await arkiv.writeVolunteerProxy({
           wallet: config.wallet,
           sdpOffer: sdpOfferJson,
-          geohash: config.geohash,
+          geohash: config.geohash.slice(0, 5),
           capacitySlots: config.capacitySlots ?? 5,
           createdAt: Date.now(),
         })
@@ -480,19 +480,29 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
   const MAX_STARTUP_ATTEMPTS = 10
   const STARTUP_BACKOFF_BASE_MS = 30_000
   const STARTUP_BACKOFF_MAX_MS = 300_000
+  const STARTUP_RESET_SLEEP_MS = 10 * 60_000
   let startupResult: { peer: RTCPeerConnection; sdpOfferJson: string; entityKey: string } | undefined
-  for (let attempt = 1; attempt <= MAX_STARTUP_ATTEMPTS; attempt++) {
-    try {
-      startupResult = await createOffer()
-      break
-    } catch (err) {
-      if (attempt >= MAX_STARTUP_ATTEMPTS) throw err
-      const backoffMs = Math.min(STARTUP_BACKOFF_BASE_MS * 2 ** (attempt - 1), STARTUP_BACKOFF_MAX_MS)
-      console.error(
-        `[volunteer] Startup failed (attempt ${attempt}/${MAX_STARTUP_ATTEMPTS}), retrying in ${backoffMs}ms:`,
-        redactErrMsg(err, config.rpcUrl),
-      )
-      await new Promise((res) => setTimeout(res, backoffMs))
+  while (!startupResult) {
+    for (let attempt = 1; attempt <= MAX_STARTUP_ATTEMPTS; attempt++) {
+      try {
+        startupResult = await createOffer()
+        break
+      } catch (err) {
+        const backoffMs = Math.min(STARTUP_BACKOFF_BASE_MS * 2 ** (attempt - 1), STARTUP_BACKOFF_MAX_MS)
+        if (attempt < MAX_STARTUP_ATTEMPTS) {
+          console.error(
+            `[volunteer] Startup failed (attempt ${attempt}/${MAX_STARTUP_ATTEMPTS}), retrying in ${backoffMs}ms:`,
+            redactErrMsg(err, config.rpcUrl),
+          )
+          await new Promise((res) => setTimeout(res, backoffMs))
+        } else {
+          console.error(
+            `[volunteer] Startup failed after ${MAX_STARTUP_ATTEMPTS} attempts, sleeping ${STARTUP_RESET_SLEEP_MS / 1000}s before next cycle:`,
+            redactErrMsg(err, config.rpcUrl),
+          )
+          await new Promise((res) => setTimeout(res, STARTUP_RESET_SLEEP_MS))
+        }
+      }
     }
   }
   let { peer: mainPeer, entityKey } = startupResult!
@@ -509,7 +519,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         const result = await arkiv.writeVolunteerProxy({
           wallet: config.wallet,
           sdpOffer: JSON.stringify(mainPeer.localDescription),
-          geohash: config.geohash,
+          geohash: config.geohash.slice(0, 5),
           capacitySlots: config.capacitySlots ?? 5,
           createdAt: Date.now(),
         })

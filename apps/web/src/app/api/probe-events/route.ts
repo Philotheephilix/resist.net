@@ -85,8 +85,13 @@ async function queryArkivProbeEvents(opts: {
 }
 
 // In-memory rate limiter: IP → { count, windowStart }
-// Allows 60 requests per minute per IP. Process-scoped — resets on cold starts
-// (acceptable: cold starts are rare and the window resets quickly).
+// Allows 60 requests per minute per IP. Process-scoped — resets on cold starts.
+// WARNING (deployment): on Vercel/Lambda each concurrent invocation is an isolated
+// process, so this map provides no cross-instance protection. An attacker can bypass
+// the limit by triggering parallel cold starts. For production, front this route with
+// a distributed rate limiter (e.g. Vercel Edge Middleware + Upstash Redis, or
+// Cloudflare Rate Limiting) that shares state across instances. This in-process map
+// remains as a secondary defence for within-instance burst traffic.
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 60
 const rateLimitMap = new Map<string, { count: number; windowStart: number }>()

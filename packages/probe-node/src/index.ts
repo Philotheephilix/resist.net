@@ -2,9 +2,25 @@
 // Runs HTTP + DNS + TCP checks on a schedule, signs results, writes to Arkiv
 // Falls back to local SQLite cache when offline
 
+import http from "http"
 import { runProbe } from "./probe"
-import { syncToArkiv } from "./sync"
+import { syncToArkiv, getPendingRowCount } from "./sync"
 import { loadConfig, savePrevHash } from "./config"
+
+const HEALTHZ_PORT = parseInt(process.env["HEALTHZ_PORT"] ?? "9090", 10)
+const PENDING_ALERT_THRESHOLD = 500
+
+function startHealthServer() {
+  http.createServer((_req, res) => {
+    const pending = getPendingRowCount()
+    const status = pending >= PENDING_ALERT_THRESHOLD ? "degraded" : "ok"
+    if (pending >= PENDING_ALERT_THRESHOLD) {
+      console.warn(`[sync] offline cache depth ${pending} >= ${PENDING_ALERT_THRESHOLD} — Arkiv may be unreachable`)
+    }
+    res.writeHead(status === "ok" ? 200 : 503, { "Content-Type": "application/json" })
+    res.end(JSON.stringify({ status, pending_rows: pending, threshold: PENDING_ALERT_THRESHOLD }))
+  }).listen(HEALTHZ_PORT)
+}
 
 const INTERVAL_MS = 15 * 60 * 1000 // 15 min
 const MAX_INTERVAL_MS = 2 * 60 * 60 * 1000 // 2 h
@@ -24,6 +40,7 @@ async function tick() {
 }
 
 export async function main() {
+  startHealthServer()
   let running = true
   let consecutiveFailures = 0
   let currentInterval = INTERVAL_MS

@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Documentation — World Mini Apps Design System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    * { box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #f3f4f5; }
+    code, pre { font-family: 'JetBrains Mono', monospace; }
+    .section-nav a { transition: color 0.15s, background 0.15s; }
+    .section-nav a:hover { color: #fff; background: rgba(255,255,255,0.06); }
+    .section-nav a.active { color: #fff; background: rgba(255,255,255,0.1); }
+    .component-card { border: 1px solid rgba(255,255,255,0.07); border-radius: 20px; background: #111; overflow: hidden; }
+    .variant-frame { border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; overflow: hidden; background: #fff; }
+    .variant-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #717680; margin-bottom: 8px; }
+    .section-anchor { scroll-margin-top: 88px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  </style>
+</head>
+<body class="min-h-screen">
+
+<!-- TOP NAV -->
+<header class="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0a]/90 backdrop-blur-md">
+  <div class="max-w-screen-2xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
+    <div class="flex items-center gap-3">
+      <span class="text-white font-semibold text-sm tracking-tight">World Mini Apps</span>
+      <span class="text-white/20 text-xs">/</span>
+      <span class="text-white/50 text-xs font-medium">Documentation</span>
+    </div>
+    <nav class="section-nav flex items-center gap-1">
+      <a href="#colors" class="px-3 py-1.5 rounded-lg text-xs font-medium text-white/50">Colors</a>
+      <a href="#haptics" class="px-3 py-1.5 rounded-lg text-xs font-medium text-white/50">Haptics</a>
+      <a href="#icons" class="px-3 py-1.5 rounded-lg text-xs font-medium text-white/50">Icons</a>
+      <a href="#i18n" class="px-3 py-1.5 rounded-lg text-xs font-medium text-white/50">i18n</a>
+      <a href="#spacing" class="px-3 py-1.5 rounded-lg text-xs font-medium text-white/50">Spacing</a>
+    </nav>
+  </div>
+</header>
+
+<!-- PAGE HEADER -->
+<div class="max-w-screen-2xl mx-auto px-6 pt-12 pb-8">
+  <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.08] text-xs text-white/50 font-medium mb-4">
+    <span class="w-1.5 h-1.5 rounded-full bg-[#3fdbed]"></span>
+    Design System
+  </div>
+  <h1 class="text-4xl font-bold text-white tracking-tight mb-3">Documentation</h1>
+  <p class="text-white/50 text-base max-w-2xl leading-relaxed">
+    Reference guides, token definitions, and behavioral APIs for the World Mini Apps UI Kit. 5 components covering color systems, haptics, icons, internationalization, and spacing.
+  </p>
+</div>
+
+<main class="max-w-screen-2xl mx-auto px-6 pb-24 space-y-20">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       COLORS
+  ═══════════════════════════════════════════════════════════ -->
+  <section id="colors" class="section-anchor">
+    <div class="flex items-start gap-4 mb-8">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#ff5a00]/20 to-[#3385ff]/20 border border-white/[0.08] flex items-center justify-center shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white/70"><circle cx="12" cy="12" r="8"/><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83"/></svg>
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Colors</h2>
+        <p class="text-white/40 text-sm mt-1 max-w-2xl">Comprehensive color token system organized into Primary Colors (Gray + semantic palettes), Specialty Colors (World brand), and Token Colors (crypto assets). Use these tokens for consistent visual communication across status states, brand expressions, and asset representations.</p>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+        <span class="text-sm font-semibold text-white/80">Color Palettes</span>
+        <span class="text-xs text-white/30 font-mono">7 variants</span>
+      </div>
+      <div class="p-6 space-y-8">
+
+        <!-- Gray Scale -->
+        <div>
+          <div class="variant-label">Gray Scale</div>
+          <p class="text-xs text-white/40 mb-4">Neutral gray palette from white (0) through near-black (900). Used for backgrounds, borders, text, and surface hierarchy.</p>
+          <div class="variant-frame p-6">
+            <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Gray</h3>
+            <div class="flex flex-wrap gap-3">
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#ffffff"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">0</strong><span class="text-[10px] text-gray-400">#ffffff</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#f9fafb"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">50</strong><span class="text-[10px] text-gray-400">#f9fafb</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#f3f4f5"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">100</strong><span class="text-[10px] text-gray-400">#f3f4f5</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#ebecef"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">200</strong><span class="text-[10px] text-gray-400">#ebecef</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#d6d9dd"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">300</strong><span class="text-[10px] text-gray-400">#d6d9dd</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#b1b8c2"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">350</strong><span class="text-[10px] text-gray-400">#b1b8c2</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#9ba3ae"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">400</strong><span class="text-[10px] text-gray-400">#9ba3ae</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#717680"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs">500</strong><span class="text-[10px] text-gray-400">#717680</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#3c424b"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs text-white/80">700</strong><span class="text-[10px] text-gray-400">#3c424b</span></div></div>
+              <div class="flex flex-col rounded-2xl overflow-hidden" style="border:1px solid rgba(0,0,0,0.098)"><div class="w-28 h-16" style="background-color:#181818"></div><div class="flex flex-col px-2 py-1"><strong class="text-xs text-white/80">900</strong><span class="text-[10px] text-gray-400">#181818</span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Semantic Palettes Row -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <!-- Success -->
+          <div>
+            <div class="variant-label">Success Palette</div>
+            <div class="variant-frame p-4">
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Success</p>
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#e6f9ec;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">100</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#ccf3d9;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">200</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#99e8b3;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">300</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#66dc8d;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">400</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#33d167;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">500</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#00c230"></div><span class="text-xs text-gray-700 font-semibold">600 ✦</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#009b26"></div><span class="text-xs text-gray-500">700</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#00741d"></div><span class="text-xs text-gray-500">800</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#004d13"></div><span class="text-xs text-gray-500">900</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- Error -->
+          <div>
+            <div class="variant-label">Error Palette</div>
+            <div class="variant-frame p-4">
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Error</p>
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#fee9e7;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">100</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#fdd3cf;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">200</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#fba79f;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">300</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#f97b6f;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">400</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#f7503f;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">500</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#f2280d"></div><span class="text-xs text-gray-700 font-semibold">600 ✦</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#c2200a"></div><span class="text-xs text-gray-500">700</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#911808"></div><span class="text-xs text-gray-500">800</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#611005"></div><span class="text-xs text-gray-500">900</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- Warning -->
+          <div>
+            <div class="variant-label">Warning Palette</div>
+            <div class="variant-frame p-4">
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Warning</p>
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#fff6e6;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">100</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#ffedcc;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">200</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#ffdb99;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">300</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#ffc966;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">400</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#ffb833;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">500</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#ffae00"></div><span class="text-xs text-gray-700 font-semibold">600 ✦</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#cc8b00"></div><span class="text-xs text-gray-500">700</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#996800"></div><span class="text-xs text-gray-500">800</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#664600"></div><span class="text-xs text-gray-500">900</span></div>
+              </div>
+            </div>
+          </div>
+          <!-- Info -->
+          <div>
+            <div class="variant-label">Info Palette</div>
+            <div class="variant-frame p-4">
+              <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Info</p>
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#e6f0ff;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">100</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#cce0ff;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">200</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#99c2ff;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">300</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#66a3ff;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">400</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#3385ff;border:1px solid rgba(0,0,0,0.08)"></div><span class="text-xs text-gray-500">500</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#005cff"></div><span class="text-xs text-gray-700 font-semibold">600 ✦</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#004acc"></div><span class="text-xs text-gray-500">700</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#003799"></div><span class="text-xs text-gray-500">800</span></div>
+                <div class="flex items-center gap-2"><div class="w-8 h-5 rounded" style="background:#002466"></div><span class="text-xs text-gray-500">900</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Specialty + Token Colors -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div class="variant-label">Specialty Colors</div>
+            <p class="text-xs text-white/40 mb-3">Brand and accent colors unique to World. Each has a vivid primary and a light tint secondary for backgrounds and hover states.</p>
+            <div class="variant-frame p-5 space-y-4">
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">World Blue</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#3fdbed"></div><div class="px-2 py-1"><strong class="text-xs">Primary</strong><div class="text-[10px] text-gray-400">#3fdbed</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#ecfbfd"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#ecfbfd</div></div></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">Carrot Orange</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#ff5a00"></div><div class="px-2 py-1"><strong class="text-xs">Primary</strong><div class="text-[10px] text-gray-400">#ff5a00</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#ffede6"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#ffede6</div></div></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">Purple</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#8600ff"></div><div class="px-2 py-1"><strong class="text-xs">Primary</strong><div class="text-[10px] text-gray-400">#8600ff</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#f2e6ff"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#f2e6ff</div></div></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">Blue</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#005cff"></div><div class="px-2 py-1"><strong class="text-xs">Primary</strong><div class="text-[10px] text-gray-400">#005cff</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#e6f0ff"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#e6f0ff</div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="variant-label">Token Colors</div>
+            <p class="text-xs text-white/40 mb-3">Crypto asset brand colors for WLD, USDCE, BTC, and ETH. Use primary for asset icons/badges and secondary for backgrounds.</p>
+            <div class="variant-frame p-5 space-y-4">
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">Worldcoin</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#181818"></div><div class="px-2 py-1"><strong class="text-xs text-white/80" style="background:#333;display:block;padding:2px 4px;border-radius:4px">Primary</strong><div class="text-[10px] text-gray-400">#181818</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#f3f4f5"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#f3f4f5</div></div></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">Digital Dollars</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#00c230"></div><div class="px-2 py-1"><strong class="text-xs">Primary</strong><div class="text-[10px] text-gray-400">#00c230</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#e6f9ec"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#e6f9ec</div></div></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">Bitcoin</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#ff5a00"></div><div class="px-2 py-1"><strong class="text-xs">Primary</strong><div class="text-[10px] text-gray-400">#ff5a00</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#ffede6"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#ffede6</div></div></div>
+                </div>
+              </div>
+              <div>
+                <p class="text-xs font-medium text-gray-600 mb-2">Ethereum</p>
+                <div class="flex gap-3">
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#3385ff"></div><div class="px-2 py-1"><strong class="text-xs">Primary</strong><div class="text-[10px] text-gray-400">#3385ff</div></div></div>
+                  <div class="flex flex-col rounded-xl overflow-hidden border border-gray-100"><div class="w-24 h-14" style="background:#e6f0ff"></div><div class="px-2 py-1"><strong class="text-xs">Secondary</strong><div class="text-[10px] text-gray-400">#e6f0ff</div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       HAPTICS
+  ═══════════════════════════════════════════════════════════ -->
+  <section id="haptics" class="section-anchor">
+    <div class="flex items-start gap-4 mb-8">
+      <div class="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white/70"><path d="M12 2a10 10 0 1 1 0 20 10 10 0 0 1 0-20z"/><path d="M12 6v6l4 2"/></svg>
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Haptics</h2>
+        <p class="text-white/40 text-sm mt-1 max-w-2xl">Behavioral API for triggering device tactile feedback. All interactive UI Kit components include haptic feedback by default. Three categories: Impact (physical collision feel), Notification (outcome signals), and Selection (state-change acknowledgment).</p>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+        <span class="text-sm font-semibold text-white/80">Haptic Types</span>
+        <span class="text-xs text-white/30 font-mono">9 variants</span>
+      </div>
+      <div class="p-6 space-y-8">
+
+        <!-- Impact Row -->
+        <div>
+          <div class="variant-label">Impact Haptics</div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            <!-- Light -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#e0e0e0]/10 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e0e0e0" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">impact</p><p class="text-[#a0a0a0] text-xs mt-0.5">light</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#e0e0e0]/10 text-[#e0e0e0] text-[10px] font-medium">light</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Collision between small UI elements.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'impact', style: 'light'</code></div>
+            </div>
+            <!-- Medium -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#b0b0b0]/10 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b0b0b0" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">impact</p><p class="text-[#a0a0a0] text-xs mt-0.5">medium</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#b0b0b0]/10 text-[#b0b0b0] text-[10px] font-medium">medium</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Collision between medium UI elements.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'impact', style: 'medium'</code></div>
+            </div>
+            <!-- Heavy -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#707070]/20 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2.5"><circle cx="12" cy="12" r="7"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">impact</p><p class="text-[#a0a0a0] text-xs mt-0.5">heavy</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#707070]/20 text-[#888] text-[10px] font-medium">heavy</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Collision between big UI elements.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'impact', style: 'heavy'</code></div>
+            </div>
+            <!-- Soft -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#c8d8f0]/10 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c8d8f0" stroke-width="1.5"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z" stroke-dasharray="3 2"/><circle cx="12" cy="12" r="4"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">impact</p><p class="text-[#a0a0a0] text-xs mt-0.5">soft</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#c8d8f0]/10 text-[#c8d8f0] text-[10px] font-medium">soft</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Collision between flexible UI elements.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'impact', style: 'soft'</code></div>
+            </div>
+            <!-- Rigid -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#f0e0c0]/10 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f0e0c0" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">impact</p><p class="text-[#a0a0a0] text-xs mt-0.5">rigid</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#f0e0c0]/10 text-[#f0e0c0] text-[10px] font-medium">rigid</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Collision between inflexible UI elements.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'impact', style: 'rigid'</code></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notification Row -->
+        <div>
+          <div class="variant-label">Notification Haptics</div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <!-- Success -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#22c55e]/15 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">notification</p><p class="text-[#22c55e] text-xs mt-0.5">success</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#22c55e]/15 text-[#22c55e] text-[10px] font-medium">success</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Indicates that an action was successful.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'notification', style: 'success'</code></div>
+            </div>
+            <!-- Warning -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#f59e0b]/15 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">notification</p><p class="text-[#f59e0b] text-xs mt-0.5">warning</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#f59e0b]/15 text-[#f59e0b] text-[10px] font-medium">warning</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Something is not right — user should take notice.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'notification', style: 'warning'</code></div>
+            </div>
+            <!-- Error -->
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#ef4444]/15 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">notification</p><p class="text-[#ef4444] text-xs mt-0.5">error</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#ef4444]/15 text-[#ef4444] text-[10px] font-medium">error</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Indicates that an action has failed.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">type: 'notification', style: 'error'</code></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Selection + Reference Card -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div class="variant-label">Selection Changed</div>
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333] max-w-sm">
+              <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-full bg-[#3b82f6]/15 flex items-center justify-center">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                </div>
+                <div><p class="text-white text-sm font-semibold leading-none">selection</p><p class="text-[#a0a0a0] text-xs mt-0.5">changed</p></div>
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full bg-[#3b82f6]/15 text-[#3b82f6] text-[10px] font-medium">selection</span>
+              </div>
+              <p class="text-[#a0a0a0] text-xs">Informs the user that a selection has changed, for example a checkbox was clicked.</p>
+              <div class="mt-3 rounded-lg bg-[#111] border border-[#333] px-3 py-2"><code class="text-[#7dd3fc] text-[10px] font-mono">MiniKit.haptics({ type: 'selection' })</code></div>
+            </div>
+          </div>
+          <div>
+            <div class="variant-label">Reference Card — All Types</div>
+            <div class="bg-[#1a1a1a] font-sans p-4 rounded-2xl border border-[#333]">
+              <h2 class="text-white text-sm font-bold tracking-tight mb-1">Haptics</h2>
+              <p class="text-[#666] text-xs mb-4">All UI Kit components include haptic feedback by default.</p>
+              <h3 class="text-[#a0a0a0] text-[9px] font-semibold uppercase tracking-widest mb-2">Impact</h3>
+              <div class="rounded-lg border border-[#333] overflow-hidden mb-3">
+                <table class="w-full text-xs">
+                  <thead><tr class="border-b border-[#333]"><th class="text-left text-[#666] font-medium px-3 py-1.5">variant</th><th class="text-left text-[#666] font-medium px-3 py-1.5">style</th><th class="text-left text-[#666] font-medium px-3 py-1.5">use</th></tr></thead>
+                  <tbody>
+                    <tr class="border-b border-[#2a2a2a]"><td class="px-3 py-1.5 text-[#a0a0a0] font-mono text-[10px]">impact</td><td class="px-3 py-1.5"><span class="text-[#e0e0e0] bg-[#e0e0e0]/10 px-1.5 py-0.5 rounded text-[10px]">light</span></td><td class="px-3 py-1.5 text-[#666] text-[10px]">Small elements</td></tr>
+                    <tr class="border-b border-[#2a2a2a]"><td class="px-3 py-1.5 text-[#a0a0a0] font-mono text-[10px]">impact</td><td class="px-3 py-1.5"><span class="text-[#b0b0b0] bg-[#b0b0b0]/10 px-1.5 py-0.5 rounded text-[10px]">medium</span></td><td class="px-3 py-1.5 text-[#666] text-[10px]">Medium elements</td></tr>
+                    <tr><td class="px-3 py-1.5 text-[#a0a0a0] font-mono text-[10px]">impact</td><td class="px-3 py-1.5"><span class="text-[#888] bg-[#707070]/20 px-1.5 py-0.5 rounded text-[10px]">heavy</span></td><td class="px-3 py-1.5 text-[#666] text-[10px]">Big elements</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <h3 class="text-[#a0a0a0] text-[9px] font-semibold uppercase tracking-widest mb-2">Notification</h3>
+              <div class="rounded-lg border border-[#333] overflow-hidden">
+                <table class="w-full text-xs">
+                  <tbody>
+                    <tr class="border-b border-[#2a2a2a]"><td class="px-3 py-1.5 text-[#a0a0a0] font-mono text-[10px]">notification</td><td class="px-3 py-1.5"><span class="text-[#22c55e] bg-[#22c55e]/15 px-1.5 py-0.5 rounded text-[10px]">success</span></td><td class="px-3 py-1.5 text-[#666] text-[10px]">Action succeeded</td></tr>
+                    <tr class="border-b border-[#2a2a2a]"><td class="px-3 py-1.5 text-[#a0a0a0] font-mono text-[10px]">notification</td><td class="px-3 py-1.5"><span class="text-[#f59e0b] bg-[#f59e0b]/15 px-1.5 py-0.5 rounded text-[10px]">warning</span></td><td class="px-3 py-1.5 text-[#666] text-[10px]">Needs attention</td></tr>
+                    <tr><td class="px-3 py-1.5 text-[#a0a0a0] font-mono text-[10px]">notification</td><td class="px-3 py-1.5"><span class="text-[#ef4444] bg-[#ef4444]/15 px-1.5 py-0.5 rounded text-[10px]">error</span></td><td class="px-3 py-1.5 text-[#666] text-[10px]">Action failed</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       ICONS
+  ═══════════════════════════════════════════════════════════ -->
+  <section id="icons" class="section-anchor">
+    <div class="flex items-start gap-4 mb-8">
+      <div class="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white/70"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Icons</h2>
+        <p class="text-white/40 text-sm mt-1 max-w-2xl">140+ SVG-based React icon components in three visual variants: outline (customizable stroke width), regular (fixed stroke width), and solid (filled). Icons render at 1.5em by default, accept standard SVG props, and use currentColor so they inherit text color from their container.</p>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+        <span class="text-sm font-semibold text-white/80">Icon Variants &amp; States</span>
+        <span class="text-xs text-white/30 font-mono">7 variants</span>
+      </div>
+      <div class="p-6 space-y-8">
+
+        <!-- Outline Grid -->
+        <div>
+          <div class="variant-label">Icon Grid — Outline Variant</div>
+          <p class="text-xs text-white/40 mb-4">Icons with customizable stroke width, allowing you to adjust the line thickness to match your design needs.</p>
+          <div class="variant-frame">
+            <div class="p-6 bg-white">
+              <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-0">
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Home">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.4764 8.85497V20.4858H14.8189V14.1238H9.34659L9.33037 20.4858H3.50879L3.52494 8.91777L12.0114 3.50177L20.4764 8.85497Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Home</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Search">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M19.9989 19.0009L15.2816 14.1716M5.08008 9.96732C5.08008 13.2636 7.75169 15.9357 11.0473 15.9357C14.3429 15.9357 17.0145 13.2636 17.0145 9.96732C17.0145 6.67109 14.3429 3.99896 11.0473 3.99896C7.75169 3.99896 5.08008 6.67109 5.08008 9.96732Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Search</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="User">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M11.9998 10.9999C13.9326 10.9999 15.4995 9.43272 15.4995 7.49947C15.4995 5.56623 13.9326 3.99902 11.9998 3.99902C10.0669 3.99902 8.5 5.56623 8.5 7.49947C8.5 9.43272 10.0669 10.9999 11.9998 10.9999Z" stroke="currentColor" stroke-miterlimit="10"/><path d="M19.999 20.001H4C4 17.3294 6.23905 15.164 8.99968 15.164H14.9993C17.7599 15.164 19.999 17.3294 19.999 20.001Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">User</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Bell">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M4.78564 18.4838H18.8841V15.7872L17.1156 14.1698L17.1248 8.64238C17.1248 5.53715 14.3989 3.55591 11.8472 3.55591C9.29856 3.55745 6.56953 5.52482 6.56953 8.6285L6.55874 14.1698L4.78564 15.7872V18.4838Z" stroke="currentColor" stroke-miterlimit="10"/><path d="M14.2448 18.2061C14.2047 19.4966 13.1454 20.5296 11.8457 20.5296C10.5459 20.5296 9.4867 19.4966 9.44507 18.2061H14.2432H14.2448Z" fill="currentColor"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Bell</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Heart">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M18.7328 12.4985L11.9632 19.2695L5.2044 12.5093C0.263356 7.5689 7.03298 0.796419 11.9756 5.73996C16.9475 0.767094 23.7048 7.52722 18.7344 12.5001L18.7328 12.4985Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Heart</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Wallet">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.9522 5.00537H3.0459V19.0072H20.9522V5.00537Z" stroke="currentColor" stroke-miterlimit="10"/><path d="M20.9527 14.3414H14.0002L14.0031 9.66481L20.9527 9.65869V14.3414Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Wallet</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Check">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M3.55273 10.7731L10.0014 17.2245L20.4483 6.77563" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Check</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Shield">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M11.9995 3.42163C14.5086 3.42163 16.7986 3.78433 18.9991 4.63938C18.9991 4.63938 18.9991 8.07964 18.9991 12.4305C18.9991 18.4251 11.9995 21.4255 11.9995 21.4255C11.9995 21.4255 5 18.4251 5 12.4305C5 8.07964 5 4.63938 5 4.63938C7.20048 3.78588 9.49045 3.42163 11.9995 3.42163Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Shield</p>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Solid Grid -->
+        <div>
+          <div class="variant-label">Icon Grid — Solid Variant</div>
+          <p class="text-xs text-white/40 mb-4">Filled icons with no stroke. Bold appearance ideal for emphasis, active states, and high-contrast designs.</p>
+          <div class="variant-frame">
+            <div class="p-6 bg-white">
+              <div class="grid grid-cols-4 sm:grid-cols-6 gap-0">
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Airplane Solid">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-[#111827]"><path d="M15.4697 7.90308L22.0293 10.9919L22.0078 15.0037H15.4404V16.3591L18.002 19.6599L17.9883 21.9861H5.95312L5.97754 20.9626L6.00781 19.6462L8.47168 16.4812V14.9929L1.96875 14.9949V11.0007L8.46973 7.81909V5.37378C8.4699 3.44261 10.0342 1.87594 11.9658 1.87378H11.9697L12.1494 1.87866C13.9975 1.97223 15.4696 3.50041 15.4697 5.37378V7.90308Z" fill="currentColor"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Airplane</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Check Solid">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-[#111827]"><path d="M20.7559 6.34265L9.24199 17.6573L3.24805 11.7885L4.64648 10.3794L9.23486 14.8518L19.3496 4.93652L20.7559 6.34265Z" fill="currentColor"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Check</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Xmark Solid">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-[#111827]"><path d="M18.293 4.29199L19.7075 5.70621L13.4141 12L19.7075 18.2937L18.293 19.708L11.9997 13.4143L5.70629 19.708L4.29199 18.2937L10.5853 12L4.29199 5.70621L5.70629 4.29199L11.9997 10.5857L18.293 4.29199Z" fill="currentColor"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Xmark</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="Plus Solid">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-[#111827]"><path d="M11 11V4H13V11H20V13H13V20H11V13H4V11H11Z" fill="currentColor"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Plus</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="ArrowDown Solid">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-[#111827]"><path d="M13.04 17.4858L18.3281 12.3276L19.7246 13.7593L12.0176 21.2778L4.25 13.7622L5.64062 12.3247L11.04 17.5493L11.0205 3.91357L13.0205 3.91162L13.04 17.4858Z" fill="currentColor"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">ArrowDown</p>
+                </button>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] hover:bg-[#f9fafb] transition-colors" aria-label="ArrowUp Solid">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" class="text-[#111827]"><path d="M10.9805 6.51416L5.69238 11.6724L4.29578 10.2407L12.0029 2.72217L19.7705 10.2378L18.3799 11.6753L12.9805 6.45068L13.0005 20.0864L11.0005 20.0884L10.9805 6.51416Z" fill="currentColor"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">ArrowUp</p>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cell States + Sizing -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div class="variant-label">Icon Cell — Default &amp; Hover States</div>
+            <div class="variant-frame p-6 bg-white flex gap-4">
+              <div class="text-center">
+                <p class="text-[10px] text-gray-400 mb-2">Default</p>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] w-20">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.4764 8.85497V20.4858H14.8189V14.1238H9.34659L9.33037 20.4858H3.50879L3.52494 8.91777L12.0114 3.50177L20.4764 8.85497Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Home</p>
+                </button>
+              </div>
+              <div class="text-center">
+                <p class="text-[10px] text-gray-400 mb-2">Hover</p>
+                <button class="flex flex-col items-center justify-center p-3 border border-[#e5e7eb] bg-[#f9fafb] w-20">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.4764 8.85497V20.4858H14.8189V14.1238H9.34659L9.33037 20.4858H3.50879L3.52494 8.91777L12.0114 3.50177L20.4764 8.85497Z" stroke="currentColor" stroke-miterlimit="10"/></svg>
+                  <p class="text-[10px] text-[#6b7280] mt-1">Home</p>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="variant-label">Icon Usage — Sizing (16 / 24 / 32 / 48px)</div>
+            <div class="variant-frame p-6 bg-white">
+              <div class="flex items-end gap-6">
+                <div class="flex flex-col items-center gap-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.4764 8.85497V20.4858H14.8189V14.1238H9.34659L9.33037 20.4858H3.50879L3.52494 8.91777L12.0114 3.50177L20.4764 8.85497Z" stroke="currentColor" stroke-miterlimit="10"/></svg><span class="text-xs text-[#6b7280]">16px</span></div>
+                <div class="flex flex-col items-center gap-2"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.4764 8.85497V20.4858H14.8189V14.1238H9.34659L9.33037 20.4858H3.50879L3.52494 8.91777L12.0114 3.50177L20.4764 8.85497Z" stroke="currentColor" stroke-miterlimit="10"/></svg><span class="text-xs text-[#6b7280]">24px</span></div>
+                <div class="flex flex-col items-center gap-2"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.4764 8.85497V20.4858H14.8189V14.1238H9.34659L9.33037 20.4858H3.50879L3.52494 8.91777L12.0114 3.50177L20.4764 8.85497Z" stroke="currentColor" stroke-miterlimit="10"/></svg><span class="text-xs text-[#6b7280]">32px</span></div>
+                <div class="flex flex-col items-center gap-2"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke-width="2" class="text-[#111827]"><path d="M20.4764 8.85497V20.4858H14.8189V14.1238H9.34659L9.33037 20.4858H3.50879L3.52494 8.91777L12.0114 3.50177L20.4764 8.85497Z" stroke="currentColor" stroke-miterlimit="10"/></svg><span class="text-xs text-[#6b7280]">48px</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       INTERNATIONALIZATION
+  ═══════════════════════════════════════════════════════════ -->
+  <section id="i18n" class="section-anchor">
+    <div class="flex items-start gap-4 mb-8">
+      <div class="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white/70"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20"/></svg>
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Internationalization (i18n)</h2>
+        <p class="text-white/40 text-sm mt-1 max-w-2xl">Localize country names and sorting across PhoneField and CountryDrawer. Covers locale registration, SSR and client-side patterns, dynamic loading, BCP 47 locale props, TypeScript types, and right-to-left support.</p>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+        <span class="text-sm font-semibold text-white/80">i18n Documentation</span>
+        <span class="text-xs text-white/30 font-mono">8 variants</span>
+      </div>
+      <div class="p-6 space-y-6">
+
+        <div>
+          <div class="variant-label">Page Header</div>
+          <div class="variant-frame">
+            <div class="font-sans bg-white p-6 max-w-3xl">
+              <h1 class="text-3xl font-bold text-gray-900 mb-3 tracking-tight">Internationalization (i18n)</h1>
+              <blockquote class="border-l-4 border-gray-300 pl-4 py-1 bg-gray-50 rounded-r text-gray-600 text-sm">
+                <p>Localize country names and sorting across components like <code class="bg-gray-100 text-gray-800 text-xs font-mono px-1.5 py-0.5 rounded">PhoneField</code> and <code class="bg-gray-100 text-gray-800 text-xs font-mono px-1.5 py-0.5 rounded">CountryDrawer</code>.</p>
+              </blockquote>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div class="variant-label">SSR Locale Registration</div>
+            <div class="variant-frame">
+              <div class="bg-white p-5 font-sans space-y-3">
+                <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">For SSR applications (Next.js, Remix, etc.)</h4>
+                <p class="text-sm text-gray-600">Use <code class="bg-gray-100 text-gray-800 text-xs font-mono px-1 py-0.5 rounded">loadLocale</code> helper and <code class="bg-gray-100 text-gray-800 text-xs font-mono px-1 py-0.5 rounded">I18nProvider</code> to ensure proper hydration:</p>
+                <div class="relative rounded-lg bg-[#1e1e2e] border border-gray-200">
+                  <pre class="overflow-x-auto p-4 text-[12px] leading-5 font-mono"><code><span class="text-[#569cd6]">import</span><span class="text-gray-300"> { </span><span class="text-[#9cdcfe]">I18nProvider</span><span class="text-gray-300">, </span><span class="text-[#9cdcfe]">loadLocale</span><span class="text-gray-300"> } </span><span class="text-[#569cd6]">from</span><span class="text-[#ce9178]"> "@worldcoin/mini-apps-ui-kit-react"</span><span class="text-gray-300">;</span>
+
+<span class="text-[#569cd6]">export default async function</span><span class="text-[#dcdcaa]"> Page</span><span class="text-gray-300">({ searchParams }) {</span>
+<span class="text-gray-300">  </span><span class="text-[#569cd6]">const</span><span class="text-[#9cdcfe]"> locale</span><span class="text-gray-300"> = searchParams.locale || </span><span class="text-[#ce9178]">"en"</span><span class="text-gray-300">;</span>
+<span class="text-gray-300">  </span><span class="text-[#569cd6]">const</span><span class="text-[#9cdcfe]"> localeData</span><span class="text-gray-300"> = </span><span class="text-[#569cd6]">await</span><span class="text-[#dcdcaa]"> loadLocale</span><span class="text-gray-300">(locale);</span>
+<span class="text-gray-300">  </span><span class="text-[#569cd6]">return</span><span class="text-gray-300"> (</span>
+<span class="text-gray-300">    &lt;</span><span class="text-[#4ec9b0]">I18nProvider</span><span class="text-[#9cdcfe]"> localeData</span><span class="text-gray-300">={localeData}&gt;</span>
+<span class="text-gray-300">      {</span><span class="text-[#6a9955]">/* Your components */</span><span class="text-gray-300">}</span>
+<span class="text-gray-300">    &lt;/</span><span class="text-[#4ec9b0]">I18nProvider</span><span class="text-gray-300">&gt;</span>
+<span class="text-gray-300">  );</span>
+<span class="text-gray-300">}</span></code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="variant-label">Client-Side Locale Registration</div>
+            <div class="variant-frame">
+              <div class="bg-white p-5 font-sans space-y-3">
+                <h4 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">For client-side only applications</h4>
+                <p class="text-sm text-gray-600">Import only the locales you need and register them once during app initialization.</p>
+                <div class="relative rounded-lg bg-[#1e1e2e] border border-gray-200">
+                  <pre class="overflow-x-auto p-4 text-[12px] leading-5 font-mono"><code><span class="text-[#569cd6]">import</span><span class="text-gray-300"> { </span><span class="text-[#9cdcfe]">i18n</span><span class="text-gray-300"> } </span><span class="text-[#569cd6]">from</span><span class="text-[#ce9178]"> "@worldcoin/mini-apps-ui-kit-react"</span><span class="text-gray-300">;</span>
+<span class="text-[#569cd6]">import</span><span class="text-[#9cdcfe]"> fr</span><span class="text-[#569cd6]"> from</span><span class="text-[#ce9178]"> "@worldcoin/mini-apps-ui-kit-react/locales/fr.json"</span><span class="text-gray-300">;</span>
+<span class="text-[#569cd6]">import</span><span class="text-[#9cdcfe]"> ar</span><span class="text-[#569cd6]"> from</span><span class="text-[#ce9178]"> "@worldcoin/mini-apps-ui-kit-react/locales/ar.json"</span><span class="text-gray-300">;</span>
+
+<span class="text-[#6a9955]">// Register at app startup</span>
+<span class="text-[#9cdcfe]">i18n</span><span class="text-gray-300">.</span><span class="text-[#dcdcaa]">registerLocale</span><span class="text-gray-300">(fr);</span>
+<span class="text-[#9cdcfe]">i18n</span><span class="text-gray-300">.</span><span class="text-[#dcdcaa]">registerLocale</span><span class="text-gray-300">(ar);</span></code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div class="variant-label">PhoneField with Locale (fr)</div>
+            <div class="variant-frame">
+              <div class="bg-white p-5 font-sans space-y-3">
+                <div class="relative rounded-lg bg-[#1e1e2e] border border-gray-200">
+                  <pre class="overflow-x-auto p-4 text-[12px] leading-5 font-mono"><code><span class="text-[#569cd6]">import</span><span class="text-gray-300"> { </span><span class="text-[#9cdcfe]">PhoneField</span><span class="text-gray-300"> } </span><span class="text-[#569cd6]">from</span><span class="text-[#ce9178]"> "@worldcoin/mini-apps-ui-kit-react"</span><span class="text-gray-300">;</span>
+
+<span class="text-[#569cd6]">export function</span><span class="text-[#dcdcaa]"> ExampleFR</span><span class="text-gray-300">() {</span>
+<span class="text-gray-300">  </span><span class="text-[#569cd6]">return</span><span class="text-gray-300"> (</span>
+<span class="text-gray-300">    &lt;</span><span class="text-[#4ec9b0]">PhoneField</span>
+<span class="text-[#9cdcfe]">      locale</span><span class="text-gray-300">="fr"</span>
+<span class="text-[#9cdcfe]">      label</span><span class="text-gray-300">="Téléphone"</span>
+<span class="text-[#9cdcfe]">      placeholder</span><span class="text-gray-300">="06 12 34 56 78"</span>
+<span class="text-gray-300">    /&gt;</span>
+<span class="text-gray-300">  );</span>
+<span class="text-gray-300">}</span></code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="variant-label">CountryDrawer with RTL Locale (ar)</div>
+            <div class="variant-frame">
+              <div class="bg-white p-5 font-sans space-y-3">
+                <div class="relative rounded-lg bg-[#1e1e2e] border border-gray-200">
+                  <pre class="overflow-x-auto p-4 text-[12px] leading-5 font-mono"><code><span class="text-[#569cd6]">import</span><span class="text-gray-300"> { </span><span class="text-[#9cdcfe]">CountryDrawer</span><span class="text-gray-300"> } </span><span class="text-[#569cd6]">from</span><span class="text-[#ce9178]"> "@worldcoin/mini-apps-ui-kit-react"</span><span class="text-gray-300">;</span>
+
+<span class="text-[#569cd6]">export function</span><span class="text-[#dcdcaa]"> ExampleAR</span><span class="text-gray-300">() {</span>
+<span class="text-gray-300">  </span><span class="text-[#569cd6]">return</span><span class="text-gray-300"> (</span>
+<span class="text-gray-300">    &lt;</span><span class="text-[#4ec9b0]">CountryDrawer</span>
+<span class="text-[#9cdcfe]">      locale</span><span class="text-gray-300">="ar"</span>
+<span class="text-[#9cdcfe]">      dir</span><span class="text-gray-300">="rtl"</span>
+<span class="text-[#9cdcfe]">      title</span><span class="text-gray-300">="الدولة"</span>
+<span class="text-gray-300">    /&gt;</span>
+<span class="text-gray-300">  );</span>
+<span class="text-gray-300">}</span></code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div>
+            <div class="variant-label">Notes — Best Practices</div>
+            <div class="variant-frame">
+              <div class="bg-white p-5 font-sans">
+                <h3 class="text-base font-semibold text-gray-900 mb-3">Notes</h3>
+                <ul class="text-sm text-gray-600 space-y-2 list-disc list-inside">
+                  <li>Register each locale once per app lifecycle before rendering.</li>
+                  <li>Use valid BCP 47 tags: <code class="bg-gray-100 px-1 rounded font-mono text-xs">"en"</code>, <code class="bg-gray-100 px-1 rounded font-mono text-xs">"fr"</code>, <code class="bg-gray-100 px-1 rounded font-mono text-xs">"ar"</code>.</li>
+                  <li><strong class="font-medium text-gray-800">SSR:</strong> always wrap in <code class="bg-gray-100 px-1 rounded font-mono text-xs">I18nProvider</code> to prevent hydration mismatches.</li>
+                  <li><code class="bg-gray-100 px-1 rounded font-mono text-xs">loadLocale</code> uses static imports — SSR-safe and bundler-friendly.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="variant-label">What Gets Localized</div>
+            <div class="variant-frame">
+              <div class="bg-white p-5 font-sans">
+                <h3 class="text-base font-semibold text-gray-900 mb-3">What gets localized?</h3>
+                <ul class="text-sm text-gray-600 space-y-2 list-disc list-inside">
+                  <li>Country names and alphabetical grouping/sorting in selectors.</li>
+                  <li>UI strings are controlled by props — pass your own:
+                    <ul class="mt-1 ml-4 space-y-0.5 list-disc list-inside text-xs">
+                      <li><code class="bg-gray-100 px-1 rounded font-mono">PhoneField</code>: <code class="bg-gray-100 px-1 rounded font-mono">label</code>, <code class="bg-gray-100 px-1 rounded font-mono">placeholder</code></li>
+                      <li><code class="bg-gray-100 px-1 rounded font-mono">CountryDrawer</code>: <code class="bg-gray-100 px-1 rounded font-mono">title</code>, <code class="bg-gray-100 px-1 rounded font-mono">searchLabel</code></li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       SPACING
+  ═══════════════════════════════════════════════════════════ -->
+  <section id="spacing" class="section-anchor">
+    <div class="flex items-start gap-4 mb-8">
+      <div class="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-white/70"><path d="M4 4h16M4 20h16M4 4v16M20 4v16"/></svg>
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-white tracking-tight">Spacing</h2>
+        <p class="text-white/40 text-sm mt-1 max-w-2xl">4px base grid system. All spacing, sizing, padding, and margin values are multiples of 4px. Defines rules for main content padding (24px), section gaps (40px), subheadline gaps (16px), button-to-iOS-bar (32px), button-above-keyboard (24px), bottom-menu-to-bar (20px), and main-title safe area (64px).</p>
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+        <span class="text-sm font-semibold text-white/80">Spacing System</span>
+        <span class="text-xs text-white/30 font-mono">7 variants</span>
+      </div>
+      <div class="p-6 space-y-8">
+
+        <!-- 4px Grid -->
+        <div>
+          <div class="variant-label">4px Layout System</div>
+          <div class="variant-frame">
+            <div class="bg-white p-6 font-sans max-w-lg">
+              <h2 class="text-base font-semibold text-gray-900 mb-1">4px layout system</h2>
+              <p class="text-sm text-gray-500 mb-5">All spacing values are multiples of <code class="bg-gray-100 text-gray-800 px-1.5 py-0.5 rounded text-xs font-mono">4px</code></p>
+              <div class="space-y-2">
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">4px</div><div class="h-4 bg-blue-500 rounded" style="width:4px"></div><span class="text-xs text-gray-500">1 unit</span></div>
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">8px</div><div class="h-4 bg-blue-500 rounded" style="width:8px"></div><span class="text-xs text-gray-500">2 units</span></div>
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">16px</div><div class="h-4 bg-blue-500 rounded" style="width:16px"></div><span class="text-xs text-gray-500">4 units — subheadline gap</span></div>
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">20px</div><div class="h-4 bg-blue-500 rounded" style="width:20px"></div><span class="text-xs text-gray-500">5 units — bottom menu</span></div>
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">24px</div><div class="h-4 bg-blue-500 rounded" style="width:24px"></div><span class="text-xs text-gray-500">6 units — main padding / above keyboard</span></div>
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">32px</div><div class="h-4 bg-blue-500 rounded" style="width:32px"></div><span class="text-xs text-gray-500">8 units — button above bottom bar</span></div>
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">40px</div><div class="h-4 bg-blue-500 rounded" style="width:40px"></div><span class="text-xs text-gray-500">10 units — section gap</span></div>
+                <div class="flex items-center gap-3"><div class="w-14 text-right text-xs text-gray-400 font-mono">64px</div><div class="h-4 bg-blue-500 rounded" style="width:64px"></div><span class="text-xs text-gray-500">16 units — main title top safe area</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Phone frame previews -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+
+          <!-- Main Padding -->
+          <div>
+            <div class="variant-label">Main Paddings (24px)</div>
+            <div class="variant-frame bg-white rounded-xl overflow-hidden max-w-[200px]">
+              <div class="bg-gray-900 text-white text-xs text-center py-1 font-medium">9:41 AM</div>
+              <div class="relative bg-gray-50">
+                <div class="absolute left-0 top-0 bottom-0 flex items-center justify-center bg-blue-100/60" style="width:24px"><span class="text-blue-700 font-mono text-[9px] font-bold" style="writing-mode:vertical-rl">24px</span></div>
+                <div class="absolute right-0 top-0 bottom-0 flex items-center justify-center bg-blue-100/60" style="width:24px"><span class="text-blue-700 font-mono text-[9px] font-bold" style="writing-mode:vertical-rl">24px</span></div>
+                <div class="py-4" style="padding-left:24px;padding-right:24px">
+                  <div class="h-2.5 bg-gray-700 rounded mb-1.5"></div>
+                  <div class="h-2 bg-gray-300 rounded mb-1 w-4/5"></div>
+                  <div class="h-2 bg-gray-300 rounded w-3/5"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Section Gap -->
+          <div>
+            <div class="variant-label">Section Gap (40px)</div>
+            <div class="variant-frame bg-white p-4 font-sans max-w-[200px]">
+              <div class="h-2.5 bg-gray-700 rounded mb-1"></div>
+              <div class="h-2 bg-gray-200 rounded mb-1 w-4/5"></div>
+              <div class="h-2 bg-gray-200 rounded w-3/5 mb-0"></div>
+              <div class="relative my-5">
+                <div class="flex items-center gap-1">
+                  <div class="flex-1 h-px border-t border-dashed border-blue-300"></div>
+                  <span class="text-blue-600 font-mono text-[9px] bg-blue-50 px-1 rounded border border-blue-200">40px</span>
+                  <div class="flex-1 h-px border-t border-dashed border-blue-300"></div>
+                </div>
+              </div>
+              <div class="h-2.5 bg-gray-700 rounded mb-1"></div>
+              <div class="h-2 bg-gray-200 rounded w-3/4"></div>
+            </div>
+          </div>
+
+          <!-- Button Spacing -->
+          <div>
+            <div class="variant-label">Button — 32px Above iOS Bar</div>
+            <div class="variant-frame bg-white rounded-xl overflow-hidden max-w-[200px]">
+              <div class="bg-gray-900 text-white text-xs text-center py-1 font-medium">9:41 AM</div>
+              <div class="bg-gray-50 px-4 py-3"><div class="h-2 bg-gray-300 rounded mb-1"></div><div class="h-2 bg-gray-300 rounded w-4/5"></div></div>
+              <div class="bg-white">
+                <div class="flex items-center gap-1 px-4 pt-2 pb-1">
+                  <div class="flex-1 h-px border-t border-dashed border-blue-300"></div>
+                  <span class="text-blue-600 font-mono text-[9px] bg-blue-50 px-1 rounded border border-blue-200">32px</span>
+                  <div class="flex-1 h-px border-t border-dashed border-blue-300"></div>
+                </div>
+                <div class="px-4 pb-2 pt-8"><button class="w-full bg-black text-white font-semibold text-xs rounded-xl h-10">Continue</button></div>
+                <div class="bg-gray-100 border-t flex items-center justify-center py-1.5"><div class="w-20 h-1 bg-gray-400 rounded-full"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Title Spacing -->
+          <div>
+            <div class="variant-label">Main Title — 64px Safe Area</div>
+            <div class="variant-frame bg-white rounded-xl overflow-hidden max-w-[200px]">
+              <div class="bg-gray-900 text-white text-xs text-center py-1 font-medium">9:41 AM</div>
+              <div class="relative" style="height:64px">
+                <div class="absolute inset-0 bg-blue-50/40"></div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                  <span class="text-blue-700 font-mono text-[9px] bg-blue-100 px-2 py-0.5 rounded-full border border-blue-300">64px safe area</span>
+                </div>
+              </div>
+              <div class="px-4 pb-4">
+                <h1 class="text-base font-bold text-gray-900">Welcome Back</h1>
+                <div class="flex items-center gap-1 my-1">
+                  <div class="flex-1 h-px border-t border-dashed border-green-300"></div>
+                  <span class="text-green-600 font-mono text-[9px] bg-green-50 px-1 rounded border border-green-200">16px</span>
+                  <div class="flex-1 h-px border-t border-dashed border-green-300"></div>
+                </div>
+                <p class="text-xs text-gray-500">Sign in to continue</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer class="border-t border-white/[0.06] mt-12">
+  <div class="max-w-screen-2xl mx-auto px-6 py-8 flex items-center justify-between text-xs text-white/20">
+    <span>World Mini Apps Design System — Documentation</span>
+    <span>5 components &middot; 39 variants</span>
+  </div>
+</footer>
+
+<script>
+  // Active nav highlighting on scroll
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.section-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => {
+          link.classList.remove('active');
+          if (link.getAttribute('href') === '#' + entry.target.id) {
+            link.classList.add('active');
+          }
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

@@ -271,7 +271,7 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
               geohash: string
             }>
             cached = data
-              .filter((e) => e.sdpOffer && e.sdpOffer.length <= 131072 && e.wallet && !e.geohash.startsWith(geohashPrefix))
+              .filter((e) => e.sdpOffer && e.sdpOffer.length <= 131072 && e.wallet && !e.wallet.includes('…') && !e.geohash.startsWith(geohashPrefix))
               .map((e) => ({ wallet: e.wallet, sdpOffer: e.sdpOffer, geohash: e.geohash }))
           }
         } catch {

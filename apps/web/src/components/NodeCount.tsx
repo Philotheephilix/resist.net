@@ -127,6 +127,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
       >
         {loading ? (
           <span
+            aria-hidden="true"
             className="inline-block h-1.5 w-20 rounded-full skeleton-shimmer"
           />
         ) : (
