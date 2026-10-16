@@ -257,7 +257,14 @@ export async function GET(request: NextRequest) {
     events = null
   }
   const DEV_FIXTURE = getDevFixture()
-  if (!events) events = DEV_FIXTURE ?? []
+  if (!events) {
+    let fixture = DEV_FIXTURE ?? []
+    // Apply filters to the dev fixture so tests that check blockType/geohash
+    // filtering get the same behaviour as a real Arkiv-backed response.
+    if (blockTypeFilter) fixture = fixture.filter(e => e.blockType === blockTypeFilter)
+    if (geohashFilter) fixture = fixture.filter(e => e.geohash != null && e.geohash.startsWith(geohashFilter))
+    events = fixture
+  }
 
   // Strip events with non-http(s) targetUrl before sending to clients — a malicious
   // probe node could publish a javascript: or data: URL that gets rendered as a link.

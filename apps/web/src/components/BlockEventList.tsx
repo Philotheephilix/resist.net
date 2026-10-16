@@ -173,6 +173,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
           style={{ color: 'rgba(255,255,255,0.65)', margin: 0 }}
         >
           Recent Events
+          <span className="sr-only">{sorted.length} events</span>
         </h2>
         <div
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold"

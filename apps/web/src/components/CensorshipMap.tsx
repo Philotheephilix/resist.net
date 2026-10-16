@@ -653,14 +653,14 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       {/* Filter state live region — separate from popup region so background polls
           that clear this (when count > 0) do not interrupt popup announcements.
           Announces "no events" only when a filter change zeros the results. */}
-      <div ref={filterLiveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
+      <div ref={filterLiveRef} aria-live="assertive" aria-atomic="true" className="sr-only" />
 
       <p
         id="map-keyboard-instructions"
         className="sr-only group-focus-within:not-sr-only group-focus-within:absolute group-focus-within:bottom-2 group-focus-within:left-1/2 group-focus-within:-translate-x-1/2 group-focus-within:z-50 group-focus-within:rounded group-focus-within:px-3 group-focus-within:py-1 group-focus-within:text-xs group-focus-within:font-medium group-focus-within:pointer-events-none"
         style={{ backgroundColor: 'var(--wld-gray-900)', color: 'var(--wld-gray-0)' }}
       >
-        Use arrow keys to pan, +/− to zoom, Tab to cycle markers, Escape to exit
+        Use arrow keys to pan, +/− to zoom, Tab to cycle markers, Escape to exit. When a popup is open, press Escape to close it and return to the marker.
       </p>
 
       {/* Empty-state overlay — shown when a filter produces no results for sighted users.
@@ -688,7 +688,9 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       <div
         ref={mapContainerRef}
         role="application"
-        aria-label="Censorship events world map"
+        aria-label={sidebarOpen
+          ? 'Censorship events world map. Use arrow keys to pan, plus and minus keys to zoom. Tab to cycle through event markers; press Enter or Space on a marker to open details. Press Escape to move focus to the skip link.'
+          : 'Censorship events world map. Use arrow keys to pan, plus and minus keys to zoom. Tab to cycle through event markers; press Enter or Space on a marker to open details. Press Escape to exit the map.'}
         aria-describedby="map-keyboard-instructions"
         className="h-full w-full"
         style={{ minHeight: 300 }}

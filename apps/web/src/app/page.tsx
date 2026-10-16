@@ -42,19 +42,20 @@ function getServerSnapshot() { return false }
 export default function HomePage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mounted, setMounted] = useState(false)
   const isDesktop = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
   const panelRef = useRef<HTMLElement>(null)
   const toggleButtonRef = useRef<HTMLButtonElement>(null)
-  const didMountRef = useRef(false)
+  const prevSidebarOpenRef = useRef(true)
+
+  useEffect(() => { setMounted(true) }, [])
 
   // WCAG 2.4.3: move focus into the panel when it opens so keyboard users
   // know where the new content appeared.
   // Skip the initial mount so focus is not hijacked before the user interacts.
   useEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true
-      return
-    }
+    if (prevSidebarOpenRef.current === sidebarOpen) return
+    prevSidebarOpenRef.current = sidebarOpen
     if (sidebarOpen && panelRef.current) {
       panelRef.current.focus()
     } else if (!sidebarOpen && toggleButtonRef.current) {
@@ -154,7 +155,7 @@ export default function HomePage() {
             }
             aria-label={sidebarOpen ? 'Hide events panel' : 'Show events panel'}
             aria-expanded={sidebarOpen}
-            aria-controls="events-panel"
+            aria-controls={sidebarOpen ? 'events-panel' : undefined}
           >
             {sidebarOpen ? 'Hide' : 'Events'}
           </button>
@@ -281,7 +282,7 @@ export default function HomePage() {
             borderLeft: '1px solid rgba(255,255,255,0.07)',
           }}
         >
-          {isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
+          {mounted && isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
         </aside>
       </main>
 
@@ -302,7 +303,7 @@ export default function HomePage() {
             WebkitBackdropFilter: 'blur(20px)',
           }}
         >
-          {!isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
+          {mounted && !isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
         </div>
       </div>
     </div>

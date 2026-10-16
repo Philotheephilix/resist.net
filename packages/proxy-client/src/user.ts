@@ -44,7 +44,17 @@ function loadBootstrapCache(): BootstrapEntry[] {
     if (fs.existsSync(BOOTSTRAP_CACHE_PATH)) {
       const stat = fs.statSync(BOOTSTRAP_CACHE_PATH)
       if (stat.size > BOOTSTRAP_CACHE_MAX_BYTES) return []
-      return JSON.parse(fs.readFileSync(BOOTSTRAP_CACHE_PATH, "utf8")) as BootstrapEntry[]
+      const parsed = JSON.parse(fs.readFileSync(BOOTSTRAP_CACHE_PATH, "utf8"))
+      if (!Array.isArray(parsed)) return []
+      const validated = parsed.filter(
+        (e) =>
+          e !== null &&
+          typeof e === "object" &&
+          typeof e.wallet === "string" && e.wallet.length > 0 && e.wallet.length <= 256 &&
+          typeof e.sdpOffer === "string" && e.sdpOffer.length > 0 && e.sdpOffer.length <= 131072 &&
+          typeof e.geohash === "string" && e.geohash.length > 0 && e.geohash.length <= 64
+      )
+      return validated as BootstrapEntry[]
     }
   } catch {
     // ignore
@@ -251,7 +261,7 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
               geohash: string
             }>
             cached = data
-              .filter((e) => e.sdpOffer && e.wallet && !e.geohash.startsWith(geohashPrefix))
+              .filter((e) => e.sdpOffer && e.sdpOffer.length <= 131072 && e.wallet && !e.geohash.startsWith(geohashPrefix))
               .map((e) => ({ wallet: e.wallet, sdpOffer: e.sdpOffer, geohash: e.geohash }))
           }
         } catch {
