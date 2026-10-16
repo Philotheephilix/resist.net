@@ -98,7 +98,6 @@ export async function loadConfig(): Promise<Config> {
     // EEXIST and falls through to read the winner's config, preventing wallet fork.
     try {
       fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600, flag: "wx" })
-      fs.chmodSync(CONFIG_PATH, 0o600)
       return config
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e
@@ -106,12 +105,10 @@ export async function loadConfig(): Promise<Config> {
     }
   }
 
-  // Enforce 0o600 on every startup — the existing file may have been created with
-  // looser permissions (e.g., if the umask was relaxed at process start).
-  fs.chmodSync(CONFIG_PATH, 0o600)
   let stored: Config
   try {
     stored = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) as Config
+    fs.chmodSync(CONFIG_PATH, 0o600)
   } catch (err) {
     // Corrupt config (truncated write, disk error) — delete and re-create from scratch.
     // Without this, the process crashes on every subsequent startup until manually fixed.

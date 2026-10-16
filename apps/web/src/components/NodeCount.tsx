@@ -20,11 +20,13 @@ export default function NodeCount() {
     let mounted = true
     let consecutiveFailures = 0
     let abortController = new AbortController()
+    let seq = 0
 
     const fetchStats = async () => {
       abortController.abort()
       abortController = new AbortController()
       const { signal } = abortController
+      const callSeq = ++seq
       try {
         const res = await fetch('/api/probe-events?stats=true', { signal })
         if (!mounted) return
@@ -52,7 +54,7 @@ export default function NodeCount() {
         consecutiveFailures++
         if (consecutiveFailures >= 3 && mounted) setStale(true)
       } finally {
-        if (mounted) setLoading(false)
+        if (mounted && callSeq === seq) setLoading(false)
       }
     }
 
@@ -70,6 +72,7 @@ export default function NodeCount() {
       <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
 
       <div
+        role="img"
         className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs${loading ? '' : ' font-medium'}`}
         style={{
           background: 'rgba(255,255,255,0.07)',
@@ -93,17 +96,17 @@ export default function NodeCount() {
             />
             <span aria-hidden>
               <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.liveProbes}</strong>
-              <span style={{ color: 'rgba(255,255,255,0.35)' }}> probes</span>
+              <span style={{ color: 'rgba(255,255,255,0.60)' }}> probes</span>
             </span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }} aria-hidden>·</span>
             <span aria-hidden>
               <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.regions}</strong>
-              <span style={{ color: 'rgba(255,255,255,0.35)' }}> regions</span>
+              <span style={{ color: 'rgba(255,255,255,0.60)' }}> regions</span>
             </span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }} aria-hidden>·</span>
             <span aria-hidden>
               <strong style={{ color: '#ff6b55', fontWeight: 600 }}>{stats.blocksToday}</strong>
-              <span style={{ color: 'rgba(255,255,255,0.35)' }}> blocks</span>
+              <span style={{ color: 'rgba(255,255,255,0.60)' }}> blocks</span>
             </span>
             {stale && (
               <span aria-hidden style={{ color: '#ffb733', fontSize: 10, fontStyle: 'italic' }}>

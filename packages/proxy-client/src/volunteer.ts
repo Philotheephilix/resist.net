@@ -550,12 +550,14 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         // suggests a crafted SDP intended to stall the poll loop via sequential DNS
         // resolution (each hostname lookup up to 30s with system default timeout).
         const MAX_CANDIDATES = 50
+        const MAX_HOSTNAME_CANDIDATES = 5
         const candidateLineCount = answerDesc.sdp.split("\n").filter(l => l.startsWith("a=candidate:")).length
         if (candidateLineCount > MAX_CANDIDATES) {
           console.error(`[volunteer] SDP from ${clientWallet} has ${candidateLineCount} candidates (max ${MAX_CANDIDATES}), skipping`)
           continue
         }
         let candidateRejected = false
+        let hostnameCandidateCount = 0
         const sanitizedLines: string[] = []
         for (const line of answerDesc.sdp.split("\n")) {
           if (!line.startsWith("a=candidate:")) {
@@ -639,10 +641,24 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
             // IPv6 ULA bypass (a hostname can have a public A record but private AAAA).
             // Regardless, strip the line: replacing the hostname with the resolved IP
             // prevents the WebRTC engine from re-resolving it (DNS TOCTOU).
+            hostnameCandidateCount++
+            if (hostnameCandidateCount > MAX_HOSTNAME_CANDIDATES) {
+              console.error(`[volunteer] Too many hostname candidates from ${clientWallet}, skipping rest`)
+              candidateRejected = true
+              break
+            }
             try {
+              let timer4: ReturnType<typeof setTimeout> | null = null
+              let timer6: ReturnType<typeof setTimeout> | null = null
               const [v4, v6] = await Promise.allSettled([
-                dns.lookup(candidateAddr, { family: 4 }),
-                dns.lookup(candidateAddr, { family: 6 }),
+                Promise.race([
+                  dns.lookup(candidateAddr, { family: 4 }).finally(() => { if (timer4 !== null) { clearTimeout(timer4); timer4 = null } }),
+                  new Promise<never>((_, reject) => { timer4 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
+                ]),
+                Promise.race([
+                  dns.lookup(candidateAddr, { family: 6 }).finally(() => { if (timer6 !== null) { clearTimeout(timer6); timer6 = null } }),
+                  new Promise<never>((_, reject) => { timer6 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
+                ]),
               ])
               const resolved4 = v4.status === "fulfilled" ? v4.value.address : null
               const resolved6 = v6.status === "fulfilled" ? v6.value.address : null

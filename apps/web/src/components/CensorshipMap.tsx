@@ -167,6 +167,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       : ' When a popup is open, press Escape to close it and return to the marker.'
     mapContainerRef.current.setAttribute('aria-label', base + (popupInstructionsVisibleRef.current ? hint : ''))
   }, [])  // refs only — stable identity, empty dep array is correct
+  useEffect(() => { updateMapAriaLabel() }, [sidebarOpen, updateMapAriaLabel])
 
   // Create a single marker DOM element and bind events. Extracted so it can be called
   // for both incremental adds (new event IDs) and full re-init.
@@ -228,39 +229,41 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       // element to be focusable and respond to Enter/Space.
       // In batch mode the layer is detached during add, so defer via rAF to avoid
       // forcing style/layout recalcs before the layer is back on the map.
-      marker.on('add', () => {
-        const patch = () => {
-          const el = marker.getElement?.() as HTMLElement | undefined
-          if (!el) return
-          el.setAttribute('tabindex', '0')
-          el.setAttribute('role', 'button')
-          el.setAttribute('aria-label', markerLabel)
-          // Inject an SVG <title> as the universally-supported accessible name source
-          // for SVG elements. NVDA+Firefox prioritises <title> over aria-label for SVG
-          // shape elements, so without this the user would hear only the role ('button')
-          // and not the URL or block type when the marker receives keyboard focus.
-          if (el.namespaceURI === 'http://www.w3.org/2000/svg' || el.tagName === 'path' || el.tagName === 'circle') {
-            const existing = el.querySelector('title')
-            if (!existing) {
-              const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title')
-              titleEl.textContent = markerLabel
-              el.prepend(titleEl)
-            }
+      const patchMarkerElement = () => {
+        const el = marker.getElement?.() as HTMLElement | undefined
+        if (!el) return
+        el.setAttribute('tabindex', '0')
+        el.setAttribute('role', 'button')
+        el.setAttribute('aria-label', markerLabel)
+        // Inject an SVG <title> as the universally-supported accessible name source
+        // for SVG elements. NVDA+Firefox prioritises <title> over aria-label for SVG
+        // shape elements, so without this the user would hear only the role ('button')
+        // and not the URL or block type when the marker receives keyboard focus.
+        if (el.namespaceURI === 'http://www.w3.org/2000/svg' || el.tagName === 'path' || el.tagName === 'circle') {
+          const existing = el.querySelector('title')
+          if (!existing) {
+            const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title')
+            titleEl.textContent = markerLabel
+            el.prepend(titleEl)
           }
-          const keyHandler = (e: KeyboardEvent) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault()
-              lastFocusedMarkerElRef.current = el
-              marker.openPopup()
-            }
-          }
-          ;(el as any)._keydownHandler = keyHandler
-          el.addEventListener('keydown', keyHandler)
         }
+        const keyHandler = (e: KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            lastFocusedMarkerElRef.current = el
+            marker.openPopup()
+          }
+        }
+        ;(el as any)._keydownHandler = keyHandler
+        el.addEventListener('keydown', keyHandler)
+      }
+      ;(marker as any)._patchElement = patchMarkerElement
+      marker.on('add', () => {
+        if ((marker as any)._batchPatch) return
         if (typeof requestAnimationFrame !== 'undefined') {
-          requestAnimationFrame(patch)
+          requestAnimationFrame(patchMarkerElement)
         } else {
-          patch()
+          patchMarkerElement()
         }
       })
 
@@ -276,9 +279,10 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         if (markerEl) lastFocusedMarkerElRef.current = markerEl
         // Cancel any pending focus transfer from a previous popup cycle.
         if (focusTimeoutRef.current !== null) clearTimeout(focusTimeoutRef.current)
+        const popupEl = e?.popup?.getElement?.() as HTMLElement | null | undefined
         focusTimeoutRef.current = setTimeout(() => {
           focusTimeoutRef.current = null
-          const popup = document.querySelector<HTMLElement>('[data-popup-content]')
+          const popup = popupEl ?? document.querySelector<HTMLElement>('[data-popup-content]')
           // Guard: only move focus if the popup is still open and focus has not
           // already moved elsewhere (e.g. user tabbed away during the 50ms delay).
           if (!popup) return
@@ -369,12 +373,30 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     const newEvents = eventsToRender.filter(e => !markerMapRef.current.has(e.id))
     const useBatch = markerMapRef.current.size === 0 && newEvents.length > 20
     if (useBatch && mapRef.current) markersLayerRef.current.remove()
+    const batchMarkers: any[] = []
     for (const event of newEvents) {
       const marker = createMarker(leaflet, event)
+      if (useBatch) (marker as any)._batchPatch = true
       markersLayerRef.current.addLayer(marker)
       markerMapRef.current.set(event.id, marker)
+      if (useBatch) batchMarkers.push(marker)
     }
-    if (useBatch && mapRef.current) markersLayerRef.current.addTo(mapRef.current)
+    if (useBatch && mapRef.current) {
+      markersLayerRef.current.addTo(mapRef.current)
+      if (typeof requestAnimationFrame !== 'undefined') {
+        requestAnimationFrame(() => {
+          for (const m of batchMarkers) {
+            const patch = m._patchElement as (() => void) | undefined
+            if (patch) patch()
+          }
+        })
+      } else {
+        for (const m of batchMarkers) {
+          const patch = m._patchElement as (() => void) | undefined
+          if (patch) patch()
+        }
+      }
+    }
   }, [createMarker])  // createMarker is stable (empty dep array) — this is also stable
 
   // Initialize map once on mount
@@ -404,7 +426,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         zoomControl: true,
         attributionControl: true,
         scrollWheelZoom: true,
-        keyboard: false,
+        keyboard: true,
       })
 
       leaflet
@@ -462,7 +484,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         // that opened the popup (e.g. Enter/Space on marker triggers popupopen synchronously).
         mapPopupTimeoutRef.current = setTimeout(() => {
           mapPopupTimeoutRef.current = null
-          const popup = document.querySelector<HTMLElement>('[data-popup-content]')
+          const popup = immediatePopup
           if (!popup) return
           // Remove any stale listener from a prior cycle before adding a fresh one.
           const prevHandler = (popup as any)._escHandler as ((e: KeyboardEvent) => void) | undefined
@@ -618,15 +640,6 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         role="application"
         className="h-full w-full"
         style={{ minHeight: 300 }}
-        aria-label={(() => {
-          const base = sidebarOpen
-            ? 'Censorship events world map. Use arrow keys to pan, plus and minus keys to zoom. Tab to cycle through event markers; press Enter or Space on a marker to open details. Press Escape to move focus to the skip link.'
-            : 'Censorship events world map. Use arrow keys to pan, plus and minus keys to zoom. Tab to cycle through event markers; press Enter or Space on a marker to open details. Press Escape to exit the map.'
-          const popupHint = sidebarOpen
-            ? ' When a popup is open, press Escape to close it and return to the marker, or Tab to the Close button.'
-            : ' When a popup is open, press Escape to close it and return to the marker.'
-          return popupInstructionsVisibleRef.current ? base + popupHint : base
-        })()}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
             // If a popup is open, close it first so popupclose fires, then focus the

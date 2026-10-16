@@ -67,6 +67,12 @@ export default function HomePage() {
       className="flex h-screen w-full flex-col overflow-hidden"
       style={{ backgroundColor: '#0a0a0a', color: '#ffffff' }}
     >
+      <a
+        href="#events-panel"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
+      >
+        Skip to events
+      </a>
       {/* ─── Top bar ── glass morphism header ── */}
       <header
         className="z-20 flex flex-shrink-0 items-center justify-between gap-4 px-5 py-3"
@@ -97,7 +103,7 @@ export default function HomePage() {
             </h1>
             <span
               className="hidden text-xs sm:inline"
-              style={{ color: 'rgba(255,255,255,0.35)' }}
+              style={{ color: 'rgba(255,255,255,0.60)' }}
             >
               Community Censorship Monitor
             </span>
@@ -145,6 +151,7 @@ export default function HomePage() {
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
+            aria-hidden={!error || undefined}
             className="absolute left-4 right-4 top-4"
             style={{ zIndex: 20, pointerEvents: error ? undefined : 'none' }}
           >
@@ -166,19 +173,17 @@ export default function HomePage() {
           </div>
 
           {/* Loading overlay */}
-          <div
-            className="absolute inset-0 flex items-center justify-center"
-            style={{
-              backgroundColor: loading && events.length === 0 ? 'rgba(10,10,10,0.75)' : 'transparent',
-              backdropFilter: loading && events.length === 0 ? 'blur(4px)' : 'none',
-              zIndex: loading && events.length === 0 ? 5 : -1,
-              pointerEvents: loading && events.length === 0 ? undefined : 'none',
-              transition: 'opacity 200ms ease',
-            }}
-            role="status"
-            aria-label="Loading probe events"
-          >
-            {loading && events.length === 0 && (
+          {loading && events.length === 0 && (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{
+                backgroundColor: 'rgba(10,10,10,0.75)',
+                backdropFilter: 'blur(4px)',
+                zIndex: 5,
+              }}
+              role="status"
+              aria-label="Loading probe events"
+            >
               <div
                 className="flex items-center gap-2.5 rounded-full px-5 py-2.5 text-sm"
                 style={{
@@ -191,8 +196,8 @@ export default function HomePage() {
                 <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full live-dot" style={{ backgroundColor: '#00c230' }} />
                 Fetching probe events…
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Event count badge */}
           <div

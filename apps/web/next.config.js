@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 const path = require('path')
+const isDev = process.env.NODE_ENV !== 'production'
 
 const nextConfig = {
   transpilePackages: ['@resist/shared', '@resist/arkiv-sdk', '@resist/map-ui'],
@@ -33,10 +34,10 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",  // unsafe-inline required by Next.js inline scripts; unsafe-eval for HMR in dev
+              `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline' https://unpkg.com",
               "img-src 'self' data: https://tiles.stadiamaps.com",
-              "connect-src 'self' https://tiles.stadiamaps.com https://ip-api.com https://rpc.tiramisu.db-chain.testnet.arkiv.network",
+              "connect-src 'self' https://tiles.stadiamaps.com https://rpc.tiramisu.db-chain.testnet.arkiv.network",
               "font-src 'self'",
               "frame-src 'none'",
               "object-src 'none'",

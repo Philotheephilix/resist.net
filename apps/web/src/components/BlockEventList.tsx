@@ -4,6 +4,7 @@ import { useMemo, memo, useEffect, useRef, useState } from 'react'
 import StatusChip, { BlockType } from './StatusChip'
 
 const URL_CACHE_MAX = 1000
+const SKELETON_ITEMS = [0, 1, 2, 3, 4]
 
 // Module-level 60s tick shared across all mounted BlockEventList instances.
 // Without this, each instance creates its own setInterval, causing redundant
@@ -159,13 +160,13 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
       >
         <h2
           className="text-[11px] font-semibold uppercase tracking-widest"
-          style={{ color: 'rgba(255,255,255,0.3)', margin: 0 }}
+          style={{ color: 'rgba(255,255,255,0.65)', margin: 0 }}
         >
           Recent Events
         </h2>
         <div
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-          style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.35)' }}
+          style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)' }}
           aria-hidden="true"
         >
           {sorted.length}
@@ -176,7 +177,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
       <div className="flex-1 overflow-y-auto">
         {loading && sorted.length === 0 ? (
           <div role="status" aria-label="Loading events" aria-busy="true" className="space-y-2 p-4">
-            {[...Array(5)].map((_, i) => (
+            {SKELETON_ITEMS.map((_, i) => (
               <div
                 key={i}
                 className="h-16 rounded-2xl skeleton-shimmer"
@@ -219,7 +220,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                     </p>
                     <p
                       className="mt-0.5 font-mono text-[11px]"
-                      style={{ color: 'rgba(255,255,255,0.28)' }}
+                      style={{ color: 'rgba(255,255,255,0.55)' }}
                       title={event.nodeWallet}
                     >
                       <span aria-hidden="true">{truncateWallet(event.nodeWallet)}</span>
@@ -232,7 +233,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                     dateTime={cachedTsIso(event.timestamp)}
                     title={cachedTsLocale(event.timestamp)}
                     className="flex-shrink-0 pt-0.5 text-[11px]"
-                    style={{ color: 'rgba(255,255,255,0.28)' }}
+                    style={{ color: 'rgba(255,255,255,0.55)' }}
                   >
                     {timeAgo(event.timestamp)}
                   </time>

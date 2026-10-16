@@ -18,7 +18,9 @@ export function useBlockEvents(filters: BlockEventFilters) {
     const prev = prevEventsRef.current
     if (
       next.length === prev.length &&
-      next.every((e, i) => e.id === prev[i]!.id && e.blockType === prev[i]!.blockType)
+      next.length > 0 &&
+      next[0]!.id === prev[0]!.id &&
+      next[next.length - 1]!.id === prev[prev.length - 1]!.id
     ) return
     prevEventsRef.current = next
     setEvents(next)
@@ -50,6 +52,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
         const res = await window.fetch(`/api/probe-events?${params}`, { signal })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
+        if (!Array.isArray(data)) throw new Error('Unexpected response shape')
         if (!cancelled && seq === seqRef.current) {
           setStableEvents(data)
           setError(null)
@@ -101,7 +104,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
           fetchEvents()
         }, 30_000)
       }
-      fetchEvents().then(resetInterval, resetInterval)
+      fetchEvents().then(() => { if (!cancelled) resetInterval() }, () => { if (!cancelled) resetInterval() })
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
