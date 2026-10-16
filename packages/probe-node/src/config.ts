@@ -133,7 +133,7 @@ export async function loadConfig(): Promise<Config> {
       fs.renameSync(tmp, CONFIG_PATH)
     } catch (err) {
       try { fs.unlinkSync(tmp) } catch { /* ignore cleanup failure */ }
-      throw err
+      console.warn("[probe] failed to persist updated geohash/ISP to disk; continuing with in-memory config:", err)
     }
   }
 

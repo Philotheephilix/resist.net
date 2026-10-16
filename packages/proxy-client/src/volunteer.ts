@@ -66,8 +66,11 @@ function loadBootstrapCache(): BootstrapEntry[] {
 
 function saveBootstrapCache(entries: BootstrapEntry[]): void {
   try {
-    fs.mkdirSync(path.dirname(BOOTSTRAP_CACHE_PATH), { recursive: true })
-    fs.writeFileSync(BOOTSTRAP_CACHE_PATH, JSON.stringify(entries, null, 2), { mode: 0o600 })
+    const dir = path.dirname(BOOTSTRAP_CACHE_PATH)
+    fs.mkdirSync(dir, { recursive: true })
+    const tmp = path.join(dir, `.bootstrap-cache.tmp.${process.pid}.${Date.now().toString(16)}.json`)
+    fs.writeFileSync(tmp, JSON.stringify(entries, null, 2), { mode: 0o600 })
+    fs.renameSync(tmp, BOOTSTRAP_CACHE_PATH)
   } catch {
     // ignore
   }

@@ -4,12 +4,14 @@ import type { ProbeResultRow } from '../components/BlockEventList'
 interface BlockEventFilters {
   blockType?: string
   includeStats?: boolean
+  geohash?: string
 }
 
 export interface ProbeStats {
   liveProbes: number
   regions: number
   blocksToday: number
+  volunteerCount?: number
 }
 
 export function useBlockEvents(filters: BlockEventFilters) {
@@ -25,6 +27,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
   const prevEventsRef = useRef<ProbeResultRow[]>([])
   const setStableEvents = useCallback((next: ProbeResultRow[]) => {
     const prev = prevEventsRef.current
+    if (next.length === 0 && prev.length === 0) return
     if (
       next.length === prev.length &&
       next.length > 0 &&
@@ -55,6 +58,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
       try {
         const params = new URLSearchParams()
         if (filters.blockType) params.set('blockType', filters.blockType)
+        if (filters.geohash) params.set('geohash', filters.geohash)
         if (filters.includeStats) params.set('includeStats', 'true')
 
         const res = await window.fetch(`/api/probe-events?${params}`, { signal })
@@ -66,8 +70,11 @@ export function useBlockEvents(filters: BlockEventFilters) {
           // Response shape: { events: ProbeResultRow[], stats: ProbeStats | null }
           if (!data || !Array.isArray(data.events)) throw new Error('Unexpected response shape')
           eventsArray = data.events
-          if (data.stats && !cancelled && seq === seqRef.current) {
-            setStats(data.stats)
+          // Update stats regardless of whether data.stats is truthy — null is valid
+          // (server has no cached stats yet) and must clear stale stats from a prior
+          // filter change rather than silently leaving the previous value.
+          if (!cancelled && seq === seqRef.current) {
+            setStats(data.stats != null ? data.stats : null)
           }
         } else {
           if (!Array.isArray(data)) throw new Error('Unexpected response shape')
@@ -131,7 +138,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
       stopInterval()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [filters.blockType, filters.includeStats, setStableEvents])
+  }, [filters.blockType, filters.geohash, filters.includeStats, setStableEvents])
 
   return { events, loading, error, stats }
 }

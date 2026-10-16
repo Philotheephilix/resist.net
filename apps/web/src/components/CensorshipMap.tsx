@@ -379,7 +379,9 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
     const batchMarkers: any[] = []
     for (const event of newEvents) {
       const marker = createMarker(leaflet, event)
-      ;(marker as any)._batchPatch = true
+      if (useBatch) {
+        ;(marker as any)._batchPatch = true
+      }
       markersLayerRef.current.addLayer(marker)
       markerMapRef.current.set(event.id, marker)
       batchMarkers.push(marker)
@@ -655,6 +657,28 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       >
         Use arrow keys to pan, +/− to zoom, Tab to cycle markers, Escape to exit
       </p>
+
+      {/* Empty-state overlay — shown when a filter produces no results for sighted users.
+          Gated by hasEverHadEventsRef so it does not flash during initial load before
+          the first fetch completes. pointer-events: none ensures map interaction is
+          not blocked (pan/zoom still work underneath the badge). */}
+      {events.length === 0 && hasEverHadEventsRef.current && (
+        <div
+          className="absolute inset-0 z-[500] flex items-center justify-center pointer-events-none"
+          aria-hidden="true"
+        >
+          <span
+            className="rounded-full px-4 py-2 text-sm font-semibold"
+            style={{
+              backgroundColor: 'var(--wld-gray-900, #111827)',
+              color: 'var(--wld-gray-0, #ffffff)',
+              opacity: 0.85,
+            }}
+          >
+            No events for this filter
+          </span>
+        </div>
+      )}
 
       <div
         ref={mapContainerRef}

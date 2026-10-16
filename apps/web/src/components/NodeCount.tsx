@@ -25,19 +25,23 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
 
   // When the parent supplies stats from the shared useBlockEvents poll, apply
   // them directly and skip the standalone polling effect below.
+  // externalStats=null means the server has no cached stats yet — still mark
+  // loading=false so the component doesn't stay stuck in the loading skeleton.
   useEffect(() => {
-    if (externalStats == null) return
-    setStats(externalStats)
+    if (externalStats === undefined) return
+    if (externalStats !== null) setStats(externalStats)
     setLoading(false)
     setStale(false)
-    const probesChanged = prevLiveProbesRef.current !== null && prevLiveProbesRef.current !== externalStats.liveProbes
-    if ((!announcedRef.current || probesChanged) && liveRef.current) {
-      announcedRef.current = true
-      prevLiveProbesRef.current = externalStats.liveProbes
-      liveRef.current.textContent =
-        `${externalStats.liveProbes} live probes across ${externalStats.regions} regions, ${externalStats.blocksToday} blocks today`
-    } else {
-      prevLiveProbesRef.current = externalStats.liveProbes
+    if (externalStats !== null) {
+      const probesChanged = prevLiveProbesRef.current !== null && prevLiveProbesRef.current !== externalStats.liveProbes
+      if ((!announcedRef.current || probesChanged) && liveRef.current) {
+        announcedRef.current = true
+        prevLiveProbesRef.current = externalStats.liveProbes
+        liveRef.current.textContent =
+          `${externalStats.liveProbes} live probes across ${externalStats.regions} regions, ${externalStats.blocksToday} blocks today`
+      } else {
+        prevLiveProbesRef.current = externalStats.liveProbes
+      }
     }
   }, [externalStats])
 
@@ -51,6 +55,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
     // Skip standalone polling when the parent is supplying stats externally.
     // This eliminates the duplicate /api/probe-events?stats=true request that
     // used to fire every 62s independently of the 30s useBlockEvents interval.
+    // externalStats=null still means the parent is supplying (just no cached stats yet).
     if (externalStats !== undefined) return
 
     let mounted = true

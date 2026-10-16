@@ -17,8 +17,8 @@ function checkRateLimit(ip: string): boolean {
         }
       }
       if (rateLimitMap.size >= RATE_LIMIT_MAP_MAX) {
-        const oldest = [...rateLimitMap.entries()].sort((a, b) => a[1].windowStart - b[1].windowStart)[0]
-        if (oldest) rateLimitMap.delete(oldest[0])
+        const oldestKey = rateLimitMap.keys().next().value
+        if (oldestKey !== undefined) rateLimitMap.delete(oldestKey)
       }
     }
     rateLimitMap.set(ip, { count: 1, windowStart: now })

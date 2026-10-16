@@ -20,7 +20,7 @@ const CensorshipMap = dynamic(() => import('../components/CensorshipMap'), {
     >
       <div className="flex items-center gap-3 rounded-full px-5 py-2.5 text-sm"
         style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.5)' }}>
-        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={{ backgroundColor: '#00c230' }} />
+        <span className="live-dot inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#00c230' }} />
         Loading map…
       </div>
     </div>
@@ -44,12 +44,21 @@ export default function HomePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const isDesktop = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
   const panelRef = useRef<HTMLElement>(null)
+  const toggleButtonRef = useRef<HTMLButtonElement>(null)
+  const didMountRef = useRef(false)
 
   // WCAG 2.4.3: move focus into the panel when it opens so keyboard users
   // know where the new content appeared.
+  // Skip the initial mount so focus is not hijacked before the user interacts.
   useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
     if (sidebarOpen && panelRef.current) {
       panelRef.current.focus()
+    } else if (!sidebarOpen && toggleButtonRef.current) {
+      toggleButtonRef.current.focus()
     }
   }, [sidebarOpen])
 
@@ -69,7 +78,9 @@ export default function HomePage() {
   }, [events])
 
   const sortedEvents = useMemo(
-    () => [...events].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50),
+    // When events is empty, setStableEvents returns the same [] reference on every
+    // poll, so this memo only recomputes when there are real changes.
+    () => events.length === 0 ? events : [...events].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50),
     [events]
   )
 
@@ -129,9 +140,10 @@ export default function HomePage() {
 
         {/* Stats + sidebar toggle */}
         <div className="flex items-center gap-2.5">
-          <VolunteerCount />
+          <VolunteerCount externalVolunteerCount={probeStats?.volunteerCount ?? null} />
           <NodeCount externalStats={probeStats} />
           <button
+            ref={toggleButtonRef}
             onClick={() => setSidebarOpen((v) => !v)}
             className="rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] min-w-[44px]"
             style={sidebarOpen
@@ -149,8 +161,8 @@ export default function HomePage() {
 
       {/* ─── Filter bar ── */}
       <div
-        role="search"
-        aria-label="Event filters"
+        role="region"
+        aria-label="Event type filter"
         className="z-10 flex-shrink-0 px-5 py-2.5"
         style={{
           background: '#0d0d0f',
@@ -171,7 +183,6 @@ export default function HomePage() {
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
-            aria-hidden={!error || undefined}
             className="absolute left-4 right-4 top-4"
             style={{ zIndex: 20, pointerEvents: error ? undefined : 'none' }}
           >
@@ -179,15 +190,20 @@ export default function HomePage() {
               className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-medium${error ? ' error-banner-visible' : ''}`}
               style={{
                 background: 'rgba(242,40,13,0.15)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
+                ...(error ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {}),
                 border: '1px solid rgba(242,40,13,0.35)',
                 color: '#ff6b55',
                 visibility: error ? 'visible' : 'hidden',
               }}
             >
               <span aria-hidden>⚠</span>
-              {error ? `Failed to load events: ${error}` : ''}
+              {error
+                ? error.includes('HTTP 5')
+                  ? 'Failed to load events — server error, please try again in a moment.'
+                  : error.includes('HTTP 4')
+                    ? 'Failed to load events — request error. Please refresh the page.'
+                    : 'Failed to load events. Check your connection and refresh.'
+                : ''}
             </div>
           </div>
 
@@ -212,7 +228,7 @@ export default function HomePage() {
                   color: 'rgba(255,255,255,0.7)',
                 }}
               >
-                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full live-dot" style={{ backgroundColor: '#00c230' }} />
+                <span className="inline-block h-1.5 w-1.5 rounded-full live-dot" style={{ backgroundColor: '#00c230' }} />
                 Fetching probe events…
               </div>
             </div>

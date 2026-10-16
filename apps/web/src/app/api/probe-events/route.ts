@@ -67,7 +67,7 @@ async function queryArkivProbeEvents(opts: {
       // Normalise blockType against known-good set — Arkiv rows written by adversarial
       // nodes could contain arbitrary strings; ensure only documented values reach clients.
       blockType: (r.blocktype && VALID_BLOCK_TYPES.has(r.blocktype) ? r.blocktype : null) as string | null,
-      geohash: /^[a-z0-9]{1,12}$/.test(r.geohash ?? '') ? r.geohash : null,
+      geohash: /^[0-9bcdefghjkmnpqrstuvwxyz]{1,12}$/.test(r.geohash ?? '') ? r.geohash : null,
       timestamp: r.timestamp,
       // Stats queries receive the raw wallet so distinct-node counting is accurate.
       // Non-stats (map/list) queries receive truncated wallets to prevent operator
@@ -119,8 +119,13 @@ function checkRateLimit(ip: string): boolean {
 
 export async function GET(request: NextRequest) {
   const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
-  const ip = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : '127.0.0.1'
-  // Skip rate limiting for loopback (dev/test) — prevents test flakiness from repeated requests
+  // Fall back to connection-level IP from Next.js when x-real-ip is absent or invalid.
+  // Without this fallback, all requests with no/invalid x-real-ip share the '127.0.0.1'
+  // bucket and exhaust the rate limit for legitimate loopback callers.
+  const connIp = (request as any).ip ?? ''
+  const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
+  const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
+  const ip = validatedRaw || validatedConn || '127.0.0.1'
   const isLoopback = ip === '127.0.0.1' || ip === '::1'
   if (!isLoopback && !checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
@@ -141,7 +146,10 @@ export async function GET(request: NextRequest) {
   }
   const blockTypeFilter = rawBlockType ?? undefined
   const rawGeohash = searchParams.get('geohash')
-  if (rawGeohash !== null && !/^[a-z0-9]{1,9}$/.test(rawGeohash)) {
+  // Valid geohash base32 chars exclude a, i, l, o (to avoid confusion with 0/1).
+  // The previous regex [0-9bcdefghjkmnpqrstuvwxyz] already excluded them but lacked
+  // anchoring; {1,9} and ^ $ ensure no extra chars slip through either side.
+  if (rawGeohash !== null && !/^[0-9bcdefghjkmnpqrstuvwxyz]{1,9}$/.test(rawGeohash)) {
     return new Response('Bad Request: invalid geohash', { status: 400 })
   }
   const geohashFilter = rawGeohash ?? undefined
@@ -202,16 +210,25 @@ export async function GET(request: NextRequest) {
         const statsResult = { liveProbes, regions: regionSet.size, blocksToday, volunteerCount }
         // Only cache from a real Arkiv response — zeros from a failed Arkiv would
         // mask recovery for up to 60 seconds.
-        // Only cache on a real Arkiv success. Caching with DEV_FIXTURE when Arkiv
-        // failed would mask recovery for up to 60s in dev, since the cache check
-        // at line 103 returns early without querying Arkiv on subsequent requests.
         if (!arkivFailed) {
           statsCache = { result: statsResult, expiresAt: Date.now() + 60_000 }
         }
         return statsResult
       })().finally(() => { statsInFlight = null })
+      // Attach a no-op rejection handler so Node doesn't emit an
+      // UnhandledPromiseRejectionWarning if the caller abandons statsInFlight
+      // (e.g. the request is aborted) before the promise settles.
+      statsInFlight.catch(() => { /* rejection handled by each awaiter below */ })
     }
-    const statsResult = await statsInFlight
+    let statsResult
+    try {
+      statsResult = await statsInFlight
+    } catch {
+      return Response.json(
+        { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 },
+        { status: 200 },
+      )
+    }
     return Response.json(statsResult, {
       headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=30' },
     })

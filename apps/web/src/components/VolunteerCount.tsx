@@ -2,19 +2,38 @@
 
 import { useEffect, useRef, useState } from 'react'
 
-export default function VolunteerCount() {
+interface VolunteerCountProps {
+  // When provided by the parent (via useBlockEvents includeStats), VolunteerCount
+  // renders this value directly and skips its own /api/probe-events polling.
+  externalVolunteerCount?: number | null
+}
+
+export default function VolunteerCount({ externalVolunteerCount }: VolunteerCountProps = {}) {
   const [count, setCount] = useState<number | null>(null)
   const liveRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef<number | null>(null)
 
+  // When the parent supplies the volunteer count from the shared useBlockEvents
+  // poll, apply it directly and skip the standalone polling effect below.
   useEffect(() => {
+    if (externalVolunteerCount == null) return
+    const newCount = externalVolunteerCount
+    if (prevCountRef.current !== newCount && liveRef.current) {
+      liveRef.current.textContent = `${newCount} volunteer ${newCount === 1 ? 'node' : 'nodes'} now active`
+    }
+    prevCountRef.current = newCount
+    setCount(newCount)
+  }, [externalVolunteerCount])
+
+  useEffect(() => {
+    // Skip standalone polling when the parent is supplying the count externally.
+    // This eliminates the duplicate /api/probe-events?stats=true request that
+    // would otherwise fire every 62s independently of the 30s useBlockEvents interval.
+    if (externalVolunteerCount !== undefined) return
+
     let mounted = true
     let abortController = new AbortController()
 
-    // Fetch volunteerCount from the shared stats endpoint so this component
-    // does not run an independent polling loop. NodeCount polls the same
-    // endpoint on a 62s interval; the server caches the response for 60s,
-    // so both components share a single effective request cadence.
     const fetchVolunteers = async () => {
       abortController.abort()
       abortController = new AbortController()
@@ -45,7 +64,7 @@ export default function VolunteerCount() {
       abortController.abort()
       clearInterval(interval)
     }
-  }, [])
+  }, [externalVolunteerCount])
 
   if (count === null) return null
 
