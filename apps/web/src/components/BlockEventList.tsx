@@ -212,7 +212,6 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                 style={{
                   ['--animation-delay' as string]: `${Math.min(i * 30, 300)}ms`,
                   borderBottom: i < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                  borderRadius: 0,
                 }}
               >
                 <div className="flex items-start justify-between gap-3">

@@ -41,6 +41,7 @@ function getServerSnapshot() { return false }
 
 export default function HomePage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
+  // Intentionally ephemeral: sidebar state is not persisted across reloads.
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mounted, setMounted] = useState(false)
   const isDesktop = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
@@ -92,14 +93,14 @@ export default function HomePage() {
     >
       <a
         href="#map-region"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-[var(--wld-gray-0)] focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-[var(--wld-gray-900)]"
       >
         Skip to map
       </a>
       {(!isDesktop || sidebarOpen) && (
         <a
           href={isDesktop && sidebarOpen ? '#events-panel' : '#mobile-events-panel'}
-          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:bg-[var(--wld-gray-0)] focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-[var(--wld-gray-900)]"
         >
           Skip to events list
         </a>
@@ -108,7 +109,9 @@ export default function HomePage() {
       <header
         className="z-20 flex flex-shrink-0 items-center justify-between gap-4 px-5 py-3"
         style={{
-          background: '#111113',
+          background: 'rgba(17, 17, 19, 0.85)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           borderBottom: '1px solid rgba(255,255,255,0.08)',
         }}
       >
@@ -168,7 +171,9 @@ export default function HomePage() {
         aria-label="Event type filter"
         className="z-10 flex-shrink-0 px-5 py-2.5"
         style={{
-          background: '#0d0d0f',
+          background: 'rgba(13, 13, 15, 0.90)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
           borderBottom: '1px solid rgba(255,255,255,0.05)',
         }}
       >
@@ -301,8 +306,10 @@ export default function HomePage() {
             background: 'rgba(12, 12, 16, 0.96)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
+            minHeight: '80px',
           }}
         >
+          <div className="mx-auto mb-2 mt-2 h-1 w-10 rounded-full" style={{ background: 'rgba(255,255,255,0.15)' }} />
           {mounted && !isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
         </div>
       </div>

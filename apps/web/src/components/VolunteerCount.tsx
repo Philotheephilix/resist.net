@@ -73,41 +73,38 @@ export default function VolunteerCount({ externalVolunteerCount }: VolunteerCoun
     }
   }, [externalVolunteerCount])
 
-  if (count === null) {
-    if (isResolved) return null
-    return (
-      <div
-        className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs"
-        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' }}
-      >
-        <span className="inline-block h-1.5 w-24 rounded-full skeleton-shimmer" />
-      </div>
-    )
-  }
-
   return (
     <>
-    <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
-    <div
-      role="img"
-      className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
-      style={{
-        background: 'rgba(255,255,255,0.07)',
-        border: '1px solid rgba(255,255,255,0.10)',
-        color: 'rgba(255,255,255,0.6)',
-      }}
-      aria-label={`${count} volunteer ${count === 1 ? 'node' : 'nodes'} active`}
-    >
-      <span
-        className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full"
-        style={{ backgroundColor: '#7c6ff7' }}
-        aria-hidden
-      />
-      <span aria-hidden>
-        <strong style={{ color: '#ffffff', fontWeight: 600 }}>{count}</strong>
-        <span style={{ color: 'rgba(255,255,255,0.60)' }}> volunteers</span>
-      </span>
-    </div>
+      <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
+      {count === null && isResolved ? null : count === null ? (
+        <div
+          className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs"
+          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' }}
+        >
+          <span className="inline-block h-1.5 w-24 rounded-full skeleton-shimmer" />
+        </div>
+      ) : (
+        <div
+          role="img"
+          className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
+          style={{
+            background: 'rgba(255,255,255,0.07)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            color: 'rgba(255,255,255,0.6)',
+          }}
+          aria-label={`${count} volunteer ${count === 1 ? 'node' : 'nodes'} active`}
+        >
+          <span
+            className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full"
+            style={{ backgroundColor: 'var(--wld-primary-pink, #9d50ff)' }}
+            aria-hidden
+          />
+          <span aria-hidden>
+            <strong style={{ color: '#ffffff', fontWeight: 600 }}>{count}</strong>
+            <span style={{ color: 'rgba(255,255,255,0.60)' }}> volunteers</span>
+          </span>
+        </div>
+      )}
     </>
   )
 }

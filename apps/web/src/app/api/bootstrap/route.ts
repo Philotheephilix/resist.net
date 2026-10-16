@@ -32,7 +32,14 @@ function checkRateLimit(ip: string): boolean {
 
 export async function GET(request: NextRequest) {
   const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
-  const ip = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : '127.0.0.1'
+  const connIp = (request as any).ip ?? ''
+  const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
+  const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
+  const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
+  const ip = validatedRaw || validatedConn || devFallback
+  if (!ip) {
+    return new Response('Bad Request: client IP could not be determined', { status: 400 })
+  }
   if (!checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,
@@ -51,13 +58,16 @@ export async function GET(request: NextRequest) {
     const client = new ArkivReadClient(rpcUrl)
     const volunteers = await client.queryVolunteers()
 
-    const entries = volunteers.map((v) => ({
-      wallet: v.wallet,
-      geohash: v.geohash ? v.geohash.slice(0, 5) : v.geohash,
-      capacitySlots: v.capacityslots,
-      createdAt: v.createdat,
-      sdpOffer: v.sdpoffer,
-    }))
+    const entries = volunteers
+      .filter((v) => typeof v.sdpoffer === 'string' && v.sdpoffer.length <= 131072)
+      .slice(0, 50)
+      .map((v) => ({
+        wallet: v.wallet,
+        geohash: v.geohash ? v.geohash.slice(0, 5) : v.geohash,
+        capacitySlots: v.capacityslots,
+        createdAt: v.createdat,
+        sdpOffer: v.sdpoffer,
+      }))
 
     return Response.json(entries)
   } catch {

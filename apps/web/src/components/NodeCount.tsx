@@ -29,7 +29,8 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
   // loading=false so the component doesn't stay stuck in the loading skeleton.
   useEffect(() => {
     if (externalStats === undefined) return
-    if (externalStats !== null) setStats(externalStats)
+    if (externalStats === null) { setLoading(false); setStale(true); return; }
+    setStats(externalStats)
     setLoading(false)
     setStale(false)
     if (externalStats !== null) {
@@ -150,7 +151,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
               <span style={{ color: 'rgba(255,255,255,0.60)' }}> blocks</span>
             </span>
             {stale && (
-              <span aria-hidden style={{ color: '#ffb733', fontSize: 10, fontStyle: 'italic' }}>
+              <span aria-hidden style={{ color: 'var(--wld-warning-500, #ffb833)', fontSize: 10, fontStyle: 'italic' }}>
                 (stale)
               </span>
             )}

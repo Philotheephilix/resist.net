@@ -73,11 +73,11 @@ const TOKEN_SUCCESS_600 = '#00c230'
 
 const COLOR_MAP = { warning: TOKEN_WARNING_600, error: TOKEN_ERROR_600, success: TOKEN_SUCCESS_600 }
 
-// Popup badge tokens — opaque bg + dark text to meet WCAG AA 4.5:1 at 11px/600
+// Popup badge tokens — alpha-glass bg + light text for dark popup (rgba(16,16,20,0.97))
 const BADGE_TOKENS: Record<string, { bg: string; color: string }> = {
-  warning: { bg: '#fff6e6', color: '#996800' },  // warning-100 / warning-800 — 7.8:1
-  error:   { bg: '#fee9e7', color: '#c2200a' },  // error-100 / error-700 — 5.1:1
-  success: { bg: '#e6f9ec', color: '#00741d' },  // success-100 / success-800 — 6.2:1
+  warning: { bg: 'rgba(255,174,0,0.15)', color: '#ffb733' },
+  error:   { bg: 'rgba(242,40,13,0.15)',  color: '#ff6b55' },
+  success: { bg: 'rgba(0,194,48,0.12)',   color: '#33d167' },
 }
 
 function markerColor(blockType: string | null): string {

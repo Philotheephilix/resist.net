@@ -132,6 +132,10 @@ export async function syncToArkiv(
   const db = getDb()
   const client = config ? buildClient(config) : null
 
+  if (!client) {
+    console.warn('[sync] No privateKey configured — results are only cached locally, not written to Arkiv')
+  }
+
   // --- evict stale rows older than 48h (past Arkiv ProbeResult TTL) ---
   const cutoffMs = Date.now() - 48 * 3600 * 1000
   stmtEvict!.run(cutoffMs)

@@ -255,6 +255,8 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
         try {
           const res = await fetch(bootstrapUrl, { signal: AbortSignal.timeout(5000) })
           if (res.ok) {
+            const cl = parseInt(res.headers.get('content-length') ?? '0', 10)
+            if (cl > 1_048_576) throw new Error('Bootstrap URL response too large')
             const data = (await res.json()) as Array<{
               wallet: string
               sdpOffer: string
@@ -297,7 +299,13 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
     peer.close()
     throw new Error("Volunteer SDP offer too large")
   }
-  const offerDesc = JSON.parse(chosen.sdpoffer) as RTCSessionDescriptionInit
+  let offerDesc: RTCSessionDescriptionInit
+  try {
+    offerDesc = JSON.parse(chosen.sdpoffer) as RTCSessionDescriptionInit
+  } catch (e) {
+    peer.close()
+    throw e instanceof SyntaxError ? new Error("Volunteer SDP offer is not valid JSON") : e
+  }
   if (
     typeof offerDesc !== "object" ||
     offerDesc === null ||

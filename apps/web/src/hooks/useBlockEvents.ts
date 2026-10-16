@@ -4,7 +4,6 @@ import type { ProbeResultRow } from '../components/BlockEventList'
 interface BlockEventFilters {
   blockType?: string
   includeStats?: boolean
-  geohash?: string
 }
 
 export interface ProbeStats {
@@ -58,7 +57,6 @@ export function useBlockEvents(filters: BlockEventFilters) {
       try {
         const params = new URLSearchParams()
         if (filters.blockType) params.set('blockType', filters.blockType)
-        if (filters.geohash) params.set('geohash', filters.geohash)
         if (filters.includeStats) params.set('includeStats', 'true')
 
         const res = await window.fetch(`/api/probe-events?${params}`, { signal })
@@ -138,7 +136,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
       stopInterval()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [filters.blockType, filters.geohash, filters.includeStats, setStableEvents])
+  }, [filters.blockType, filters.includeStats, setStableEvents])
 
   return { events, loading, error, stats }
 }
