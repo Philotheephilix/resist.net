@@ -32,17 +32,21 @@ function subscribeToTick(fn: TickListener): () => void {
 const urlHostnameCache = new Map<string, string>()
 function cachedTruncateUrl(url: string): string {
   let result = urlHostnameCache.get(url)
-  if (result === undefined) {
-    try {
-      result = new URL(url).hostname
-    } catch {
-      result = url.length > 32 ? url.slice(0, 32) + '…' : url
-    }
-    if (urlHostnameCache.size >= URL_CACHE_MAX) {
-      urlHostnameCache.delete(urlHostnameCache.keys().next().value!)
-    }
+  if (result !== undefined) {
+    // LRU promotion: move to end so keys().next() evicts the least-recently-used entry
+    urlHostnameCache.delete(url)
     urlHostnameCache.set(url, result)
+    return result
   }
+  try {
+    result = new URL(url).hostname
+  } catch {
+    result = url.length > 32 ? url.slice(0, 32) + '…' : url
+  }
+  if (urlHostnameCache.size >= URL_CACHE_MAX) {
+    urlHostnameCache.delete(urlHostnameCache.keys().next().value!)
+  }
+  urlHostnameCache.set(url, result)
   return result
 }
 
@@ -52,20 +56,18 @@ const tsIsoCache = new Map<number, string>()
 const tsLocaleCache = new Map<number, string>()
 function cachedTsIso(ts: number): string {
   let s = tsIsoCache.get(ts)
-  if (s === undefined) {
-    s = new Date(ts).toISOString()
-    if (tsIsoCache.size >= URL_CACHE_MAX) tsIsoCache.delete(tsIsoCache.keys().next().value!)
-    tsIsoCache.set(ts, s)
-  }
+  if (s !== undefined) { tsIsoCache.delete(ts); tsIsoCache.set(ts, s); return s }
+  s = new Date(ts).toISOString()
+  if (tsIsoCache.size >= URL_CACHE_MAX) tsIsoCache.delete(tsIsoCache.keys().next().value!)
+  tsIsoCache.set(ts, s)
   return s
 }
 function cachedTsLocale(ts: number): string {
   let s = tsLocaleCache.get(ts)
-  if (s === undefined) {
-    s = new Date(ts).toLocaleString()
-    if (tsLocaleCache.size >= URL_CACHE_MAX) tsLocaleCache.delete(tsLocaleCache.keys().next().value!)
-    tsLocaleCache.set(ts, s)
-  }
+  if (s !== undefined) { tsLocaleCache.delete(ts); tsLocaleCache.set(ts, s); return s }
+  s = new Date(ts).toLocaleString()
+  if (tsLocaleCache.size >= URL_CACHE_MAX) tsLocaleCache.delete(tsLocaleCache.keys().next().value!)
+  tsLocaleCache.set(ts, s)
   return s
 }
 
@@ -108,7 +110,13 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
   // Uses a shared module-level interval so two mounted instances (sidebar +
   // mobile sheet) do not each create their own redundant timer.
   const [, setTick] = useState(0)
-  useEffect(() => subscribeToTick(() => setTick(t => t + 1)), [])
+  // Stable ref so the same function identity is passed to subscribeToTick on every
+  // invocation (Strict Mode double-invoke, remount). Without this, cleanup removes
+  // the first inline arrow and subscribe adds a second one — between cleanup and
+  // re-subscribe tickListeners hits size 0 and the interval is torn down, causing
+  // a brief window where 60s tick labels can go stale for an extra full interval.
+  const tickListenerRef = useRef(() => setTick(t => t + 1))
+  useEffect(() => subscribeToTick(tickListenerRef.current), [])
 
   // Only compute ownSorted when sortedEvents is not provided (standalone usage).
   // When sortedEvents is provided the result is always []; including events in the

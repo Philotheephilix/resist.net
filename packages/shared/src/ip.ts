@@ -25,16 +25,51 @@ export function isPrivateIpv4(ip: string): boolean {
 }
 
 /**
+ * Expand a compressed IPv6 address to its full 8-group form.
+ * Handles :: abbreviation and short groups (e.g. '0::' → '0000:0000:...:0000').
+ * Returns null for inputs that are not valid IPv6 notation.
+ */
+function expandIPv6(ip: string): string | null {
+  const lower = ip.toLowerCase()
+  // Must contain only hex digits, colons, and optional leading/trailing colons
+  if (!/^[0-9a-f:]+$/.test(lower)) return null
+
+  const halves = lower.split("::")
+  if (halves.length > 2) return null  // multiple :: — invalid
+
+  const pad = (groups: string[]): string[] =>
+    groups.map(g => g.padStart(4, "0"))
+
+  if (halves.length === 1) {
+    const groups = lower.split(":")
+    if (groups.length !== 8) return null
+    return pad(groups).join(":")
+  }
+
+  // Has :: expansion
+  const left = halves[0]!.length > 0 ? halves[0]!.split(":") : []
+  const right = halves[1]!.length > 0 ? halves[1]!.split(":") : []
+  const missing = 8 - left.length - right.length
+  if (missing < 0) return null
+  const full = [...left, ...Array(missing).fill("0"), ...right]
+  if (full.length !== 8) return null
+  return pad(full).join(":")
+}
+
+const IPV6_UNSPECIFIED = "0000:0000:0000:0000:0000:0000:0000:0000"
+const IPV6_LOOPBACK    = "0000:0000:0000:0000:0000:0000:0000:0001"
+
+/**
  * Returns true if an IPv6 address is in a private/reserved range.
  * Covers: loopback (::1), link-local (fe80::/10), ULA (fc00::/7 = fc/fd prefix),
  * IPv4-mapped (::ffff:), site-local (fec0::/10, deprecated), multicast (ff::/8).
  */
 export function isPrivateIpv6(ip: string): boolean {
   const lower = ip.toLowerCase()
-  // Loopback — compressed, single-digit expanded, and fully zero-padded forms
-  if (lower === "::1" || lower === "0:0:0:0:0:0:0:1" || lower === "0000:0000:0000:0000:0000:0000:0000:0001") return true
-  // Unspecified — compressed, single-digit expanded, and fully zero-padded forms
-  if (lower === "::" || lower === "0:0:0:0:0:0:0:0" || lower === "0000:0000:0000:0000:0000:0000:0000:0000") return true
+  // Canonically expand to catch all compressed forms of loopback and unspecified
+  // (e.g. '0::', '::0', '0:0::', '0:0:0:0:0:0:0::' — all expand to the same value).
+  const expanded = expandIPv6(lower)
+  if (expanded === IPV6_LOOPBACK || expanded === IPV6_UNSPECIFIED) return true
   if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true  // fe80–febf link-local
   if (/^fe[c-f][0-9a-f]:/i.test(lower)) return true   // fec0–feff site-local (deprecated, still private)
   if (/^f[cd]/i.test(lower)) return true               // fc00::/7 ULA (fc00–fdff)

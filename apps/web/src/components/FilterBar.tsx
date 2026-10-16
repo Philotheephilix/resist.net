@@ -1,8 +1,5 @@
 'use client'
 
-import { useRef, KeyboardEvent } from 'react'
-import { flushSync } from 'react-dom'
-
 export type FilterType = 'all' | 'dns_poisoning' | 'tcp_rst' | 'http_block' | 'full_unreachable'
 
 interface FilterBarProps {
@@ -19,67 +16,50 @@ const FILTERS: { key: FilterType; label: string }[] = [
 ]
 
 export default function FilterBar({ active, onChange }: FilterBarProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const currentIdx = FILTERS.findIndex((f) => f.key === active)
-    const buttons = () => containerRef.current?.querySelectorAll('button[role="radio"]')
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      e.preventDefault()
-      const next = (currentIdx + 1) % FILTERS.length
-      // flushSync forces React to re-render synchronously before we call .focus(),
-      // so the newly active button already has tabIndex=0 when focus is moved.
-      flushSync(() => { onChange(FILTERS[next]!.key) })
-      ;(buttons()?.[next] as HTMLElement | undefined)?.focus()
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      e.preventDefault()
-      const prev = (currentIdx - 1 + FILTERS.length) % FILTERS.length
-      flushSync(() => { onChange(FILTERS[prev]!.key) })
-      ;(buttons()?.[prev] as HTMLElement | undefined)?.focus()
-    } else if (e.key === 'Home') {
-      e.preventDefault()
-      flushSync(() => { onChange(FILTERS[0]!.key) })
-      ;(buttons()?.[0] as HTMLElement | undefined)?.focus()
-    } else if (e.key === 'End') {
-      e.preventDefault()
-      flushSync(() => { onChange(FILTERS[FILTERS.length - 1]!.key) })
-      ;(buttons()?.[FILTERS.length - 1] as HTMLElement | undefined)?.focus()
-    }
-  }
-
   return (
+    // role=radiogroup with native <input type="radio"> elements gives full AT support
+    // across all assistive technology versions — JAWS, NVDA, VoiceOver on iOS/macOS.
+    // Native inputs handle arrow-key navigation, aria-checked semantics, and group
+    // name announcement without needing ARIA role overrides on non-radio elements.
     <div
-      ref={containerRef}
       role="radiogroup"
       aria-label="Filter events by block type"
       className="flex items-center gap-2 overflow-x-auto pb-1"
       style={{ scrollbarWidth: 'none' }}
-      onKeyDown={handleKeyDown}
     >
       {FILTERS.map(({ key, label }) => {
         const isActive = active === key
         return (
-          <button
+          <label
             key={key}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
-            tabIndex={isActive ? 0 : -1}
-            onClick={() => onChange(key)}
-            className="flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+            className="flex-shrink-0 cursor-pointer rounded-full"
             style={{
               backgroundColor: isActive ? 'var(--wld-gray-0)' : 'var(--wld-glass-bg-muted)',
               color: isActive ? 'var(--wld-gray-900)' : 'var(--wld-gray-300)',
               border: isActive
                 ? '1px solid var(--wld-gray-0)'
                 : '1px solid var(--wld-glass-bg-active)',
-              cursor: 'pointer',
               transitionDuration: 'var(--wld-duration-base)',
               transitionTimingFunction: 'var(--wld-ease-default)',
+              transition: 'background-color var(--wld-duration-base) var(--wld-ease-default)',
             }}
           >
-            {label}
-          </button>
+            {/* Visually hidden radio input — clicking the label activates it */}
+            <input
+              type="radio"
+              name="filter"
+              value={key}
+              checked={isActive}
+              onChange={() => onChange(key)}
+              className="sr-only"
+            />
+            <span
+              className="block px-3 py-1.5 text-xs font-semibold focus-within:ring-2 focus-within:ring-white/50 focus-within:rounded-full"
+              aria-hidden="true"
+            >
+              {label}
+            </span>
+          </label>
         )
       })}
     </div>

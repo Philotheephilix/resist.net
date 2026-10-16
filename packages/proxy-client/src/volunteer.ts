@@ -15,6 +15,20 @@ import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
 
 const { RTCPeerConnection } = wrtc
 
+// Redact any URL matching the RPC endpoint from error messages to prevent
+// accidental exposure of API keys embedded in the URL path.
+function redactErrMsg(err: unknown, rpcUrl?: string): string {
+  const msg = (err instanceof Error ? err.message : String(err)) ?? ""
+  if (!rpcUrl) return msg.replace(/https?:\/\/\S+/g, "[url-redacted]")
+  try {
+    const u = new URL(rpcUrl)
+    return msg.replaceAll(rpcUrl, u.origin + "/[REDACTED]")
+      .replace(/https?:\/\/\S+/g, "[url-redacted]")
+  } catch {
+    return msg.replace(/https?:\/\/\S+/g, "[url-redacted]")
+  }
+}
+
 const OFFER_TTL_MS = 5 * 60 * 1000
 const REFRESH_INTERVAL_MS = 4 * 60 * 1000
 const POLL_INTERVAL_MS = 10 * 1000
@@ -416,7 +430,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
       cache.unshift({ wallet: config.wallet, sdpOffer: sdpOfferJson, geohash: config.geohash })
       saveBootstrapCache(cache.slice(0, 50))
     } catch (err) {
-      console.error("[volunteer] Arkiv write failed, running offline:", (err as Error).message)
+      console.error("[volunteer] Arkiv write failed, running offline:", redactErrMsg(err, config.rpcUrl))
       entityKey = ""
     }
 
@@ -444,7 +458,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         currentEntityKey = result
       }
     } catch (err) {
-      console.error("[volunteer] Refresh failed:", (err as Error).message)
+      console.error("[volunteer] Refresh failed:", redactErrMsg(err, config.rpcUrl))
     }
   }, REFRESH_INTERVAL_MS)
 
@@ -454,7 +468,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
     try {
       answers = await arkiv.querySignalExchange(config.wallet)
     } catch (err) {
-      console.error("[volunteer] Poll failed:", (err as Error).message)
+      console.error("[volunteer] Poll failed:", redactErrMsg(err, config.rpcUrl))
       return
     }
 
@@ -581,7 +595,8 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
           }
           const m = /a=candidate:[^\s]+ [^\s]+ [^\s]+ [^\s]+ ([^\s]+) /.exec(line)
           if (!m) {
-            sanitizedLines.push(line)
+            // Malformed candidate — fewer than 5 fields, cannot safely classify the address.
+            // Pass-through would bypass all IP checks; drop it instead.
             continue
           }
           const candidateAddr = m[1]!
@@ -610,7 +625,10 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
             }
             // Strip raddr field in srflx/relay candidates — it contains the volunteer's
             // LAN IP and leaks the private network topology to the connecting client.
-            const sanitizedLine = line.replace(/ raddr [^\s]+ rport \d+/g, ' raddr 0.0.0.0 rport 0')
+            // Use addrtype-aware replacement: IPv6 candidates require '::' not '0.0.0.0'
+            // (same rationale as c= and a=rtcp: lines: RFC 4566-invalid to mix families).
+            const raddrReplacement = isIpv6Literal ? ':: rport 0' : '0.0.0.0 rport 0'
+            const sanitizedLine = line.replace(/ raddr [^\s]+ rport \d+/g, ` raddr ${raddrReplacement}`)
             sanitizedLines.push(sanitizedLine)
           } else {
             // Hostname candidate — resolve BOTH A and AAAA records to prevent

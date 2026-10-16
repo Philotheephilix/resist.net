@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { geohashToLatLng, blockTypeLabel, markerColorForBlockType } from '@resist/map-ui'
 import type { ProbeResultRow } from './BlockEventList'
 
@@ -137,9 +137,13 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
   // preventing the stale clear from silencing the new popup's announcement.
   const liveRegionClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Keep sidebarOpenRef in sync so Leaflet event-handler closures always read
-  // the latest prop value without needing to recreate the closure.
-  sidebarOpenRef.current = sidebarOpen
+  // Keep sidebarOpenRef in sync via useLayoutEffect so it is only written after
+  // React commits the render. Writing directly in the render body could update the
+  // ref during a speculative (aborted) concurrent render, causing Leaflet callbacks
+  // that fire between renders to read a stale or transient value.
+  // useLayoutEffect runs synchronously after commit but before paint, so the ref
+  // is always current by the time any Leaflet popupopen handler fires.
+  useLayoutEffect(() => { sidebarOpenRef.current = sidebarOpen }, [sidebarOpen])
 
   // Update the map container's aria-label imperatively without triggering a React
   // re-render — used when popup instructions become visible for the first time.
@@ -201,7 +205,12 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
         fillOpacity: 0.5,
       })
 
-      marker.bindPopup(popupHtml, { maxWidth: 260 })
+      // closeButton: false — disable Leaflet's native close button (<a href='#'> in the
+      // popup header) which is keyboard-reachable but not wired to popupClosedByActionRef.
+      // The custom [data-popup-close] button is already the sole close mechanism; keeping
+      // the native button means Tab-navigating to it and pressing Enter closes the popup
+      // without restoring focus to the marker.
+      marker.bindPopup(popupHtml, { maxWidth: 260, closeButton: false })
 
       const markerLabel = `${event.targetUrl}: ${label}`
 
@@ -214,13 +223,27 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
         el.setAttribute('tabindex', '0')
         el.setAttribute('role', 'button')
         el.setAttribute('aria-label', markerLabel)
-        el.addEventListener('keydown', (e: KeyboardEvent) => {
+        // Inject an SVG <title> as the universally-supported accessible name source
+        // for SVG elements. NVDA+Firefox prioritises <title> over aria-label for SVG
+        // shape elements, so without this the user would hear only the role ('button')
+        // and not the URL or block type when the marker receives keyboard focus.
+        if (el.namespaceURI === 'http://www.w3.org/2000/svg' || el.tagName === 'path' || el.tagName === 'circle') {
+          const existing = el.querySelector('title')
+          if (!existing) {
+            const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title')
+            titleEl.textContent = markerLabel
+            el.prepend(titleEl)
+          }
+        }
+        const keyHandler = (e: KeyboardEvent) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             lastFocusedMarkerElRef.current = el
             marker.openPopup()
           }
-        })
+        }
+        ;(el as any)._keydownHandler = keyHandler
+        el.addEventListener('keydown', keyHandler)
       })
 
       // On popup open: move keyboard focus into the popup content div so keyboard-
@@ -253,9 +276,13 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
           clearTimeout(focusTimeoutRef.current)
           focusTimeoutRef.current = null
         }
-        if (liveRegionRef.current) {
-          liveRegionRef.current.textContent = ''
-        }
+        // Do NOT unconditionally clear the live region here. If the user clicks a second
+        // marker immediately, Leaflet fires popupclose then popupopen synchronously —
+        // the empty write in popupclose followed immediately by the content write in
+        // popupopen can cause VoiceOver on iOS/macOS to drain the buffer and suppress
+        // the new popup's announcement. popupopen always overwrites the region content,
+        // so the clear here is redundant. The 1500ms deferred clear below handles
+        // the non-action-close case where no new popup follows.
         // Return focus to the marker unless focus has already moved outside the map
         // (e.g. user clicked a different marker, or focus is on another page element).
         // This handles outside-click and Leaflet X-button closes — not just Escape.
@@ -379,12 +406,12 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
       map.on('popupopen', (ev: any) => {
         if (!hasEverOpenedPopupRef.current) {
           hasEverOpenedPopupRef.current = true
-          // Defer to avoid a DOM mutation inside Leaflet's synchronous event dispatch,
-          // which can conflict with a live-region update in the same tick.
-          setTimeout(() => {
-            popupInstructionsVisibleRef.current = true
-            updateMapAriaLabel()
-          }, 0)
+          // Update the aria-label synchronously so the Escape hint is present
+          // before the screen reader reads the popup open announcement.
+          // Updating an outer container's aria-label is safe inside Leaflet's
+          // synchronous event dispatch — it only touches our own div, not Leaflet's DOM.
+          popupInstructionsVisibleRef.current = true
+          updateMapAriaLabel()
         }
         // Cancel any pending liveRegion clear from the previous "Popup closed" announcement
         // so it doesn't silently blank the new popup's open announcement.
@@ -496,6 +523,18 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Cancel pending timeouts before removing the map to prevent their callbacks
+      // from firing against the unmounted component's stale refs.
+      if (mapPopupTimeoutRef.current !== null) { clearTimeout(mapPopupTimeoutRef.current); mapPopupTimeoutRef.current = null }
+      if (focusTimeoutRef.current !== null) { clearTimeout(focusTimeoutRef.current); focusTimeoutRef.current = null }
+      if (liveRegionClearTimeoutRef.current !== null) { clearTimeout(liveRegionClearTimeoutRef.current); liveRegionClearTimeoutRef.current = null }
+      // Explicitly remove keydown listeners stored on each marker's SVG element.
+      // Relying solely on Leaflet's map.remove() to free them is safe in real browsers
+      // but leaks in jsdom test environments where the SVG container may be retained.
+      markerMapRef.current.forEach(m => {
+        const el = m.getElement?.() as any
+        if (el && el._keydownHandler) { el.removeEventListener('keydown', el._keydownHandler); el._keydownHandler = null }
+      })
       if (mapRef.current) {
         mapRef.current.remove()
         mapRef.current = null

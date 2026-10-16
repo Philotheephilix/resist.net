@@ -44,7 +44,10 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
     // Cap ISP length before writing to disk — a MITM on ip-api.com could return
     // an arbitrarily large ISP string that grows config.json unboundedly.
     const rawIsp = data.isp ?? data.org ?? "unknown"
-    const isp = rawIsp.slice(0, 128)
+    // Strip ASCII control characters (U+0000–U+001F) and Unicode bidi overrides
+    // (U+202A–U+202E, U+2066–U+2069) that could cause log-viewer spoofing or
+    // misattribution of probe results if embedded in stored ISP metadata.
+    const isp = rawIsp.slice(0, 128).replace(/[\u0000-\u001F‪-‮⁦-⁩﻿]/g, "") || "unknown"
     return { geohash, isp }
   } catch {
     // Fallback: use env vars or defaults
@@ -56,17 +59,21 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
 }
 
 export async function savePrevHash(config: Config, prevHash: string): Promise<void> {
+  const tmp = CONFIG_PATH + ".tmp." + process.pid
   try {
     // Caller already holds config in memory — skip the readFileSync/JSON.parse round-trip
     // and write the in-memory config with the updated prevHash directly.
     const updated = { ...config, prevHash }
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
-    // chmodSync enforces 0o600 regardless of the file's existing permissions.
-    // writeFileSync { mode } only sets permissions on newly created files on most
-    // platforms — it does not downgrade existing world-readable files.
-    fs.chmodSync(CONFIG_PATH, 0o600)
-  } catch {
-    // Non-fatal: if we can't persist prevHash the chain just resets from this point
+    // Atomic write: write to a sibling temp file then rename so a crash between
+    // truncate and write never leaves a corrupt CONFIG_PATH.
+    fs.writeFileSync(tmp, JSON.stringify(updated, null, 2), { mode: 0o600 })
+    fs.chmodSync(tmp, 0o600)
+    fs.renameSync(tmp, CONFIG_PATH)
+  } catch (err) {
+    // Non-fatal but must be logged — a silent failure leaves prevHash stale on disk
+    // and causes the next tick to fork the tamper-evidence chain from the stale root.
+    console.error("[probe] savePrevHash failed, chain continuity may be broken:", err)
+    try { fs.unlinkSync(tmp) } catch { /* ignore cleanup failure */ }
   }
 }
 
@@ -84,9 +91,17 @@ export async function loadConfig(): Promise<Config> {
       networkType: "unknown",
       prevHash: "0".repeat(64),
     }
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
-    fs.chmodSync(CONFIG_PATH, 0o600)
-    return config
+    // Use 'wx' (exclusive create) flag so only one process can create the file.
+    // If two processes race on first start (e.g. systemd respawn), the loser gets
+    // EEXIST and falls through to read the winner's config, preventing wallet fork.
+    try {
+      fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600, flag: "wx" })
+      fs.chmodSync(CONFIG_PATH, 0o600)
+      return config
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e
+      // Lost the creation race — fall through to read the winner's config below
+    }
   }
 
   // Enforce 0o600 on every startup — the existing file may have been created with

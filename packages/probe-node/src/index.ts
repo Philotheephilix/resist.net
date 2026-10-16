@@ -11,11 +11,14 @@ const INTERVAL_MS = 15 * 60 * 1000 // 15 min
 async function tick() {
   const config = await loadConfig()
   const { results, finalHash } = await runProbe(config)
-  await syncToArkiv(results, config)
-  // Persist finalHash so the next tick threads the chain correctly.
-  // Without this, every cycle re-reads the same stale prevHash from config.json
-  // and the tamper-evidence chain resets on every probe cycle.
-  await savePrevHash(config, finalHash)
+  try {
+    await syncToArkiv(results, config)
+  } finally {
+    // Always persist finalHash even if syncToArkiv throws mid-batch.
+    // Without try/finally, a partial Arkiv write followed by a throw would leave
+    // prevHash stale on disk and fork the tamper-evidence chain on the next tick.
+    await savePrevHash(config, finalHash)
+  }
 }
 
 export async function main() {

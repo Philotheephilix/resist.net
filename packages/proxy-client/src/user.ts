@@ -325,7 +325,8 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
     }
     const m = /a=candidate:[^\s]+ [^\s]+ [^\s]+ [^\s]+ ([^\s]+) /.exec(line)
     if (!m) {
-      sanitizedOfferLines.push(line)
+      // Malformed candidate — fewer than 5 fields, cannot safely classify the address.
+      // Pass-through would bypass all IP checks; drop it instead.
       continue
     }
     const candidateAddr = m[1]!
@@ -346,8 +347,9 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
         peer.close()
         throw new Error(`Volunteer SDP contains private candidate IP: ${candidateAddr}`)
       }
-      // Strip raddr field in srflx/relay candidates — it leaks the volunteer's LAN IP.
-      const sanitizedLine = line.replace(/ raddr [^\s]+ rport \d+/g, ' raddr 0.0.0.0 rport 0')
+      // Strip raddr field — addrtype-aware: IPv6 candidates use '::' not '0.0.0.0'
+      const raddrReplacement = isIpv6Literal ? ':: rport 0' : '0.0.0.0 rport 0'
+      const sanitizedLine = line.replace(/ raddr [^\s]+ rport \d+/g, ` raddr ${raddrReplacement}`)
       sanitizedOfferLines.push(sanitizedLine)
     } else {
       // Hostname candidate — resolve both A and AAAA to prevent IPv6 ULA bypass,
@@ -398,8 +400,25 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   // Wait for ICE candidates to gather
   await waitForIceCandidates(peer)
 
-  // 7. Publish SDP answer to Arkiv
-  const sdpAnswerJson = JSON.stringify(peer.localDescription)
+  // 7. Sanitize and publish SDP answer to Arkiv.
+  // peer.localDescription includes host-type ICE candidates that carry the user's
+  // LAN IP addresses (e.g. 192.168.x.x). Arkiv is a public blockchain — publishing
+  // host candidates would permanently expose the user's private network topology to
+  // any observer reading the chain. Strip host candidates; keep only srflx/relay
+  // (STUN-derived public IPs) with raddr already zeroed, and o=/c= lines already
+  // sanitized to 0.0.0.0/:: by the sanitization loop above.
+  const rawAnswerSdp = peer.localDescription?.sdp ?? ""
+  const safeAnswerSdp = rawAnswerSdp
+    .split("\n")
+    .filter(line => {
+      if (!line.startsWith("a=candidate:")) return true
+      // Keep only srflx and relay candidates — host candidates carry LAN IPs
+      const typ = /\btyp (\w+)/.exec(line)?.[1]
+      return typ === "srflx" || typ === "relay"
+    })
+    .map(line => line.replace(/ raddr \S+ rport \d+/g, " raddr 0.0.0.0 rport 0"))
+    .join("\n")
+  const sdpAnswerJson = JSON.stringify({ type: peer.localDescription?.type, sdp: safeAnswerSdp })
   try {
     await arkiv.writeSignalExchange({
       volunteerWallet: chosen.wallet,

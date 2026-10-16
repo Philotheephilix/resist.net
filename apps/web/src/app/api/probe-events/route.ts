@@ -130,7 +130,10 @@ export async function GET(request: NextRequest) {
         const statsResult = { liveProbes, regions: regionSet.size, blocksToday }
         // Only cache from a real Arkiv response — zeros from a failed Arkiv would
         // mask recovery for up to 60 seconds.
-        if (!arkivFailed || DEV_FIXTURE) {
+        // Only cache on a real Arkiv success. Caching with DEV_FIXTURE when Arkiv
+        // failed would mask recovery for up to 60s in dev, since the cache check
+        // at line 103 returns early without querying Arkiv on subsequent requests.
+        if (!arkivFailed) {
           statsCache = { result: statsResult, expiresAt: Date.now() + 60_000 }
         }
         return statsResult

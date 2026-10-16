@@ -145,16 +145,27 @@ export async function syncToArkiv(
   if (client && pending.length > 0) {
     let inFlight = 0
     let next = 0
+    let rateLimited = false  // abort drain immediately on first 429
     const results_drain: boolean[] = new Array(pending.length).fill(false)
     await new Promise<void>((resolve) => {
       const schedule = () => {
+        // Stop dispatching new items as soon as rate-limiting is detected.
+        // Without this guard all remaining items fire despite the 429 signal,
+        // worsening the rate-limit backoff window on the Arkiv RPC server.
+        if (rateLimited) { if (inFlight === 0) resolve(); return }
         while (inFlight < DRAIN_CONCURRENCY && next < pending.length) {
           const idx = next++
           inFlight++
           const row = pending[idx]!
           writeToArkiv(client!, JSON.parse(row.payload) as ProbeResult)
             .then(ok => { results_drain[idx] = ok })
-            .catch(() => { results_drain[idx] = false })
+            .catch((err) => {
+              results_drain[idx] = false
+              const msg = err instanceof Error ? err.message : String(err)
+              if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many')) {
+                rateLimited = true
+              }
+            })
             .finally(() => { inFlight--; schedule() })
         }
         if (inFlight === 0) resolve()
