@@ -20,6 +20,26 @@ function getArkivRpcUrl(configRpcUrl?: string): string {
   )
 }
 
+// Client-side write-rate guard: max results submitted to Arkiv per wallet per hour.
+// This caps the damage from a misconfigured or malicious binary running at INTERVAL_MS=0.
+// The limit is intentionally generous vs. normal usage (5 targets × 4 ticks/hour = 20/hr)
+// to give headroom for offline-cache drain bursts while still blocking flood attacks.
+const MAX_WRITES_PER_WALLET_PER_HOUR = 200
+// wallet → { count, windowStart }
+const _walletWriteRateMap = new Map<string, { count: number; windowStart: number }>()
+
+function checkWalletWriteRate(wallet: string): boolean {
+  const now = Date.now()
+  const entry = _walletWriteRateMap.get(wallet)
+  if (!entry || now - entry.windowStart > 3_600_000) {
+    _walletWriteRateMap.set(wallet, { count: 1, windowStart: now })
+    return true
+  }
+  if (entry.count >= MAX_WRITES_PER_WALLET_PER_HOUR) return false
+  entry.count++
+  return true
+}
+
 // Module-level singleton — opens the DB once per process and runs DDL once.
 // Previously getDb() opened + closed a connection on every syncToArkiv() call
 // and re-ran CREATE TABLE IF NOT EXISTS on every invocation (a DDL statement
@@ -170,7 +190,17 @@ export async function syncToArkiv(
           const idx = next++
           inFlight++
           const row = pending[idx]!
-          writeToArkiv(client!, JSON.parse(row.payload) as ProbeResult)
+          const drainResult = JSON.parse(row.payload) as ProbeResult
+          const safeDrainResult = { ...drainResult, geohash: drainResult.geohash.slice(0, 5) }
+          if (!checkWalletWriteRate(safeDrainResult.nodeWallet)) {
+            console.warn('[sync] client-side write-rate limit reached for wallet during drain — skipping remaining')
+            results_drain[idx] = false
+            inFlight--
+            // Rate cap hit — stop draining for this cycle; remaining rows stay cached.
+            if (inFlight === 0) resolve()
+            break
+          }
+          writeToArkiv(client!, safeDrainResult)
             .then(ok => { results_drain[idx] = ok })
             .catch((err) => {
               results_drain[idx] = false
@@ -204,12 +234,16 @@ export async function syncToArkiv(
     const safeResult = { ...result, geohash: result.geohash.slice(0, 5) }
     let wrote = false
     if (client) {
-      try {
-        wrote = await writeToArkiv(client, safeResult)
-      } catch {
-        // 429 rate-limit: writeToArkiv re-throws; treat as a cache miss so
-        // the result is queued locally rather than silently dropped.
-        wrote = false
+      if (!checkWalletWriteRate(safeResult.nodeWallet)) {
+        console.warn('[sync] client-side write-rate limit reached for wallet — queuing locally')
+      } else {
+        try {
+          wrote = await writeToArkiv(client, safeResult)
+        } catch {
+          // 429 rate-limit: writeToArkiv re-throws; treat as a cache miss so
+          // the result is queued locally rather than silently dropped.
+          wrote = false
+        }
       }
     }
     if (!wrote) {

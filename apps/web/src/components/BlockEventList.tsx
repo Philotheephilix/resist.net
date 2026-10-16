@@ -80,6 +80,7 @@ export interface ProbeResultRow {
   timestamp: number
   nodeWallet: string
   reachable: boolean
+  verified?: boolean
 }
 
 interface BlockEventListProps {
@@ -89,6 +90,7 @@ interface BlockEventListProps {
    *  sort+slice is skipped — avoids duplicating O(N log N) work when this component
    *  is mounted twice (sidebar + mobile sheet). */
   sortedEvents?: ProbeResultRow[]
+  isFiltered?: boolean
 }
 
 const timeAgoCache = new Map<number, { bucket: number; value: string }>()
@@ -122,7 +124,7 @@ function truncateWallet(wallet: string): string {
   return `${wallet.slice(0, 6)}…${wallet.slice(-4)}`
 }
 
-export default memo(function BlockEventList({ events, loading, sortedEvents }: BlockEventListProps) {
+export default memo(function BlockEventList({ events, loading, sortedEvents, isFiltered }: BlockEventListProps) {
   // Tick every 60s to refresh timeAgo labels between data-fetch polls.
   // Uses a shared module-level interval so two mounted instances (sidebar +
   // mobile sheet) do not each create their own redundant timer.
@@ -162,7 +164,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
     const count = sorted.length
     if (count !== prevCountRef.current) {
       prevCountRef.current = count
-      liveRef.current.textContent = count > 0 ? `${count} events loaded` : 'No events yet'
+      liveRef.current.textContent = count > 0 ? `${count} events loaded` : isFiltered ? 'No events match this filter' : 'No events yet'
     }
   }, [loading, sorted.length])
 
@@ -211,7 +213,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
             className="flex h-32 items-center justify-center text-sm"
             style={{ color: 'rgba(255,255,255,0.25)' }}
           >
-            No events yet
+            {isFiltered ? 'No events match this filter' : 'No events yet'}
           </div>
         ) : (
           <ul aria-labelledby="events-list-heading" className="px-3 py-2">
@@ -227,8 +229,18 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                 <div className="flex items-start justify-between gap-3">
                   {/* Left: chip + url */}
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1.5">
+                    <div className="mb-1.5 flex items-center gap-1.5">
                       <StatusChip blockType={event.blockType} />
+                      {event.blockType !== null && event.verified === false && (
+                        <span
+                          className="rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                          style={{ background: 'rgba(255,180,0,0.15)', color: 'rgba(255,200,60,0.85)' }}
+                          title="Reported by a single node — not yet corroborated by 3+ independent regions"
+                          aria-label="unverified — single node report"
+                        >
+                          unverified
+                        </span>
+                      )}
                     </div>
                     <p
                       className="truncate text-[13px] font-medium leading-snug"

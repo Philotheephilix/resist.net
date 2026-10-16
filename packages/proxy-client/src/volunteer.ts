@@ -32,6 +32,11 @@ function redactErrMsg(err: unknown, rpcUrl?: string): string {
 const OFFER_TTL_MS = 5 * 60 * 1000
 const REFRESH_INTERVAL_MS = 4 * 60 * 1000
 const POLL_INTERVAL_MS = 10 * 1000
+// Faster poll rate used for the first FAST_POLL_WINDOW_MS after a new offer is
+// published. Reduces the worst-case signalling lag from ~10 s to ~3 s, giving
+// the user's 30 s ICE timeout comfortable headroom even on slow networks.
+const FAST_POLL_INTERVAL_MS = 3 * 1000
+const FAST_POLL_WINDOW_MS = 60 * 1000
 
 const BOOTSTRAP_CACHE_PATH = path.join(os.homedir(), ".resist-net", "bootstrap-cache.json")
 
@@ -413,7 +418,12 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
    */
   async function createOffer(): Promise<{ peer: RTCPeerConnection; sdpOfferJson: string; entityKey: string }> {
     const peer = new RTCPeerConnection({
-      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+        { urls: "stun:stun.cloudflare.com:3478" },
+        { urls: "stun:stun.stunprotocol.org:3478" },
+      ],
     }) as RTCPeerConnection
 
     // Control channel triggers ICE gathering
@@ -530,19 +540,59 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
     }
   }, REFRESH_INTERVAL_MS)
 
-  // Poll for incoming SDP answers
-  let pollRunning = false
-  const pollInterval = setInterval(async () => {
-    if (pollRunning) return
-    pollRunning = true
-    try {
-    let answers
-    try {
-      answers = await arkiv.querySignalExchange(config.wallet)
-    } catch (err) {
-      console.error("[volunteer] Poll failed:", redactErrMsg(err, config.rpcUrl))
+  // Poll for incoming SDP answers.
+  // Orphaned signalExchange entities (created by users whose ICE timed out before
+  // the volunteer processed the answer) accumulate on Arkiv until their on-chain TTL
+  // expires (~2 min). No explicit cleanup is needed from either side — expiry is
+  // automatic.  processedAnswers TTL (10 min) exceeds the signalExchange TTL so a
+  // re-published answer from a retrying client is still accepted.
+  //
+  // The Arkiv query and the answer-processing loop are decoupled: `queryRunning`
+  // serialises only the lightweight RPC fetch, while `processRunning` serialises the
+  // heavier setRemoteDescription work. This lets the next scheduled tick fetch fresh
+  // answers even when the previous processing pass is still in-flight.
+  let queryRunning = false
+  let processRunning = false
+  let lastOfferPublishedAt = Date.now() // set to now; updated whenever createOffer succeeds
+  // Answers fetched by the query loop, handed to the processing loop
+  let pendingAnswers: Awaited<ReturnType<typeof arkiv.querySignalExchange>> = []
+
+  // Use a self-rescheduling timer so we can vary the interval dynamically.
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
+  const schedulePoll = () => {
+    const elapsed = Date.now() - lastOfferPublishedAt
+    const interval = elapsed < FAST_POLL_WINDOW_MS ? FAST_POLL_INTERVAL_MS : POLL_INTERVAL_MS
+    pollTimer = setTimeout(runPoll, interval)
+  }
+
+  const runPoll = async () => {
+    // --- Fetch phase (serialised) ---
+    if (!queryRunning) {
+      queryRunning = true
+      try {
+        const fetched = await arkiv.querySignalExchange(config.wallet)
+        // Merge new answers into pending, deduplicating by entityKey
+        for (const row of fetched) {
+          if (!pendingAnswers.some(r => r.entityKey === row.entityKey)) {
+            pendingAnswers.push(row)
+          }
+        }
+      } catch (err) {
+        console.error("[volunteer] Poll failed:", redactErrMsg(err, config.rpcUrl))
+      } finally {
+        queryRunning = false
+      }
+    }
+
+    // --- Process phase (serialised separately so fetch can run next tick) ---
+    if (processRunning || pendingAnswers.length === 0) {
+      schedulePoll()
       return
     }
+    processRunning = true
+    // Snapshot and clear pending; we'll process this batch
+    let answers = pendingAnswers.splice(0)
+    try {
     // Cap answers to prevent a flooded signal exchange from stalling the loop
     answers = answers.slice(0, 20)
 
@@ -556,6 +606,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         const result = await createOffer()
         mainPeer = result.peer
         currentEntityKey = result.entityKey
+        lastOfferPublishedAt = Date.now()
       } catch (err) {
         console.error("[volunteer] Failed to recreate mainPeer:", redactErrMsg(err, config.rpcUrl))
         return
@@ -591,6 +642,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
             const result = await createOffer()
             peers.set(clientWallet, result.peer)
             currentEntityKey = result.entityKey
+            lastOfferPublishedAt = Date.now()
             console.log(`[volunteer] Published fresh offer for ${clientWallet} (mainPeer already connected)`)
           } catch (err) {
             console.error(`[volunteer] Failed to create offer for ${clientWallet}:`, redactErrMsg(err, config.rpcUrl))
@@ -843,14 +895,17 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
       }
     }
     } finally {
-      pollRunning = false
+      processRunning = false
     }
-  }, POLL_INTERVAL_MS)
+    schedulePoll()
+  }
+
+  schedulePoll()
 
   // Graceful shutdown on SIGINT/SIGTERM
   const shutdown = () => {
     clearInterval(refreshInterval)
-    clearInterval(pollInterval)
+    if (pollTimer !== null) clearTimeout(pollTimer)
     for (const [, p] of peers) {
       try { p.close() } catch { /* ignore */ }
     }

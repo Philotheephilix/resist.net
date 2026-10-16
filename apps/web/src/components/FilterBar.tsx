@@ -22,13 +22,13 @@ const LABEL_STYLE_ACTIVE: React.CSSProperties = {
   color: '#ffffff',
   border: '1px solid rgba(255,255,255,0.20)',
   boxShadow: '0 1px 6px rgba(0,0,0,0.25)',
-  transition: 'background-color 150ms cubic-bezier(0.16,1,0.3,1), color 150ms cubic-bezier(0.16,1,0.3,1), border-color 150ms cubic-bezier(0.16,1,0.3,1)',
+  transition: 'background-color 150ms cubic-bezier(0.16,1,0.3,1), color 150ms cubic-bezier(0.16,1,0.3,1), border-color 150ms cubic-bezier(0.16,1,0.3,1), transform 150ms cubic-bezier(0.16,1,0.3,1)',
 }
 const LABEL_STYLE_INACTIVE: React.CSSProperties = {
   background: 'rgba(255,255,255,0.04)',
   color: 'rgba(255,255,255,0.55)',
   border: '1px solid rgba(255,255,255,0.07)',
-  transition: 'background-color 150ms cubic-bezier(0.16,1,0.3,1), color 150ms cubic-bezier(0.16,1,0.3,1), border-color 150ms cubic-bezier(0.16,1,0.3,1)',
+  transition: 'background-color 150ms cubic-bezier(0.16,1,0.3,1), color 150ms cubic-bezier(0.16,1,0.3,1), border-color 150ms cubic-bezier(0.16,1,0.3,1), transform 150ms cubic-bezier(0.16,1,0.3,1)',
 }
 
 export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
@@ -43,7 +43,7 @@ export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
         return (
           <label
             key={key}
-            className="filter-option flex-shrink-0 cursor-pointer rounded-full select-none"
+            className="filter-option flex-shrink-0 cursor-pointer rounded-full select-none active:scale-95"
             style={isActive ? LABEL_STYLE_ACTIVE : LABEL_STYLE_INACTIVE}
           >
             {/* Visually hidden radio input — clicking the label activates it */}

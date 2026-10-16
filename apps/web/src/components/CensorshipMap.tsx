@@ -202,6 +202,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           <div style="font-size:11px;color:var(--wld-gray-300,#d1d5db);font-family:monospace;margin-bottom:8px;"><span class="sr-only">Node: </span>${esc(wallet)}</div>
           <button
             data-popup-close
+            class="popup-close-btn"
             aria-label="Close popup"
             style="display:block;width:100%;padding:13px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:transparent;color:var(--wld-gray-300,#d1d5db);font-size:11px;cursor:pointer;"
           >Close</button>
@@ -521,9 +522,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       // Apply any events that arrived while Leaflet was still initializing.
       // Without this, the first batch of events is silently dropped because the
       // events effect fires before mapRef/markersLayerRef are set.
-      if (pendingEventsRef.current.length > 0) {
-        renderMarkersRef.current(leaflet, pendingEventsRef.current)
-      }
+      renderMarkersRef.current(leaflet, pendingEventsRef.current)
     }
 
     init()
@@ -618,7 +617,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         <a
           href="#events-panel"
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-xs focus:font-semibold"
-          style={{ backgroundColor: 'var(--wld-gray-0, #ffffff)', color: 'var(--wld-gray-900, #111827)' }}
+          style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
           data-map-escape-target
         >
           Skip to events list
@@ -627,7 +626,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         <button
           type="button"
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-xs focus:font-semibold"
-          style={{ backgroundColor: 'var(--wld-gray-0, #ffffff)', color: 'var(--wld-gray-900, #111827)' }}
+          style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
           data-map-escape-target
           onClick={() => {
             // Move focus to the first interactive element outside the map container
@@ -673,9 +672,11 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           <span
             className="rounded-full px-4 py-2 text-sm font-semibold"
             style={{
-              backgroundColor: 'var(--wld-gray-900, #111827)',
+              background: 'rgba(15,13,22,0.80)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid rgba(255,255,255,0.12)',
               color: 'var(--wld-gray-0, #ffffff)',
-              opacity: 0.85,
             }}
           >
             No events for this filter

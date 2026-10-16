@@ -36,6 +36,7 @@ let statsCache: { result: object; expiresAt: number } | null = null
 let statsInFlight: Promise<object> | null = null
 
 const VALID_BLOCK_TYPES = new Set(['dns_poisoning', 'tcp_rst', 'http_block', 'full_unreachable'])
+const GEOHASH_RE = /^[0-9bcdefghjkmnpqrstuvwxyz]{1,9}$/
 
 async function queryArkivProbeEvents(opts: {
   geohash?: string
@@ -67,7 +68,7 @@ async function queryArkivProbeEvents(opts: {
       // Normalise blockType against known-good set — Arkiv rows written by adversarial
       // nodes could contain arbitrary strings; ensure only documented values reach clients.
       blockType: (r.blocktype && VALID_BLOCK_TYPES.has(r.blocktype) ? r.blocktype : null) as string | null,
-      geohash: /^[0-9bcdefghjkmnpqrstuvwxyz]{1,12}$/.test(r.geohash ?? '') ? r.geohash : null,
+      geohash: GEOHASH_RE.test(r.geohash ?? '') ? r.geohash : null,
       timestamp: r.timestamp,
       // Stats queries receive the raw wallet so distinct-node counting is accurate.
       // Non-stats (map/list) queries receive truncated wallets to prevent operator
@@ -161,7 +162,7 @@ export async function GET(request: NextRequest) {
   // Valid geohash base32 chars exclude a, i, l, o (to avoid confusion with 0/1).
   // The previous regex [0-9bcdefghjkmnpqrstuvwxyz] already excluded them but lacked
   // anchoring; {1,9} and ^ $ ensure no extra chars slip through either side.
-  if (rawGeohash !== null && !/^[0-9bcdefghjkmnpqrstuvwxyz]{1,9}$/.test(rawGeohash)) {
+  if (rawGeohash !== null && !GEOHASH_RE.test(rawGeohash)) {
     return new Response('Bad Request: invalid geohash', { status: 400 })
   }
   const geohashFilter = rawGeohash ?? undefined
@@ -193,7 +194,20 @@ export async function GET(request: NextRequest) {
         if (!events) events = DEV_FIXTURE ?? []
         const oneDayAgo = Date.now() - 24 * 3600 * 1000
         const recentAll = events.filter((e) => e.timestamp > oneDayAgo)
-        const blocksToday = recentAll.filter((e) => e.blockType !== null).length
+        // Quorum check: only count a URL as blocked when 3+ distinct geographic regions
+        // (first 4 chars of geohash ≈ 45km cell) independently report it blocked.
+        // Single-node reports are not counted — they may be fabricated by a malicious operator.
+        const blocksByUrl = new Map<string, Set<string>>()
+        for (const e of recentAll) {
+          if (e.blockType !== null && e.geohash && e.geohash.length >= 4) {
+            const region = e.geohash.slice(0, 4)
+            let regions = blocksByUrl.get(e.targetUrl)
+            if (!regions) { regions = new Set(); blocksByUrl.set(e.targetUrl, regions) }
+            regions.add(region)
+          }
+        }
+        const BLOCK_QUORUM = 3
+        const blocksToday = [...blocksByUrl.values()].filter(regions => regions.size >= BLOCK_QUORUM).length
         const regionSet = new Set(
           recentAll
             .filter((e) => e.geohash && e.geohash.length >= 4)
@@ -275,6 +289,26 @@ export async function GET(request: NextRequest) {
     events = fixture
   }
 
+  // Build quorum-verified URL set: a URL is verified when 3+ distinct 4-char geohash
+  // regions (≈45km cells) independently report it blocked within the last 48h.
+  // Single-node block reports are labelled unverified so the UI can surface the caveat.
+  const BLOCK_QUORUM = 3
+  const eventsForQuorum = events ?? []
+  const quorumRegionsByUrl = new Map<string, Set<string>>()
+  for (const e of eventsForQuorum) {
+    if (e.blockType !== null && e.geohash && e.geohash.length >= 4) {
+      const region = (e.geohash as string).slice(0, 4)
+      let regions = quorumRegionsByUrl.get(e.targetUrl)
+      if (!regions) { regions = new Set(); quorumRegionsByUrl.set(e.targetUrl, regions) }
+      regions.add(region)
+    }
+  }
+  const verifiedUrls = new Set(
+    [...quorumRegionsByUrl.entries()]
+      .filter(([, regions]) => regions.size >= BLOCK_QUORUM)
+      .map(([url]) => url)
+  )
+
   // Strip events with non-http(s) targetUrl before sending to clients — a malicious
   // probe node could publish a javascript: or data: URL that gets rendered as a link.
   const safe = events.filter(e => {
@@ -284,7 +318,12 @@ export async function GET(request: NextRequest) {
     } catch {
       return false
     }
-  })
+  }).map(e => ({
+    ...e,
+    // verified=true means quorum of 3+ distinct regions corroborate this block report.
+    // verified=false means the report is from a single node and may be fabricated.
+    verified: e.blockType === null ? true : verifiedUrls.has(e.targetUrl),
+  }))
 
   const safeSlice = safe.slice(0, 200)
 

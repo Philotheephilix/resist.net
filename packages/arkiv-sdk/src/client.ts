@@ -79,6 +79,9 @@ export class ArkivClient {
       blocktype: result.blockType !== null ? str(result.blockType) : str(""),
       httpstatus: i32(result.httpStatus ?? -1),
       responsetimems: i32(result.responseTimeMs !== null ? Math.min(result.responseTimeMs, 2147483647) : -1),
+      // first-class queryable attribute so chain continuity can be verified by
+      // dashboards and off-chain validators without parsing the opaque payload
+      prevresulthash: str(result.prevResultHash),
     }
 
     const { entityKey } = await this.walletClient.createEntity({
@@ -156,9 +159,10 @@ export class ArkivClient {
 
   /**
    * Write a SignalExchange (WebRTC answer SDP) with 2min TTL.
+   * Returns the entity key so the caller can delete it on failure.
    */
-  async writeSignalExchange(exchange: SignalExchangeEntry): Promise<void> {
-    await this.walletClient.createEntity({
+  async writeSignalExchange(exchange: SignalExchangeEntry): Promise<string> {
+    const { entityKey } = await this.walletClient.createEntity({
       payload: new TextEncoder().encode(exchange.sdpAnswer),
       contentType: "application/json",
       attributes: {
@@ -170,6 +174,14 @@ export class ArkivClient {
       },
       expires: ExpirationTime.fromMinutes(2),
     })
+    return entityKey
+  }
+
+  /**
+   * Delete an entity by its key (best-effort cleanup).
+   */
+  async deleteEntity(entityKey: string): Promise<void> {
+    await this.walletClient.deleteEntity({ entityKey: entityKey as `0x${string}` })
   }
 
   /**
@@ -222,7 +234,34 @@ export class ArkivClient {
         geohash: String(a["geohash"]?.value ?? ""),
         isp: String(a["isp"]?.value ?? ""),
         networktype: String(a["networktype"]?.value ?? ""),
+        prevresulthash: String(a["prevresulthash"]?.value ?? ""),
       })
+    }
+
+    // Detect chain gaps: for each wallet, sort by timestamp and flag any row whose
+    // prevresulthash is not the all-zeroes genesis value AND does not match the
+    // entityKey of the immediately preceding result from that wallet.
+    const byWallet = new Map<string, ProbeResultRow[]>()
+    for (const row of rows) {
+      const bucket = byWallet.get(row.nodewallet) ?? []
+      bucket.push(row)
+      byWallet.set(row.nodewallet, bucket)
+    }
+    for (const bucket of byWallet.values()) {
+      bucket.sort((a, b) => a.timestamp - b.timestamp)
+      for (let i = 0; i < bucket.length; i++) {
+        const row = bucket[i]!
+        if (i === 0) {
+          // First known result for this wallet in the window — gap undetectable
+          // (earlier results may have expired), skip.
+          continue
+        }
+        const prev = bucket[i - 1]!
+        const ZERO_HASH = "0".repeat(64)
+        if (row.prevresulthash !== ZERO_HASH && row.prevresulthash !== prev.entityKey) {
+          row.chainGap = true
+        }
+      }
     }
 
     return rows
@@ -358,7 +397,7 @@ export class ArkivReadClient {
       .limit(opts.limit ?? 100)
       .fetch()
 
-    return page.entities.map((entity) => {
+    const rows = page.entities.map((entity) => {
       const a = entity.attributes
       return {
         entityKey: entity.key as string,
@@ -372,8 +411,31 @@ export class ArkivReadClient {
         geohash: String(a["geohash"]?.value ?? ""),
         isp: String(a["isp"]?.value ?? ""),
         networktype: String(a["networktype"]?.value ?? ""),
+        prevresulthash: String(a["prevresulthash"]?.value ?? ""),
       }
     })
+
+    // Detect chain gaps at query time: flag rows whose prevresulthash doesn't match
+    // the preceding result's entityKey for that wallet (same logic as ArkivClient).
+    const byWallet = new Map<string, import("./types.js").ProbeResultRow[]>()
+    for (const row of rows) {
+      const bucket = byWallet.get(row.nodewallet) ?? []
+      bucket.push(row)
+      byWallet.set(row.nodewallet, bucket)
+    }
+    for (const bucket of byWallet.values()) {
+      bucket.sort((a, b) => a.timestamp - b.timestamp)
+      const ZERO_HASH = "0".repeat(64)
+      for (let i = 1; i < bucket.length; i++) {
+        const row = bucket[i]!
+        const prev = bucket[i - 1]!
+        if (row.prevresulthash !== ZERO_HASH && row.prevresulthash !== prev.entityKey) {
+          row.chainGap = true
+        }
+      }
+    }
+
+    return rows
   }
 
   async queryVolunteers(excludeGeohashPrefix?: string): Promise<import("./types.js").VolunteerProxyRow[]> {

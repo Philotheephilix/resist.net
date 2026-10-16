@@ -20,6 +20,7 @@ export interface ProbeResult {
   isp: string;                 // carrier/ISP name
   networkType: "wifi" | "mobile" | "unknown";
   prevResultHash: string;      // hash of previous ProbeResult — chain integrity
+  targetsHash: string;         // SHA-256 of the sorted canonical TARGETS list used for this probe batch
 }
 
 export interface VolunteerProxy {

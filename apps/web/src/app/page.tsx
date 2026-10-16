@@ -104,18 +104,20 @@ export default function HomePage() {
   return (
     <div
       className="flex h-screen w-full flex-col overflow-hidden"
-      style={{ backgroundColor: '#0a0a0a', color: '#ffffff' }}
+      style={{ background: 'radial-gradient(ellipse at 20% 0%, rgba(30,20,50,0.9) 0%, #090910 55%, #07070a 100%)', color: '#ffffff' }}
     >
       <a
         href="#map-region"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-[var(--wld-gray-0)] focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-[var(--wld-gray-900)]"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold"
+        style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
       >
         Skip to map
       </a>
       {(!isDesktop || sidebarOpen) && (
         <a
           href={isDesktop && sidebarOpen ? '#events-panel' : '#mobile-events-panel'}
-          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:bg-[var(--wld-gray-0)] focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-[var(--wld-gray-900)]"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold"
+          style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
         >
           Skip to events list
         </a>
@@ -186,10 +188,11 @@ export default function HomePage() {
         aria-label="Event type filter"
         className="z-10 flex-shrink-0 px-5 py-2.5"
         style={{
-          background: 'rgba(13, 13, 15, 0.90)',
+          background: 'rgba(15, 13, 22, 0.75)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
           borderBottom: '1px solid rgba(255,255,255,0.05)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
         }}
       >
         <FilterBar active={activeFilter} onChange={setActiveFilter} />
@@ -216,7 +219,8 @@ export default function HomePage() {
                 ...(error ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {}),
                 border: '1px solid rgba(242,40,13,0.35)',
                 color: '#ff6b55',
-                visibility: error ? 'visible' : 'hidden',
+                opacity: error ? 1 : 0,
+                transition: 'opacity 0.2s ease',
               }}
             >
               <span aria-hidden>⚠</span>
@@ -302,7 +306,7 @@ export default function HomePage() {
             borderLeft: '1px solid rgba(255,255,255,0.07)',
           }}
         >
-          {mounted && isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
+          {mounted && isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} isFiltered={activeFilter !== 'all'} />}
         </aside>
       </main>
 
@@ -317,7 +321,7 @@ export default function HomePage() {
           onClick={() => setMobileSheetOpen((v) => !v)}
           aria-expanded={mobileSheetOpen}
           aria-controls="mobile-events-panel"
-          className="flex w-full items-center justify-between px-4 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px]"
+          className="flex w-full items-center justify-between px-4 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] hover:bg-white/5 transition-colors duration-100"
           style={{ background: 'rgba(12, 12, 16, 0.96)', color: 'rgba(255,255,255,0.7)' }}
         >
           <span>Block events feed</span>
@@ -349,7 +353,7 @@ export default function HomePage() {
                 ✕
               </button>
             </div>
-            {mounted && !isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} />}
+            {mounted && !isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} isFiltered={activeFilter !== 'all'} />}
           </div>
         )}
       </div>

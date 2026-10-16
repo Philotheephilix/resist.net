@@ -75,7 +75,7 @@ function saveBootstrapCache(entries: BootstrapEntry[]): void {
 }
 
 /**
- * Wait for ICE connection to reach 'connected' state, with 30s timeout.
+ * Wait for ICE connection to reach 'connected' state, with 60s timeout.
  */
 function waitForIceConnected(peer: RTCPeerConnection): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -84,8 +84,8 @@ function waitForIceConnected(peer: RTCPeerConnection): Promise<void> {
       return
     }
     const timeout = setTimeout(() => {
-      reject(new Error("ICE connection timeout after 30s"))
-    }, 30_000)
+      reject(new Error("ICE connection timeout after 60s"))
+    }, 60_000)
 
     peer.addEventListener("iceconnectionstatechange", () => {
       const state = peer.iceConnectionState
@@ -233,7 +233,7 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
     volunteers = await arkiv.queryVolunteers(geohashPrefix)
     // Update bootstrap cache with fresh data
     const freshEntries: BootstrapEntry[] = volunteers
-      .filter((v) => v.sdpoffer.length <= 131072)
+      .filter((v) => v.sdpoffer.length <= 131072 && !v.wallet.includes('…'))
       .map((v) => ({
         wallet: v.wallet,
         sdpOffer: v.sdpoffer,
@@ -299,7 +299,12 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
 
   // 3. Create WebRTC peer connection
   const peer = new RTCPeerConnection({
-    iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun1.l.google.com:19302" },
+      { urls: "stun:stun.cloudflare.com:3478" },
+      { urls: "stun:stun.stunprotocol.org:3478" },
+    ],
   }) as RTCPeerConnection
 
   // 4. Validate volunteer's SDP offer before setting as remote description
@@ -481,8 +486,9 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   }
 
   const sdpAnswerJson = JSON.stringify({ type: peer.localDescription?.type, sdp: safeAnswerSdp })
+  let signalExchangeKey: string | undefined
   try {
-    await arkiv.writeSignalExchange({
+    signalExchangeKey = await arkiv.writeSignalExchange({
       volunteerWallet: chosen.wallet,
       clientWallet: config.wallet,
       sdpAnswer: sdpAnswerJson,
@@ -505,6 +511,9 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
     console.log(`[user] Local HTTP proxy listening on 127.0.0.1:${LOCAL_PROXY_PORT}`)
   } catch (err) {
     peer.close()
+    if (signalExchangeKey) {
+      arkiv.deleteEntity(signalExchangeKey).catch(() => { /* best-effort */ })
+    }
     throw err
   }
 

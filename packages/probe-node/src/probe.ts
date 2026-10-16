@@ -16,6 +16,13 @@ const TARGETS = [
   "https://signal.org",
 ];
 
+// Stable content-hash of the canonical TARGETS list (sorted, newline-joined).
+// Included in every ProbeResult so Arkiv consumers can reject or flag results
+// produced with a tampered or cherry-picked target set.
+export const TARGETS_HASH = createHash("sha256")
+  .update([...TARGETS].sort().join("\n"))
+  .digest("hex");
+
 async function httpCheck(url: string, signal?: AbortSignal): Promise<{ reachable: boolean; status: number | null; ms: number | null }> {
   const start = Date.now();
   try {
@@ -177,6 +184,7 @@ async function probeTarget(url: string, config: { wallet: string; geohash: strin
     isp: config.isp,
     networkType: "unknown",
     prevResultHash: config.prevHash,
+    targetsHash: TARGETS_HASH,
   };
 }
 

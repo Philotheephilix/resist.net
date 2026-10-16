@@ -60,6 +60,10 @@ export interface ProbeResultRow {
   geohash: string;
   isp: string;
   networktype: string;
+  prevresulthash: string;
+  /** True when this row's prevresulthash does not match any known preceding entityKey
+   *  from the same wallet — indicates a chain reset (config deleted or hash forged). */
+  chainGap?: boolean;
 }
 
 export interface VolunteerProxyRow {

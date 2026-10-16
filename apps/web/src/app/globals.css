@@ -26,6 +26,12 @@ body {
 .filter-option:hover {
   background: rgba(255,255,255,0.08) !important;
   border-color: rgba(255,255,255,0.12) !important;
+  transform: scale(1.02);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+
+.filter-option:active {
+  transform: scale(0.95);
 }
 
 /* ── Alert slide-in ── */
@@ -158,4 +164,18 @@ body {
 
 .leaflet-control-attribution a {
   color: rgba(255,255,255,0.75) !important;
+}
+
+.popup-close-btn {
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.popup-close-btn:hover {
+  background: rgba(255,255,255,0.10) !important;
+  border-color: rgba(255,255,255,0.25) !important;
+}
+
+.popup-close-btn:focus-visible {
+  outline: 2px solid rgba(255,255,255,0.35);
+  outline-offset: 2px;
 }
