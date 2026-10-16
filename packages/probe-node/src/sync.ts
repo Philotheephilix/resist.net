@@ -79,7 +79,15 @@ async function writeToArkiv(client: ArkivClient, result: ProbeResult): Promise<b
   try {
     await client.writeProbeResult(result)
     return true
-  } catch {
+  } catch (err) {
+    // Surface 429 rate-limit errors distinctly so the caller can back off.
+    // Silently returning false on 429 treats rate-limiting as a permanent failure
+    // and re-queues the row on every cycle without any backoff.
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('429') || msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many')) {
+      console.warn('[sync] Arkiv rate-limited (429) — backing off drain for this cycle')
+      throw err  // propagate to allSettled as rejection; caller counts it as a skip
+    }
     return false
   }
 }
@@ -130,7 +138,7 @@ export async function syncToArkiv(
   // (100ms avg per write × 10 concurrent = ~1s per chunk instead of ~10s sequential)
   // while keeping memory usage bounded (10 in-flight objects at a time).
   // Successful rows are deleted in a single transaction after the batch completes.
-  const DRAIN_CONCURRENCY = 10
+  const DRAIN_CONCURRENCY = 5  // conservative to avoid 429 rate-limits from Arkiv RPC
   const pending = stmtSelectPending!.all() as { id: string; payload: string }[]
   const successfulIds: string[] = []
 

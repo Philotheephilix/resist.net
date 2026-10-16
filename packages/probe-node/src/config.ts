@@ -61,6 +61,10 @@ export async function savePrevHash(config: Config, prevHash: string): Promise<vo
     // and write the in-memory config with the updated prevHash directly.
     const updated = { ...config, prevHash }
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2), { mode: 0o600 })
+    // chmodSync enforces 0o600 regardless of the file's existing permissions.
+    // writeFileSync { mode } only sets permissions on newly created files on most
+    // platforms — it does not downgrade existing world-readable files.
+    fs.chmodSync(CONFIG_PATH, 0o600)
   } catch {
     // Non-fatal: if we can't persist prevHash the chain just resets from this point
   }
@@ -81,9 +85,13 @@ export async function loadConfig(): Promise<Config> {
       prevHash: "0".repeat(64),
     }
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 })
+    fs.chmodSync(CONFIG_PATH, 0o600)
     return config
   }
 
+  // Enforce 0o600 on every startup — the existing file may have been created with
+  // looser permissions (e.g., if the umask was relaxed at process start).
+  fs.chmodSync(CONFIG_PATH, 0o600)
   const stored = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) as Config
 
   // Refresh geohash/ISP on each startup in case the node has moved or changed ISP
@@ -92,6 +100,7 @@ export async function loadConfig(): Promise<Config> {
     stored.geohash = geohash
     stored.isp = isp
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(stored, null, 2), { mode: 0o600 })
+    fs.chmodSync(CONFIG_PATH, 0o600)
   }
 
   return stored

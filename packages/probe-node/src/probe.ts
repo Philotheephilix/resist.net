@@ -86,6 +86,11 @@ async function dnsCheck(domain: string): Promise<{ expected: string | null; rece
 }
 
 async function tcpCheck(host: string, port = 443): Promise<{ connected: boolean; rstInjected: boolean; ms: number | null }> {
+  // Limitation: on networks with transparent TCP proxies (common in ISP-level
+  // censorship), the proxy completes the TCP 3-way handshake on behalf of the
+  // blocked destination. This produces connected:true even when the host is
+  // unreachable. Cross-reference with httpCheck (which verifies HTTP response
+  // status) and dnsCheck to detect discrepancies indicating proxy interception.
   return new Promise((resolve) => {
     const start = Date.now();
     const sock = net.connect({ host, port, timeout: 5000 });
@@ -113,11 +118,20 @@ function classifyBlock(
 
 async function probeTarget(url: string, config: { wallet: string; geohash: string; isp: string; prevHash: string }): Promise<ProbeResult> {
   const domain = new URL(url).hostname;
-  const [httpRes, dnsRes, tcpRes] = await Promise.all([
-    httpCheck(url),
-    dnsCheck(domain),
-    tcpCheck(domain),
-  ]);
+  // Two-phase probing: run dnsCheck first to detect poisoning early.
+  // If DNS is poisoned, abort httpCheck/tcpCheck — they would run against a bogus
+  // IP for up to 8+5s, wasting the network slot on a known-bad target.
+  // If DNS is clean (or inconclusive), run httpCheck+tcpCheck in parallel.
+  const dnsRes = await dnsCheck(domain);
+  let httpRes: { reachable: boolean; status: number | null; ms: number | null }
+  let tcpRes: { connected: boolean; rstInjected: boolean; ms: number | null }
+  if (dnsRes.poisoned) {
+    // Skip network checks on a poisoned domain — the resolved IP is adversarial.
+    httpRes = { reachable: false, status: null, ms: null };
+    tcpRes = { connected: false, rstInjected: false, ms: null };
+  } else {
+    [httpRes, tcpRes] = await Promise.all([httpCheck(url), tcpCheck(domain)]);
+  }
 
   const blockType = classifyBlock(httpRes.reachable, dnsRes.poisoned, tcpRes.connected, tcpRes.rstInjected);
   return {

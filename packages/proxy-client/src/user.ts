@@ -291,6 +291,17 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   const sanitizedOfferLines: string[] = []
   for (const line of offerDesc.sdp.split("\n")) {
     if (!line.startsWith("a=candidate:")) {
+      // Sanitize non-candidate address-bearing lines (c=, a=rtcp:) to prevent
+      // private IP leakage. Modern DataChannel-only connections use ICE candidates
+      // exclusively, but we sanitize defensively against library behavior changes.
+      if (/^c=IN IP[46] /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/^(c=IN IP[46] )\S+/, '$10.0.0.0'))
+        continue
+      }
+      if (/^a=rtcp:\d+ IN IP[46] /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/(^a=rtcp:\d+ IN IP[46] )\S+/, '$10.0.0.0'))
+        continue
+      }
       sanitizedOfferLines.push(line)
       continue
     }

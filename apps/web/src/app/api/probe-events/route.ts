@@ -6,15 +6,21 @@ import { NextRequest } from 'next/server'
 // the oneDayAgo filter regardless of how long the process has been running.
 const USE_DEV_FIXTURE = process.env['NODE_ENV'] === 'development' && process.env['USE_MOCK_DATA'] === 'true'
 
+function truncateWallet(w: string): string {
+  return w.length > 10 ? w.slice(0, 6) + '…' + w.slice(-4) : w
+}
+
 function getDevFixture() {
   if (!USE_DEV_FIXTURE) return null
   const now = Date.now()
+  // Wallet addresses pre-truncated to match the truncation applied to real Arkiv data
+  // in queryArkivProbeEvents. Ensures the fixture path can never leak full addresses.
   return [
-    { id: '1', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning', geohash: 'u4pruyd', timestamp: now - 300_000, nodeWallet: '0x0000000000000000000000000000000000000001', reachable: false },
-    { id: '2', targetUrl: 'https://instagram.com', blockType: 'http_block', geohash: 'tdr1w3j', timestamp: now - 600_000, nodeWallet: '0x0000000000000000000000000000000000000002', reachable: false },
-    { id: '3', targetUrl: 'https://wikipedia.org', blockType: null, geohash: 'w3gv2uk', timestamp: now - 900_000, nodeWallet: '0x0000000000000000000000000000000000000003', reachable: true },
-    { id: '4', targetUrl: 'https://youtube.com', blockType: 'tcp_rst', geohash: 'sp7fj5n', timestamp: now - 1_200_000, nodeWallet: '0x0000000000000000000000000000000000000004', reachable: false },
-    { id: '5', targetUrl: 'https://reddit.com', blockType: 'full_unreachable', geohash: '9q5cs2r', timestamp: now - 1_800_000, nodeWallet: '0x0000000000000000000000000000000000000005', reachable: false },
+    { id: '1', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning', geohash: 'u4pruyd', timestamp: now - 300_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: false },
+    { id: '2', targetUrl: 'https://instagram.com', blockType: 'http_block', geohash: 'tdr1w3j', timestamp: now - 600_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
+    { id: '3', targetUrl: 'https://wikipedia.org', blockType: null, geohash: 'w3gv2uk', timestamp: now - 900_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
+    { id: '4', targetUrl: 'https://youtube.com', blockType: 'tcp_rst', geohash: 'sp7fj5n', timestamp: now - 1_200_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
+    { id: '5', targetUrl: 'https://reddit.com', blockType: 'full_unreachable', geohash: '9q5cs2r', timestamp: now - 1_800_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000005'), reachable: false },
   ]
 }
 
@@ -24,6 +30,10 @@ function getDevFixture() {
 // acceptable: the first poll pays the full cost, subsequent polls within the same
 // warm worker are served from cache.
 let statsCache: { result: object; expiresAt: number } | null = null
+// Singleflight: coalesce concurrent cold-start requests onto one Arkiv query.
+// Without this, N concurrent requests on a cold serverless worker each issue
+// their own 2000-row query — the thundering herd fully avoids the empty cache.
+let statsInFlight: Promise<object> | null = null
 
 const VALID_BLOCK_TYPES = new Set(['dns_poisoning', 'tcp_rst', 'http_block', 'full_unreachable'])
 
@@ -87,7 +97,7 @@ export async function GET(request: NextRequest) {
     return new Response('Bad Request: stats=true cannot be combined with geohash', { status: 400 })
   }
 
-  // Return cached stats BEFORE issuing the expensive 10,000-row Arkiv query.
+  // Return cached stats BEFORE issuing the expensive 2000-row Arkiv query.
   // The cache check must come first — placing it after the query means every
   // request pays the full RPC cost regardless of cache state.
   if (statsMode && statsCache && statsCache.expiresAt > Date.now()) {
@@ -96,44 +106,52 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // For stats, fetch with raw wallets so distinct-node counting is exact.
-  // For normal queries, push both geohash and blockType filters to Arkiv so
-  // the server-side query only returns matching rows — avoids missing older
-  // matching events that would be cut off by the 200-row in-memory slice.
-  let events = await queryArkivProbeEvents({
-    geohash: statsMode ? undefined : geohashFilter,
-    blockType: statsMode ? undefined : blockTypeFilter,
-    limit: statsMode ? 2_000 : 200,
-    includeRawWallets: statsMode,
-  })
-  const arkivFailed = events === null
-  const DEV_FIXTURE = getDevFixture()
-  if (!events) events = DEV_FIXTURE ?? []
-
   if (statsMode) {
-    const oneDayAgo = Date.now() - 24 * 3600 * 1000
-    const recentAll = events.filter((e) => e.timestamp > oneDayAgo)
-    const blocksToday = recentAll.filter((e) => e.blockType !== null).length
-    const regionSet = new Set(
-      recentAll
-        .filter((e) => e.geohash && e.geohash.length >= 4)
-        .map((e) => e.geohash.slice(0, 4))
-    )
-    // liveProbes uses raw wallets (includeRawWallets=true) so distinct-node
-    // counting is exact — truncated wallets would cause prefix/suffix collisions
-    // that undercount the number of active probe operators.
-    const liveProbes = new Set(recentAll.map((e) => e.nodeWallet)).size
-    const statsResult = { liveProbes, regions: regionSet.size, blocksToday }
-    // Only cache results from a real Arkiv response. When Arkiv is down and
-    // DEV_FIXTURE is absent, events=[] producing 0/0/0 stats — caching these
-    // zeros would mask recovery for up to 60 seconds after Arkiv comes back.
-    if (!arkivFailed || DEV_FIXTURE) {
-      statsCache = { result: statsResult, expiresAt: Date.now() + 60_000 }
+    // Singleflight: if a stats query is already in-flight, join it rather than
+    // issuing a second 2000-row Arkiv query. Prevents thundering-herd stampede
+    // on cold-start where N concurrent requests all race past the empty cache.
+    if (!statsInFlight) {
+      statsInFlight = (async () => {
+        let events = await queryArkivProbeEvents({ limit: 2_000, includeRawWallets: true })
+        const arkivFailed = events === null
+        const DEV_FIXTURE = getDevFixture()
+        if (!events) events = DEV_FIXTURE ?? []
+        const oneDayAgo = Date.now() - 24 * 3600 * 1000
+        const recentAll = events.filter((e) => e.timestamp > oneDayAgo)
+        const blocksToday = recentAll.filter((e) => e.blockType !== null).length
+        const regionSet = new Set(
+          recentAll
+            .filter((e) => e.geohash && e.geohash.length >= 4)
+            .map((e) => e.geohash.slice(0, 4))
+        )
+        // liveProbes uses raw wallets (includeRawWallets=true) so distinct-node
+        // counting is exact — truncated wallets cause prefix/suffix collisions.
+        const liveProbes = new Set(recentAll.map((e) => e.nodeWallet)).size
+        const statsResult = { liveProbes, regions: regionSet.size, blocksToday }
+        // Only cache from a real Arkiv response — zeros from a failed Arkiv would
+        // mask recovery for up to 60 seconds.
+        if (!arkivFailed || DEV_FIXTURE) {
+          statsCache = { result: statsResult, expiresAt: Date.now() + 60_000 }
+        }
+        return statsResult
+      })().finally(() => { statsInFlight = null })
     }
+    const statsResult = await statsInFlight
     return Response.json(statsResult, {
       headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=30' },
     })
   }
+
+  // For normal (map/list) queries, push geohash and blockType filters to Arkiv
+  // so the server-side query only returns matching rows.
+  let events = await queryArkivProbeEvents({
+    geohash: geohashFilter,
+    blockType: blockTypeFilter,
+    limit: 200,
+    includeRawWallets: false,
+  })
+  const DEV_FIXTURE = getDevFixture()
+  if (!events) events = DEV_FIXTURE ?? []
 
   return Response.json(events.slice(0, 200), {
     headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
