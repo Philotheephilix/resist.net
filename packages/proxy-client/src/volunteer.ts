@@ -545,14 +545,35 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
             // via c= (connection) and a=rtcp: lines. Modern DataChannel-only connections
             // use ICE candidates exclusively, but we sanitize defensively in case the
             // wrtc version changes or a non-ICE fallback is triggered.
-            // c=IN IP4 <addr> → c=IN IP4 0.0.0.0
-            if (/^c=IN IP[46] /.test(line)) {
-              sanitizedLines.push(line.replace(/^(c=IN IP[46] )\S+/, '$10.0.0.0'))
+            // c= connection line: rewrite to unspecified address matching addrtype.
+            // IP4 → 0.0.0.0 (IPv4 unspecified); IP6 → :: (IPv6 unspecified).
+            // Using 0.0.0.0 for IP6 would be RFC 4566-invalid and causes libwebrtc
+            // to throw in setRemoteDescription.
+            if (/^c=IN IP4 /.test(line)) {
+              sanitizedLines.push(line.replace(/^(c=IN IP4 )\S+/, '$10.0.0.0'))
               continue
             }
-            // a=rtcp:<port> IN IP4 <addr> → a=rtcp:<port> IN IP4 0.0.0.0
-            if (/^a=rtcp:\d+ IN IP[46] /.test(line)) {
-              sanitizedLines.push(line.replace(/(^a=rtcp:\d+ IN IP[46] )\S+/, '$10.0.0.0'))
+            if (/^c=IN IP6 /.test(line)) {
+              sanitizedLines.push(line.replace(/^(c=IN IP6 )\S+/, '$1::'))
+              continue
+            }
+            // a=rtcp: same addrtype-aware substitution
+            if (/^a=rtcp:\d+ IN IP4 /.test(line)) {
+              sanitizedLines.push(line.replace(/(^a=rtcp:\d+ IN IP4 )\S+/, '$10.0.0.0'))
+              continue
+            }
+            if (/^a=rtcp:\d+ IN IP6 /.test(line)) {
+              sanitizedLines.push(line.replace(/(^a=rtcp:\d+ IN IP6 )\S+/, '$1::'))
+              continue
+            }
+            // o= origin line: <username> <sess-id> <sess-version> IN IP4/IP6 <addr>
+            // wrtc embeds the LAN IP here; rewrite to unspecified address.
+            if (/^o=\S+ \S+ \S+ IN IP4 /.test(line)) {
+              sanitizedLines.push(line.replace(/(o=\S+ \S+ \S+ IN IP4 )\S+/, '$10.0.0.0'))
+              continue
+            }
+            if (/^o=\S+ \S+ \S+ IN IP6 /.test(line)) {
+              sanitizedLines.push(line.replace(/(o=\S+ \S+ \S+ IN IP6 )\S+/, '$1::'))
               continue
             }
             sanitizedLines.push(line)

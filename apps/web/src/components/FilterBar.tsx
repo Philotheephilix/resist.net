@@ -23,7 +23,7 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     const currentIdx = FILTERS.findIndex((f) => f.key === active)
-    const buttons = () => containerRef.current?.querySelectorAll('[role="radio"]')
+    const buttons = () => containerRef.current?.querySelectorAll('button[role="radio"]')
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault()
       const next = (currentIdx + 1) % FILTERS.length
@@ -59,18 +59,13 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
       {FILTERS.map(({ key, label }) => {
         const isActive = active === key
         return (
-          <div
+          <button
             key={key}
+            type="button"
             role="radio"
             aria-checked={isActive}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onChange(key)}
-            onKeyDown={(e) => {
-              if (e.key === ' ' || e.key === 'Enter') {
-                e.preventDefault()
-                onChange(key)
-              }
-            }}
             className="flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all focus:outline-none focus:ring-2 focus:ring-white/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
             style={{
               backgroundColor: isActive ? 'var(--wld-gray-0)' : 'var(--wld-glass-bg-muted)',
@@ -84,7 +79,7 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
             }}
           >
             {label}
-          </div>
+          </button>
         )
       })}
     </div>

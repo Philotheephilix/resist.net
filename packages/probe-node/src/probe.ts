@@ -16,14 +16,16 @@ const TARGETS = [
   "https://signal.org",
 ];
 
-async function httpCheck(url: string): Promise<{ reachable: boolean; status: number | null; ms: number | null }> {
+async function httpCheck(url: string, signal?: AbortSignal): Promise<{ reachable: boolean; status: number | null; ms: number | null }> {
   const start = Date.now();
   try {
     // redirect:'manual' prevents fetch from auto-following 3xx responses.
     // A censor intercepting probe traffic could otherwise issue a 302 to an
     // RFC-1918 URL, causing the probe node to reach internal network services.
+    const timeoutSignal = AbortSignal.timeout(8000);
+    const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
+      signal: combined,
       redirect: "manual",
     });
     // Treat redirect as blocked/censored — censors commonly redirect blocked
@@ -85,7 +87,7 @@ async function dnsCheck(domain: string): Promise<{ expected: string | null; rece
   }
 }
 
-async function tcpCheck(host: string, port = 443): Promise<{ connected: boolean; rstInjected: boolean; ms: number | null }> {
+async function tcpCheck(host: string, port = 443, signal?: AbortSignal): Promise<{ connected: boolean; rstInjected: boolean; ms: number | null }> {
   // Limitation: on networks with transparent TCP proxies (common in ISP-level
   // censorship), the proxy completes the TCP 3-way handshake on behalf of the
   // blocked destination. This produces connected:true even when the host is
@@ -93,11 +95,18 @@ async function tcpCheck(host: string, port = 443): Promise<{ connected: boolean;
   // status) and dnsCheck to detect discrepancies indicating proxy interception.
   return new Promise((resolve) => {
     const start = Date.now();
+    if (signal?.aborted) {
+      resolve({ connected: false, rstInjected: false, ms: null });
+      return;
+    }
     const sock = net.connect({ host, port, timeout: 5000 });
-    sock.on("connect", () => { sock.destroy(); resolve({ connected: true, rstInjected: false, ms: Date.now() - start }); });
+    const onAbort = () => { sock.destroy(); resolve({ connected: false, rstInjected: false, ms: null }); };
+    signal?.addEventListener("abort", onAbort, { once: true });
+    sock.on("connect", () => { signal?.removeEventListener("abort", onAbort); sock.destroy(); resolve({ connected: true, rstInjected: false, ms: Date.now() - start }); });
     // timeout fires when connect stalls (no SYN-ACK) — must destroy to trigger 'error'
     sock.on("timeout", () => sock.destroy(new Error("connect timeout")));
     sock.on("error", (e: NodeJS.ErrnoException) => {
+      signal?.removeEventListener("abort", onAbort);
       resolve({ connected: false, rstInjected: e.code === "ECONNRESET", ms: Date.now() - start });
     });
   });
@@ -122,15 +131,32 @@ async function probeTarget(url: string, config: { wallet: string; geohash: strin
   // If DNS is poisoned, abort httpCheck/tcpCheck — they would run against a bogus
   // IP for up to 8+5s, wasting the network slot on a known-bad target.
   // If DNS is clean (or inconclusive), run httpCheck+tcpCheck in parallel.
-  const dnsRes = await dnsCheck(domain);
+  // Run DNS, HTTP, and TCP checks concurrently. An AbortController lets dnsCheck
+  // abort the in-flight HTTP and TCP requests the moment poisoning is confirmed,
+  // avoiding an 8+5s wait for already-invalid checks to time out.
+  // If DNS comes back poisoned OR inconclusive (expected===null), we abort http/tcp
+  // immediately — in both cases running them would hit an untrusted or unknown IP.
+  const httpAbort = new AbortController();
+  const tcpAbort = new AbortController();
+  const [dnsRes, httpResRaw, tcpResRaw] = await Promise.all([
+    dnsCheck(domain).then(r => {
+      if (r.poisoned || r.expected === null) {
+        httpAbort.abort();
+        tcpAbort.abort();
+      }
+      return r;
+    }),
+    httpCheck(url, httpAbort.signal),
+    tcpCheck(domain, 443, tcpAbort.signal),
+  ]);
   let httpRes: { reachable: boolean; status: number | null; ms: number | null }
   let tcpRes: { connected: boolean; rstInjected: boolean; ms: number | null }
-  if (dnsRes.poisoned) {
-    // Skip network checks on a poisoned domain — the resolved IP is adversarial.
+  if (dnsRes.poisoned || dnsRes.expected === null) {
     httpRes = { reachable: false, status: null, ms: null };
     tcpRes = { connected: false, rstInjected: false, ms: null };
   } else {
-    [httpRes, tcpRes] = await Promise.all([httpCheck(url), tcpCheck(domain)]);
+    httpRes = httpResRaw;
+    tcpRes = tcpResRaw;
   }
 
   const blockType = classifyBlock(httpRes.reachable, dnsRes.poisoned, tcpRes.connected, tcpRes.rstInjected);

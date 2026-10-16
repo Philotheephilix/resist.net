@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { geohashToLatLng, blockTypeLabel, markerColorForBlockType } from '@resist/map-ui'
 import type { ProbeResultRow } from './BlockEventList'
 
@@ -84,10 +84,14 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
   const mapRef = useRef<any>(null)
   const markersLayerRef = useRef<any>(null)
   const markerGenRef = useRef(0)
-  // mapAriaLabelState: base description shown before any popup; popup-Escape clause
-  // is appended once after the first popup ever opens to avoid noise for keyboard users
-  // who may never open a popup. Uses state (not ref) so the DOM attribute updates reactively.
-  const [popupInstructionsVisible, setPopupInstructionsVisible] = useState(false)
+  // popupInstructionsVisibleRef: tracks whether popup-Escape hint has been appended.
+  // Stored as a ref (not state) to avoid triggering a React re-render on first popup open.
+  // The aria-label is updated imperatively via mapContainerRef when the hint should appear.
+  const popupInstructionsVisibleRef = useRef(false)
+  // sidebarOpenRef: mirrors the sidebarOpen prop so imperative aria-label updates
+  // in Leaflet event handlers (which capture the initial ref value) stay in sync
+  // with the latest prop without needing a re-render or closure re-creation.
+  const sidebarOpenRef = useRef(sidebarOpen)
   // lastFocusedMarkerElRef: the SVG element that opened the current popup.
   // Used to return keyboard focus to the marker when the popup closes via Escape.
   const lastFocusedMarkerElRef = useRef<HTMLElement | null>(null)
@@ -128,6 +132,28 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
   // NOT restore focus when the user Tabbed out of the popup (focus left the popup
   // intentionally; restoring it would yank focus backward against user intent).
   const popupClosedByActionRef = useRef(false)
+  // liveRegionClearTimeoutRef: handle for the 1500ms clear after "Popup closed" announcement.
+  // Stored so it can be cancelled when the next popup opens before the 1500ms fires,
+  // preventing the stale clear from silencing the new popup's announcement.
+  const liveRegionClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Keep sidebarOpenRef in sync so Leaflet event-handler closures always read
+  // the latest prop value without needing to recreate the closure.
+  sidebarOpenRef.current = sidebarOpen
+
+  // Update the map container's aria-label imperatively without triggering a React
+  // re-render — used when popup instructions become visible for the first time.
+  const updateMapAriaLabel = () => {
+    if (!mapContainerRef.current) return
+    const open = sidebarOpenRef.current
+    const base = open
+      ? 'Censorship events world map. Use arrow keys to pan, plus and minus keys to zoom. Tab to cycle through event markers; press Enter or Space on a marker to open details. Press Escape to move focus to the skip link.'
+      : 'Censorship events world map. Use arrow keys to pan, plus and minus keys to zoom. Tab to cycle through event markers; press Enter or Space on a marker to open details. Press Escape to exit the map.'
+    const hint = open
+      ? ' When a popup is open, press Escape to close it and return to the marker, or Tab to the Close button.'
+      : ' When a popup is open, press Escape to close it and return to the marker.'
+    mapContainerRef.current.setAttribute('aria-label', base + (popupInstructionsVisibleRef.current ? hint : ''))
+  }
 
   // Create a single marker DOM element and bind events. Extracted so it can be called
   // for both incremental adds (new event IDs) and full re-init.
@@ -249,8 +275,13 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
           // Brief AT announcement so screen reader users know where focus went.
           // Without this, focus returns silently and the user may be disoriented.
           if (liveRegionRef.current) {
+            if (liveRegionClearTimeoutRef.current !== null) {
+              clearTimeout(liveRegionClearTimeoutRef.current)
+              liveRegionClearTimeoutRef.current = null
+            }
             liveRegionRef.current.textContent = 'Popup closed. Focus returned to marker.'
-            setTimeout(() => {
+            liveRegionClearTimeoutRef.current = setTimeout(() => {
+              liveRegionClearTimeoutRef.current = null
               if (liveRegionRef.current) liveRegionRef.current.textContent = ''
             }, 1500)
           }
@@ -348,7 +379,18 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
       map.on('popupopen', (ev: any) => {
         if (!hasEverOpenedPopupRef.current) {
           hasEverOpenedPopupRef.current = true
-          setPopupInstructionsVisible(true)
+          // Defer to avoid a DOM mutation inside Leaflet's synchronous event dispatch,
+          // which can conflict with a live-region update in the same tick.
+          setTimeout(() => {
+            popupInstructionsVisibleRef.current = true
+            updateMapAriaLabel()
+          }, 0)
+        }
+        // Cancel any pending liveRegion clear from the previous "Popup closed" announcement
+        // so it doesn't silently blank the new popup's open announcement.
+        if (liveRegionClearTimeoutRef.current !== null) {
+          clearTimeout(liveRegionClearTimeoutRef.current)
+          liveRegionClearTimeoutRef.current = null
         }
         if (mapPopupTimeoutRef.current !== null) {
           clearTimeout(mapPopupTimeoutRef.current)
@@ -524,15 +566,16 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
           const popupHint = sidebarOpen
             ? ' When a popup is open, press Escape to close it and return to the marker, or Tab to the Close button.'
             : ' When a popup is open, press Escape to close it and return to the marker.'
-          return popupInstructionsVisible ? base + popupHint : base
+          return popupInstructionsVisibleRef.current ? base + popupHint : base
         })()}
         onKeyDown={(e) => {
           if (e.key === 'Escape') {
-            // If a popup is open, mark it as closed by Escape so the popupclose handler
-            // restores focus to the marker. This path fires when Escape is pressed BEFORE
-            // the 60ms setTimeout in popupopen has registered the in-popup keydown listener.
-            if (document.querySelector('[data-popup-content]')) {
+            // If a popup is open, close it first so popupclose fires, then focus the
+            // escape target. Without closePopup() the popup stays open, popupclose never
+            // fires, and popupClosedByActionRef stays true — stale — for the next cycle.
+            if (document.querySelector('[data-popup-content]') && mapRef.current) {
               popupClosedByActionRef.current = true
+              mapRef.current.closePopup()
             }
             const escapeTarget = (e.currentTarget.parentElement as HTMLElement)?.querySelector<HTMLElement>('[data-map-escape-target]')
             escapeTarget?.focus()

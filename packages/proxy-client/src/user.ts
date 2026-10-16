@@ -294,12 +294,30 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
       // Sanitize non-candidate address-bearing lines (c=, a=rtcp:) to prevent
       // private IP leakage. Modern DataChannel-only connections use ICE candidates
       // exclusively, but we sanitize defensively against library behavior changes.
-      if (/^c=IN IP[46] /.test(line)) {
-        sanitizedOfferLines.push(line.replace(/^(c=IN IP[46] )\S+/, '$10.0.0.0'))
+      if (/^c=IN IP4 /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/^(c=IN IP4 )\S+/, '$10.0.0.0'))
         continue
       }
-      if (/^a=rtcp:\d+ IN IP[46] /.test(line)) {
-        sanitizedOfferLines.push(line.replace(/(^a=rtcp:\d+ IN IP[46] )\S+/, '$10.0.0.0'))
+      if (/^c=IN IP6 /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/^(c=IN IP6 )\S+/, '$1::'))
+        continue
+      }
+      if (/^a=rtcp:\d+ IN IP4 /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/(^a=rtcp:\d+ IN IP4 )\S+/, '$10.0.0.0'))
+        continue
+      }
+      if (/^a=rtcp:\d+ IN IP6 /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/(^a=rtcp:\d+ IN IP6 )\S+/, '$1::'))
+        continue
+      }
+      // o= origin line: <username> <sess-id> <sess-version> IN IP4/IP6 <addr>
+      // wrtc embeds the volunteer's LAN IP here; rewrite to unspecified address.
+      if (/^o=\S+ \S+ \S+ IN IP4 /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/(o=\S+ \S+ \S+ IN IP4 )\S+/, '$10.0.0.0'))
+        continue
+      }
+      if (/^o=\S+ \S+ \S+ IN IP6 /.test(line)) {
+        sanitizedOfferLines.push(line.replace(/(o=\S+ \S+ \S+ IN IP6 )\S+/, '$1::'))
         continue
       }
       sanitizedOfferLines.push(line)

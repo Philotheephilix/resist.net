@@ -134,26 +134,35 @@ export async function syncToArkiv(
   stmtEvict!.run(cutoffMs)
 
   // --- drain offline cache first (batch of 100 rows per cycle) ---
-  // Writes are parallelized in chunks of 10 to reduce drain time ~10x vs sequential
-  // (100ms avg per write × 10 concurrent = ~1s per chunk instead of ~10s sequential)
-  // while keeping memory usage bounded (10 in-flight objects at a time).
-  // Successful rows are deleted in a single transaction after the batch completes.
+  // All 100 rows run concurrently but are throttled by a semaphore at DRAIN_CONCURRENCY=5
+  // concurrent in-flight writes. This removes the sequential barrier between old chunks
+  // (previously a slow row at position 4 blocked the next chunk from starting) while
+  // keeping the Arkiv RPC rate-limit safe. Wall-clock drain time ≈ ceil(N/C) × avg_write_ms.
   const DRAIN_CONCURRENCY = 5  // conservative to avoid 429 rate-limits from Arkiv RPC
   const pending = stmtSelectPending!.all() as { id: string; payload: string }[]
   const successfulIds: string[] = []
 
   if (client && pending.length > 0) {
-    for (let i = 0; i < pending.length; i += DRAIN_CONCURRENCY) {
-      const chunk = pending.slice(i, i + DRAIN_CONCURRENCY)
-      const outcomes = await Promise.allSettled(
-        chunk.map(row => writeToArkiv(client!, JSON.parse(row.payload) as ProbeResult))
-      )
-      for (let j = 0; j < outcomes.length; j++) {
-        const outcome = outcomes[j]
-        if (outcome && outcome.status === "fulfilled" && outcome.value) {
-          successfulIds.push(chunk[j]!.id)
+    let inFlight = 0
+    let next = 0
+    const results_drain: boolean[] = new Array(pending.length).fill(false)
+    await new Promise<void>((resolve) => {
+      const schedule = () => {
+        while (inFlight < DRAIN_CONCURRENCY && next < pending.length) {
+          const idx = next++
+          inFlight++
+          const row = pending[idx]!
+          writeToArkiv(client!, JSON.parse(row.payload) as ProbeResult)
+            .then(ok => { results_drain[idx] = ok })
+            .catch(() => { results_drain[idx] = false })
+            .finally(() => { inFlight--; schedule() })
         }
+        if (inFlight === 0) resolve()
       }
+      schedule()
+    })
+    for (let i = 0; i < pending.length; i++) {
+      if (results_drain[i]) successfulIds.push(pending[i]!.id)
     }
   }
 
@@ -168,7 +177,13 @@ export async function syncToArkiv(
   for (const result of results) {
     let wrote = false
     if (client) {
-      wrote = await writeToArkiv(client, result)
+      try {
+        wrote = await writeToArkiv(client, result)
+      } catch {
+        // 429 rate-limit: writeToArkiv re-throws; treat as a cache miss so
+        // the result is queued locally rather than silently dropped.
+        wrote = false
+      }
     }
     if (!wrote) {
       // Use wall-clock insert time (not result.timestamp) so the 48h eviction
