@@ -50,3 +50,11 @@ export interface NodeIdentity {
   capabilities: ("probe" | "proxy")[];
   lastSeenAt: number;
 }
+
+export interface NodeIdentityEntry {
+  wallet: string;
+  geohash: string;
+  isp: string;
+  networkType: "wifi" | "mobile" | "unknown";
+  capabilities: ("probe" | "proxy")[];
+}

@@ -1,11 +1,16 @@
 {
   "name": "@resist/probe-node",
   "version": "0.1.0",
+  "bin": {
+    "resist-probe": "./dist/cli.js"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "start": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@resist/arkiv-sdk": "*",
     "@resist/shared": "*",
     "ethers": "^6.0.0",
     "node-fetch": "^3.0.0",
@@ -16,6 +21,7 @@
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
-    "@types/better-sqlite3": "^7.0.0"
+    "@types/better-sqlite3": "^7.0.0",
+    "@types/ngeohash": "^0.6.5"
   }
 }

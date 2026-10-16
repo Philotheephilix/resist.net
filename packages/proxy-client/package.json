@@ -2,10 +2,12 @@
   "name": "@resist/proxy-client",
   "version": "0.1.0",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc"
+    "dev": "tsx watch src/cli.ts",
+    "build": "tsc",
+    "start": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@resist/arkiv-sdk": "*",
     "@resist/shared": "*",
     "ethers": "^6.0.0",
     "wrtc": "^0.4.7"

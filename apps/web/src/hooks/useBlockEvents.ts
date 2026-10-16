@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import type { ProbeResultRow } from '../components/BlockEventList'
 
 interface BlockEventFilters {
@@ -11,6 +11,18 @@ export function useBlockEvents(filters: BlockEventFilters) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const seqRef = useRef(0)
+  // Stable prev-events ref — only swap the array when content changes, so consumers
+  // that useMemo-depend on `events` don't recompute on polls that return the same data.
+  const prevEventsRef = useRef<ProbeResultRow[]>([])
+  const setStableEvents = useCallback((next: ProbeResultRow[]) => {
+    const prev = prevEventsRef.current
+    if (
+      next.length === prev.length &&
+      next.every((e, i) => e.id === prev[i]!.id && e.blockType === prev[i]!.blockType)
+    ) return
+    prevEventsRef.current = next
+    setEvents(next)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -39,7 +51,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
         if (!cancelled && seq === seqRef.current) {
-          setEvents(data)
+          setStableEvents(data)
           setError(null)
         }
       } catch (err) {
@@ -49,7 +61,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
         if (err instanceof Error && err.name === 'AbortError') return
         if (!cancelled && seq === seqRef.current) {
           // Clear stale events so the UI does not show outdated data alongside the error.
-          setEvents([])
+          setStableEvents([])
           setError(err instanceof Error ? err.message : 'Failed to fetch events')
         }
       } finally {

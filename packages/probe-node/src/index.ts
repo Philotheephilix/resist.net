@@ -22,8 +22,16 @@ async function tick() {
 }
 
 export async function main() {
-  await tick()
-  let running = false
+  // Set running=true before the initial tick so a concurrent setInterval fire
+  // (if the interval fires before tick() resolves on an overloaded system) is dropped.
+  let running = true
+  try {
+    await tick()
+  } catch (err) {
+    console.error("[probe] initial tick error:", err)
+  } finally {
+    running = false
+  }
   setInterval(() => {
     if (running) return
     running = true

@@ -114,14 +114,18 @@ async function resolveAndCheckHost(host: string): Promise<{ blocked: boolean; ip
     // Resolve both A and AAAA to prevent IPv6 ULA bypass.
     // dns.lookup family:4 does not restrict IPv6 literals, so we use explicit
     // family variants and accept either a public IPv4 or IPv6 result.
+    // Timer handles are stored so they can be cleared when DNS wins the race,
+    // preventing lingering timers from keeping the event loop alive.
+    let timer4: ReturnType<typeof setTimeout> | null = null
+    let timer6: ReturnType<typeof setTimeout> | null = null
     const [v4, v6] = await Promise.allSettled([
       Promise.race([
-        dns.lookup(host, { family: 4 }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("DNS timeout")), 5000)),
+        dns.lookup(host, { family: 4 }).finally(() => { if (timer4 !== null) { clearTimeout(timer4); timer4 = null } }),
+        new Promise<never>((_, reject) => { timer4 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
       ]),
       Promise.race([
-        dns.lookup(host, { family: 6 }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("DNS timeout")), 5000)),
+        dns.lookup(host, { family: 6 }).finally(() => { if (timer6 !== null) { clearTimeout(timer6); timer6 = null } }),
+        new Promise<never>((_, reject) => { timer6 = setTimeout(() => reject(new Error("DNS timeout")), 5000) }),
       ]),
     ])
     const resolved4 = v4.status === "fulfilled" ? v4.value.address : null

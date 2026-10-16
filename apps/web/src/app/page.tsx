@@ -177,7 +177,6 @@ export default function HomePage() {
             }}
             role="status"
             aria-label="Loading probe events"
-            aria-hidden={loading && events.length === 0 ? undefined : 'true'}
           >
             {loading && events.length === 0 && (
               <div
@@ -254,7 +253,7 @@ export default function HomePage() {
         role="region"
         className="flex-shrink-0 sm:hidden"
         aria-label="Recent block events (mobile)"
-        aria-hidden={isDesktop || sidebarOpen ? 'true' : undefined}
+        {...(isDesktop || sidebarOpen ? { inert: true } : {})}
         style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
       >
         <div

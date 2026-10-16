@@ -79,7 +79,36 @@ async function queryArkivProbeEvents(opts: {
   }
 }
 
+// In-memory rate limiter: IP → { count, windowStart }
+// Allows 60 requests per minute per IP. Process-scoped — resets on cold starts
+// (acceptable: cold starts are rare and the window resets quickly).
+const RATE_LIMIT_WINDOW_MS = 60_000
+const RATE_LIMIT_MAX = 60
+const rateLimitMap = new Map<string, { count: number; windowStart: number }>()
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(ip)
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    rateLimitMap.set(ip, { count: 1, windowStart: now })
+    return true
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false
+  entry.count++
+  return true
+}
+
 export async function GET(request: NextRequest) {
+  // Rate limit by forwarded IP (X-Forwarded-For) or direct connection IP
+  const forwarded = request.headers.get('x-forwarded-for')
+  const ip = (forwarded ? forwarded.split(',')[0]!.trim() : request.headers.get('x-real-ip')) ?? '127.0.0.1'
+  if (!checkRateLimit(ip)) {
+    return new Response('Too Many Requests', {
+      status: 429,
+      headers: { 'Retry-After': '60' },
+    })
+  }
+
   const { searchParams } = new URL(request.url)
   const statsMode = searchParams.get('stats') === 'true'
   const rawBlockType = searchParams.get('blockType')
@@ -158,7 +187,18 @@ export async function GET(request: NextRequest) {
   const DEV_FIXTURE = getDevFixture()
   if (!events) events = DEV_FIXTURE ?? []
 
-  return Response.json(events.slice(0, 200), {
+  // Strip events with non-http(s) targetUrl before sending to clients — a malicious
+  // probe node could publish a javascript: or data: URL that gets rendered as a link.
+  const safe = events.filter(e => {
+    try {
+      const u = new URL(e.targetUrl)
+      return u.protocol === 'http:' || u.protocol === 'https:'
+    } catch {
+      return false
+    }
+  })
+
+  return Response.json(safe.slice(0, 200), {
     headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
   })
 }

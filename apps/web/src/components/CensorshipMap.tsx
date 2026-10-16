@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { geohashToLatLng, blockTypeLabel, markerColorForBlockType } from '@resist/map-ui'
 import type { ProbeResultRow } from './BlockEventList'
 
@@ -88,7 +88,7 @@ interface CensorshipMapProps {
   sidebarOpen?: boolean
 }
 
-export default function CensorshipMap({ events, sidebarOpen = true }: CensorshipMapProps) {
+export default memo(function CensorshipMap({ events, sidebarOpen = true }: CensorshipMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const markersLayerRef = useRef<any>(null)
@@ -226,33 +226,42 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
       // Make markers keyboard-focusable: Leaflet SVG markers are not natively
       // keyboard-reachable. After the marker is added, patch its underlying DOM
       // element to be focusable and respond to Enter/Space.
+      // In batch mode the layer is detached during add, so defer via rAF to avoid
+      // forcing style/layout recalcs before the layer is back on the map.
       marker.on('add', () => {
-        const el = marker.getElement?.() as HTMLElement | undefined
-        if (!el) return
-        el.setAttribute('tabindex', '0')
-        el.setAttribute('role', 'button')
-        el.setAttribute('aria-label', markerLabel)
-        // Inject an SVG <title> as the universally-supported accessible name source
-        // for SVG elements. NVDA+Firefox prioritises <title> over aria-label for SVG
-        // shape elements, so without this the user would hear only the role ('button')
-        // and not the URL or block type when the marker receives keyboard focus.
-        if (el.namespaceURI === 'http://www.w3.org/2000/svg' || el.tagName === 'path' || el.tagName === 'circle') {
-          const existing = el.querySelector('title')
-          if (!existing) {
-            const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title')
-            titleEl.textContent = markerLabel
-            el.prepend(titleEl)
+        const patch = () => {
+          const el = marker.getElement?.() as HTMLElement | undefined
+          if (!el) return
+          el.setAttribute('tabindex', '0')
+          el.setAttribute('role', 'button')
+          el.setAttribute('aria-label', markerLabel)
+          // Inject an SVG <title> as the universally-supported accessible name source
+          // for SVG elements. NVDA+Firefox prioritises <title> over aria-label for SVG
+          // shape elements, so without this the user would hear only the role ('button')
+          // and not the URL or block type when the marker receives keyboard focus.
+          if (el.namespaceURI === 'http://www.w3.org/2000/svg' || el.tagName === 'path' || el.tagName === 'circle') {
+            const existing = el.querySelector('title')
+            if (!existing) {
+              const titleEl = document.createElementNS('http://www.w3.org/2000/svg', 'title')
+              titleEl.textContent = markerLabel
+              el.prepend(titleEl)
+            }
           }
-        }
-        const keyHandler = (e: KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            lastFocusedMarkerElRef.current = el
-            marker.openPopup()
+          const keyHandler = (e: KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              lastFocusedMarkerElRef.current = el
+              marker.openPopup()
+            }
           }
+          ;(el as any)._keydownHandler = keyHandler
+          el.addEventListener('keydown', keyHandler)
         }
-        ;(el as any)._keydownHandler = keyHandler
-        el.addEventListener('keydown', keyHandler)
+        if (typeof requestAnimationFrame !== 'undefined') {
+          requestAnimationFrame(patch)
+        } else {
+          patch()
+        }
       })
 
       // On popup open: move keyboard focus into the popup content div so keyboard-
@@ -395,6 +404,7 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
         zoomControl: true,
         attributionControl: true,
         scrollWheelZoom: true,
+        keyboard: false,
       })
 
       leaflet
@@ -633,4 +643,4 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
       />
     </div>
   )
-}
+})

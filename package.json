@@ -8,9 +8,14 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint"
+    "lint": "turbo run lint",
+    "test": "playwright test",
+    "test:arkiv": "tsx scripts/test-arkiv-live.ts",
+    "typecheck": "tsc -p packages/arkiv-sdk/tsconfig.json --noEmit && tsc -p packages/probe-node/tsconfig.json --noEmit && tsc -p packages/proxy-client/tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/ngeohash": "^0.6.8",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   }

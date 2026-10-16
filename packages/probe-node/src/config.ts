@@ -28,6 +28,7 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
   try {
     const res = await fetch("https://ip-api.com/json?fields=status,lat,lon,isp,org,query", {
       signal: AbortSignal.timeout(5000),
+      redirect: 'error',
     })
     if (!res.ok) throw new Error(`ip-api status ${res.status}`)
     const data = (await res.json()) as IpApiResponse
@@ -44,10 +45,11 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
     // Cap ISP length before writing to disk — a MITM on ip-api.com could return
     // an arbitrarily large ISP string that grows config.json unboundedly.
     const rawIsp = data.isp ?? data.org ?? "unknown"
-    // Strip ASCII control characters (U+0000–U+001F) and Unicode bidi overrides
-    // (U+202A–U+202E, U+2066–U+2069) that could cause log-viewer spoofing or
+    // Strip ASCII control characters (U+0000–U+001F), Unicode bidi overrides
+    // (U+202A–U+202E, U+2066–U+2069), paragraph/line separators (U+2028–U+2029),
+    // and LTR/RTL marks (U+200E–U+200F) that could cause log-viewer spoofing or
     // misattribution of probe results if embedded in stored ISP metadata.
-    const isp = rawIsp.slice(0, 128).replace(/[\u0000-\u001F‪-‮⁦-⁩﻿]/g, "") || "unknown"
+    const isp = rawIsp.slice(0, 128).replace(/[\u0000-\u001F‎‏  ‪-‮⁦-⁩﻿]/g, "") || "unknown"
     return { geohash, isp }
   } catch {
     // Fallback: use env vars or defaults
@@ -107,7 +109,16 @@ export async function loadConfig(): Promise<Config> {
   // Enforce 0o600 on every startup — the existing file may have been created with
   // looser permissions (e.g., if the umask was relaxed at process start).
   fs.chmodSync(CONFIG_PATH, 0o600)
-  const stored = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) as Config
+  let stored: Config
+  try {
+    stored = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) as Config
+  } catch (err) {
+    // Corrupt config (truncated write, disk error) — delete and re-create from scratch.
+    // Without this, the process crashes on every subsequent startup until manually fixed.
+    console.error("[probe] config.json is corrupt, deleting and regenerating:", err)
+    fs.unlinkSync(CONFIG_PATH)
+    return loadConfig()
+  }
 
   // Refresh geohash/ISP on each startup in case the node has moved or changed ISP
   const { geohash, isp } = await detectLocation()

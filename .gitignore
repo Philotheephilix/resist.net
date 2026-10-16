@@ -12,3 +12,6 @@ docs/
 .agents/
 .claude/
 skills-lock.json
+test-results/
+playwright-report/
+scripts/
