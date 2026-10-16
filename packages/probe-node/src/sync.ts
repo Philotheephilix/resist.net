@@ -88,6 +88,9 @@ async function writeToArkiv(client: ArkivClient, result: ProbeResult): Promise<b
       console.warn('[sync] Arkiv rate-limited (429) — backing off drain for this cycle')
       throw err  // propagate to allSettled as rejection; caller counts it as a skip
     }
+    // Log non-429 failures so operators can detect persistent write errors (auth, 400, 500, network)
+    // without needing to infer them from the growing offline cache size.
+    console.warn('[sync] Arkiv write failed (non-429), queuing locally:', msg)
     return false
   }
 }
@@ -184,8 +187,10 @@ export async function syncToArkiv(
     deleteBatch(successfulIds)
   }
 
-  // --- write new results ---
-  for (const result of results) {
+  // --- write new results (parallel) ---
+  // Up to 5 results per tick; Promise.allSettled lets all complete regardless of
+  // individual failures, mirroring the drain path's concurrent write pattern.
+  await Promise.allSettled(results.map(async result => {
     let wrote = false
     if (client) {
       try {
@@ -201,7 +206,7 @@ export async function syncToArkiv(
       // window starts from when the row was actually cached, not when the probe ran.
       stmtInsert!.run(result.id, JSON.stringify(result), Date.now())
     }
-  }
+  }))
 
   // --- NodeIdentity heartbeat (30-minute TTL per spec) ---
   if (client && config) {

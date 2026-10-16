@@ -11,7 +11,10 @@ export function isPrivateIpv4(ip: string): boolean {
   const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip)
   if (!ipv4) return true // non-standard form → deny
 
-  const [, a, b] = ipv4.map(Number)
+  const parts = ipv4.slice(1).map(Number)
+  // Reject out-of-range octets (e.g. 192.999.1.1) — standard IPv4 requires 0-255.
+  if (parts.some(n => n > 255)) return true
+  const [a, b] = parts
   if (a === 10) return true                              // RFC-1918 10.x
   if (a === 172 && b >= 16 && b <= 31) return true      // RFC-1918 172.16-31.x
   if (a === 192 && b === 168) return true                // RFC-1918 192.168.x
@@ -37,13 +40,19 @@ function expandIPv6(ip: string): string | null {
   const halves = lower.split("::")
   if (halves.length > 2) return null  // multiple :: — invalid
 
-  const pad = (groups: string[]): string[] =>
-    groups.map(g => g.padStart(4, "0"))
+  const pad = (groups: string[]): string[] | null => {
+    // Reject groups longer than 4 hex digits — padStart only pads, never truncates,
+    // so 'fe800' would survive as 'fe800' and bypass regex-based private checks.
+    if (groups.some(g => g.length > 4)) return null
+    return groups.map(g => g.padStart(4, "0"))
+  }
 
   if (halves.length === 1) {
     const groups = lower.split(":")
     if (groups.length !== 8) return null
-    return pad(groups).join(":")
+    const padded = pad(groups)
+    if (!padded) return null
+    return padded.join(":")
   }
 
   // Has :: expansion
@@ -53,7 +62,9 @@ function expandIPv6(ip: string): string | null {
   if (missing < 0) return null
   const full = [...left, ...Array(missing).fill("0"), ...right]
   if (full.length !== 8) return null
-  return pad(full).join(":")
+  const padded = pad(full)
+  if (!padded) return null
+  return padded.join(":")
 }
 
 const IPV6_UNSPECIFIED = "0000:0000:0000:0000:0000:0000:0000:0000"
@@ -69,6 +80,9 @@ export function isPrivateIpv6(ip: string): boolean {
   // Canonically expand to catch all compressed forms of loopback and unspecified
   // (e.g. '0::', '::0', '0:0::', '0:0:0:0:0:0:0::' — all expand to the same value).
   const expanded = expandIPv6(lower)
+  // Treat unparseable IPv6 as private/denied — a malformed address should never
+  // reach external systems (consistent with isPrivateIpv4's non-standard-form rule).
+  if (expanded === null) return true
   if (expanded === IPV6_LOOPBACK || expanded === IPV6_UNSPECIFIED) return true
   if (/^fe[89ab][0-9a-f]:/i.test(lower)) return true  // fe80–febf link-local
   if (/^fe[c-f][0-9a-f]:/i.test(lower)) return true   // fec0–feff site-local (deprecated, still private)

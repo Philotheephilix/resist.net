@@ -1,5 +1,7 @@
 'use client'
 
+import { memo } from 'react'
+
 export type FilterType = 'all' | 'dns_poisoning' | 'tcp_rst' | 'http_block' | 'full_unreachable'
 
 interface FilterBarProps {
@@ -15,11 +17,29 @@ const FILTERS: { key: FilterType; label: string }[] = [
   { key: 'full_unreachable', label: 'Unreachable' },
 ]
 
-export default function FilterBar({ active, onChange }: FilterBarProps) {
+// Hoisted to module level — stable object identity prevents recreation on every render.
+const LABEL_STYLE_ACTIVE: React.CSSProperties = {
+  backgroundColor: 'var(--wld-gray-0)',
+  color: 'var(--wld-gray-900)',
+  border: '1px solid var(--wld-gray-0)',
+  transitionDuration: 'var(--wld-duration-base)',
+  transitionTimingFunction: 'var(--wld-ease-default)',
+  transition: 'background-color var(--wld-duration-base) var(--wld-ease-default)',
+}
+const LABEL_STYLE_INACTIVE: React.CSSProperties = {
+  backgroundColor: 'var(--wld-glass-bg-muted)',
+  color: 'var(--wld-gray-300)',
+  border: '1px solid var(--wld-glass-bg-active)',
+  transitionDuration: 'var(--wld-duration-base)',
+  transitionTimingFunction: 'var(--wld-ease-default)',
+  transition: 'background-color var(--wld-duration-base) var(--wld-ease-default)',
+}
+
+export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
   return (
     // role=radiogroup with native <input type="radio"> elements gives full AT support
     // across all assistive technology versions — JAWS, NVDA, VoiceOver on iOS/macOS.
-    // Native inputs handle arrow-key navigation, aria-checked semantics, and group
+    // Native inputs handle arrow-key navigation, checked semantics, and group
     // name announcement without needing ARIA role overrides on non-radio elements.
     <div
       role="radiogroup"
@@ -33,16 +53,7 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
           <label
             key={key}
             className="flex-shrink-0 cursor-pointer rounded-full"
-            style={{
-              backgroundColor: isActive ? 'var(--wld-gray-0)' : 'var(--wld-glass-bg-muted)',
-              color: isActive ? 'var(--wld-gray-900)' : 'var(--wld-gray-300)',
-              border: isActive
-                ? '1px solid var(--wld-gray-0)'
-                : '1px solid var(--wld-glass-bg-active)',
-              transitionDuration: 'var(--wld-duration-base)',
-              transitionTimingFunction: 'var(--wld-ease-default)',
-              transition: 'background-color var(--wld-duration-base) var(--wld-ease-default)',
-            }}
+            style={isActive ? LABEL_STYLE_ACTIVE : LABEL_STYLE_INACTIVE}
           >
             {/* Visually hidden radio input — clicking the label activates it */}
             <input
@@ -53,10 +64,7 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
               onChange={() => onChange(key)}
               className="sr-only"
             />
-            <span
-              className="block px-3 py-1.5 text-xs font-semibold focus-within:ring-2 focus-within:ring-white/50 focus-within:rounded-full"
-              aria-hidden="true"
-            >
+            <span className="block px-3 py-1.5 text-xs font-semibold focus-within:ring-2 focus-within:ring-white/50 focus-within:rounded-full">
               {label}
             </span>
           </label>
@@ -64,4 +72,4 @@ export default function FilterBar({ active, onChange }: FilterBarProps) {
       })}
     </div>
   )
-}
+})

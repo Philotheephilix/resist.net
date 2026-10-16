@@ -59,7 +59,9 @@ async function queryArkivProbeEvents(opts: {
     return rows.map((r) => ({
       id: r.entityKey,
       targetUrl: r.targeturl,
-      blockType: r.blocktype || null,
+      // Normalise blockType against known-good set — Arkiv rows written by adversarial
+      // nodes could contain arbitrary strings; ensure only documented values reach clients.
+      blockType: (r.blocktype && VALID_BLOCK_TYPES.has(r.blocktype) ? r.blocktype : null) as string | null,
       geohash: r.geohash,
       timestamp: r.timestamp,
       // Stats queries receive the raw wallet so distinct-node counting is accurate.

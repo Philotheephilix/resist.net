@@ -416,7 +416,14 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
       const typ = /\btyp (\w+)/.exec(line)?.[1]
       return typ === "srflx" || typ === "relay"
     })
-    .map(line => line.replace(/ raddr \S+ rport \d+/g, " raddr 0.0.0.0 rport 0"))
+    .map(line => {
+      if (!line.startsWith("a=candidate:")) return line
+      // Use address-family-aware raddr replacement — an IPv6 candidate with a 0.0.0.0
+      // raddr is RFC-4566-invalid; use '::' for IPv6, '0.0.0.0' for IPv4.
+      const isIpv6Cand = / [0-9a-fA-F:]*:[0-9a-fA-F:]+ \d+ typ /.test(line)
+      const raddrFill = isIpv6Cand ? ":: rport 0" : "0.0.0.0 rport 0"
+      return line.replace(/ raddr \S+ rport \d+/g, ` raddr ${raddrFill}`)
+    })
     .join("\n")
   const sdpAnswerJson = JSON.stringify({ type: peer.localDescription?.type, sdp: safeAnswerSdp })
   try {

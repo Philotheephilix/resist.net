@@ -157,17 +157,15 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
         className="flex items-center justify-between px-4 py-3"
         style={{ borderBottom: '1px solid var(--wld-glass-bg-muted)' }}
       >
-        {/* role=heading aria-level=2: the page h1 is "resist.net" in the top bar,
-            so this section heading is level 2. A gap in heading levels (h1 → h3)
-            violates WCAG 2.4.6; level 2 keeps the hierarchy continuous. */}
-        <span
-          role="heading"
-          aria-level={2}
+        {/* Native h2: the page h1 is "resist.net" in the top bar.
+            Native heading elements get heading-navigation shortcuts (H key in JAWS/NVDA)
+            which role=heading on a span does not reliably provide across all AT. */}
+        <h2
           className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: 'var(--wld-gray-400)' }}
+          style={{ color: 'var(--wld-gray-400)', margin: 0 }}
         >
           Recent Events
-        </span>
+        </h2>
         {/* Visual count badge — plain div, no role=status, no aria-live.
             AT announcements handled by the liveRef region above to avoid
             announcing a bare number on every poll cycle with no context. */}

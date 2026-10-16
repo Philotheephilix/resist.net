@@ -7,6 +7,36 @@ import FilterBar, { FilterType } from '../components/FilterBar'
 import NodeCount from '../components/NodeCount'
 import { useBlockEvents } from '../hooks/useBlockEvents'
 
+// Hoisted static style objects — stable identity avoids recreating them on every render.
+const SIDEBAR_BTN_STATIC: React.CSSProperties = {
+  color: 'var(--wld-gray-300)',
+  border: '1px solid var(--wld-glass-border-focus)',
+}
+const LOADING_PILL_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--wld-surface-elevated)',
+  color: 'var(--wld-gray-300)',
+  border: '1px solid var(--wld-glass-border-focus)',
+}
+const LOADING_DOT_STYLE: React.CSSProperties = { backgroundColor: 'var(--wld-success-600)' }
+const STATUS_VISIBLE_STYLE: React.CSSProperties = {
+  backgroundColor: 'var(--wld-surface-elevated)',
+  color: 'var(--wld-gray-300)',
+  border: '1px solid var(--wld-glass-border-focus)',
+  zIndex: 5,
+  pointerEvents: 'none',
+}
+const STATUS_HIDDEN_STYLE: React.CSSProperties = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  padding: 0,
+  margin: '-1px',
+  overflow: 'hidden',
+  clip: 'rect(0,0,0,0)',
+  whiteSpace: 'nowrap',
+  border: 0,
+}
+
 // Leaflet must be client-only — no SSR
 const CensorshipMap = dynamic(() => import('../components/CensorshipMap'), {
   ssr: false,
@@ -90,14 +120,12 @@ export default function HomePage() {
             R
           </div>
           <div>
-            <span
-              role="heading"
-              aria-level={1}
+            <h1
               className="text-sm font-semibold tracking-tight"
-              style={{ color: 'var(--wld-gray-0)' }}
+              style={{ color: 'var(--wld-gray-0)', margin: 0 }}
             >
               resist.net
-            </span>
+            </h1>
             <span
               className="ml-2 hidden text-xs sm:inline"
               style={{ color: 'var(--wld-gray-400)' }}
@@ -114,11 +142,8 @@ export default function HomePage() {
             onClick={() => setSidebarOpen((v) => !v)}
             className="rounded-full px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
             style={{
-              backgroundColor: sidebarOpen
-                ? 'var(--wld-glass-bg-active)'
-                : 'var(--wld-glass-bg-faint)',
-              color: 'var(--wld-gray-300)',
-              border: '1px solid var(--wld-glass-border-focus)',
+              ...SIDEBAR_BTN_STATIC,
+              backgroundColor: sidebarOpen ? 'var(--wld-glass-bg-active)' : 'var(--wld-glass-bg-faint)',
             }}
             aria-label={sidebarOpen ? 'Hide events panel' : 'Show events panel'}
             aria-expanded={sidebarOpen}
@@ -147,25 +172,32 @@ export default function HomePage() {
         <div className="relative flex-1">
           <CensorshipMap events={events} sidebarOpen={sidebarOpen} />
 
-          {/* Error banner */}
-          {error && (
-            <div
-              className="absolute left-4 right-4 top-4 flex items-center gap-2 rounded-xl px-4 py-2 text-xs"
-              style={{
-                backgroundColor: 'var(--wld-error-100)',
-                border: '1px solid var(--wld-error-600)',
-                color: 'var(--wld-error-700)',
-                zIndex: 10,
-                transform: 'translateY(0)',
-                opacity: 1,
-                animation: 'slideInFromTop 300ms cubic-bezier(0,0,0.2,1)',
-              }}
-              role="alert"
-            >
-              <span aria-hidden>⚠</span>
-              Failed to load events: {error}
-            </div>
-          )}
+          {/* Error banner — role=alert container always in DOM so AT registers the
+              live region before the first error fires. Some AT (JAWS, older VoiceOver)
+              miss announcements when the element is injected already containing text.
+              The visible styled content is a child; we show/hide it via visibility. */}
+          <div
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            className="absolute left-4 right-4 top-4"
+            style={{ zIndex: 10, pointerEvents: error ? undefined : 'none' }}
+          >
+            {error && (
+              <div
+                className="flex items-center gap-2 rounded-xl px-4 py-2 text-xs"
+                style={{
+                  backgroundColor: 'var(--wld-error-100)',
+                  border: '1px solid var(--wld-error-600)',
+                  color: 'var(--wld-error-700)',
+                  animation: 'slideInFromTop 300ms cubic-bezier(0,0,0.2,1)',
+                }}
+              >
+                <span aria-hidden>⚠</span>
+                Failed to load events: {error}
+              </div>
+            )}
+          </div>
 
           {/* Loading overlay on map — always in DOM so the role=status live region
               is registered by AT before the first announcement fires.
@@ -182,18 +214,8 @@ export default function HomePage() {
             aria-hidden={loading && events.length === 0 ? undefined : 'true'}
           >
             {loading && events.length === 0 && (
-              <div
-                className="flex items-center gap-2 rounded-full px-4 py-2 text-xs"
-                style={{
-                  backgroundColor: 'var(--wld-surface-elevated)',
-                  color: 'var(--wld-gray-300)',
-                  border: '1px solid var(--wld-glass-border-focus)',
-                }}
-              >
-                <span
-                  className="inline-block h-1.5 w-1.5 animate-pulse rounded-full"
-                  style={{ backgroundColor: 'var(--wld-success-600)' }}
-                />
+              <div className="flex items-center gap-2 rounded-full px-4 py-2 text-xs" style={LOADING_PILL_STYLE}>
+                <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full" style={LOADING_DOT_STYLE} />
                 Fetching probe events…
               </div>
             )}
@@ -212,31 +234,13 @@ export default function HomePage() {
             className={!loading && events.length > 0
               ? 'absolute bottom-4 left-4 rounded-full px-3 py-1.5 text-xs font-semibold'
               : undefined}
-            style={!loading && events.length > 0
-              ? {
-                  backgroundColor: 'var(--wld-surface-elevated)',
-                  color: 'var(--wld-gray-300)',
-                  border: '1px solid var(--wld-glass-border-focus)',
-                  zIndex: 5,
-                  pointerEvents: 'none',
-                }
-              : {
-                  position: 'absolute',
-                  width: '1px',
-                  height: '1px',
-                  padding: 0,
-                  margin: '-1px',
-                  overflow: 'hidden',
-                  clip: 'rect(0,0,0,0)',
-                  whiteSpace: 'nowrap',
-                  border: 0,
-                }}
+            style={!loading && events.length > 0 ? STATUS_VISIBLE_STYLE : STATUS_HIDDEN_STYLE}
           aria-label={!loading && events.length > 0
             ? `${blockedCount} blocked, ${reachableCount} reachable`
             : undefined}
           >
             {!loading && events.length > 0
-              ? <>{blockedCount} blocks<span aria-hidden="true"> • </span>{reachableCount} reachable</>
+              ? <>{blockedCount} blocked<span aria-hidden="true"> • </span>{reachableCount} reachable</>
               : ''}
           </div>
         </div>

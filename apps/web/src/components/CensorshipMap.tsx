@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { geohashToLatLng, blockTypeLabel, markerColorForBlockType } from '@resist/map-ui'
 import type { ProbeResultRow } from './BlockEventList'
 
@@ -17,20 +17,26 @@ const TS_CACHE_MAX = 1000
 const tsLocaleMapCache = new Map<number, string>()
 function cachedMapTs(ts: number): string {
   let s = tsLocaleMapCache.get(ts)
-  if (s === undefined) {
-    s = new Date(ts).toLocaleString()
-    if (tsLocaleMapCache.size >= TS_CACHE_MAX) tsLocaleMapCache.delete(tsLocaleMapCache.keys().next().value!)
+  if (s !== undefined) {
+    tsLocaleMapCache.delete(ts)
     tsLocaleMapCache.set(ts, s)
+    return s
   }
+  s = new Date(ts).toLocaleString()
+  if (tsLocaleMapCache.size >= TS_CACHE_MAX) tsLocaleMapCache.delete(tsLocaleMapCache.keys().next().value!)
+  tsLocaleMapCache.set(ts, s)
   return s
 }
 function cachedGeohashToLatLng(hash: string): [number, number] {
   let latlng = geohashCache.get(hash)
-  if (!latlng) {
-    latlng = geohashToLatLng(hash) as [number, number]
-    if (geohashCache.size >= GEO_CACHE_MAX) geohashCache.delete(geohashCache.keys().next().value!)
+  if (latlng) {
+    geohashCache.delete(hash)
     geohashCache.set(hash, latlng)
+    return latlng
   }
+  latlng = geohashToLatLng(hash) as [number, number]
+  if (geohashCache.size >= GEO_CACHE_MAX) geohashCache.delete(geohashCache.keys().next().value!)
+  geohashCache.set(hash, latlng)
   return latlng
 }
 
@@ -41,11 +47,14 @@ const ESC_CACHE_MAX = 500
 const escCache = new Map<string, string>()
 const esc = (s: string): string => {
   let r = escCache.get(s)
-  if (r === undefined) {
-    r = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-    if (escCache.size >= ESC_CACHE_MAX) escCache.delete(escCache.keys().next().value!)
+  if (r !== undefined) {
+    escCache.delete(s)
     escCache.set(s, r)
+    return r
   }
+  r = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  if (escCache.size >= ESC_CACHE_MAX) escCache.delete(escCache.keys().next().value!)
+  escCache.set(s, r)
   return r
 }
 
@@ -147,7 +156,7 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
 
   // Update the map container's aria-label imperatively without triggering a React
   // re-render — used when popup instructions become visible for the first time.
-  const updateMapAriaLabel = () => {
+  const updateMapAriaLabel = useCallback(() => {
     if (!mapContainerRef.current) return
     const open = sidebarOpenRef.current
     const base = open
@@ -157,11 +166,11 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
       ? ' When a popup is open, press Escape to close it and return to the marker, or Tab to the Close button.'
       : ' When a popup is open, press Escape to close it and return to the marker.'
     mapContainerRef.current.setAttribute('aria-label', base + (popupInstructionsVisibleRef.current ? hint : ''))
-  }
+  }, [])  // refs only — stable identity, empty dep array is correct
 
   // Create a single marker DOM element and bind events. Extracted so it can be called
   // for both incremental adds (new event IDs) and full re-init.
-  const createMarker = (leaflet: any, event: ProbeResultRow) => {
+  const createMarker = useCallback((leaflet: any, event: ProbeResultRow) => {
       const [lat, lng] = cachedGeohashToLatLng(event.geohash)
       const badgeVariant = markerColorForBlockType(event.blockType)
       const color = COLOR_MAP[badgeVariant] ?? TOKEN_SUCCESS_600
@@ -183,11 +192,11 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
           <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--wld-gray-0,#ffffff);">
             ${esc(event.targetUrl)}
           </div>
-          <div aria-label="Block type: ${esc(label)}" style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;background:${badge.bg};color:${badge.color};margin-bottom:8px;">
-            ${esc(label)}
+          <div style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;background:${badge.bg};color:${badge.color};margin-bottom:8px;">
+            <span class="sr-only">Block type: </span>${esc(label)}
           </div>
           <div style="font-size:11px;color:var(--wld-gray-300,#d1d5db);margin-bottom:2px;">${esc(ts)}</div>
-          <div aria-label="Node wallet: ${esc(event.nodeWallet)}" style="font-size:11px;color:var(--wld-gray-300,#d1d5db);font-family:monospace;margin-bottom:8px;">${esc(wallet)}</div>
+          <div style="font-size:11px;color:var(--wld-gray-300,#d1d5db);font-family:monospace;margin-bottom:8px;"><span class="sr-only">Node: </span>${esc(wallet)}</div>
           <button
             data-popup-close
             aria-label="Close popup"
@@ -315,20 +324,21 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
         }
       })
     return marker
-  }
+  }, [])  // reads only refs and module-level caches — stable, empty dep array correct
 
   // Shared marker render function — uses incremental diffing to avoid O(N) DOM teardown
   // on every poll cycle. Only adds markers for new event IDs and removes markers for
   // events that are no longer in the set. Common case (1-2 new events per 60s poll)
   // is O(delta) instead of O(N).
-  const renderMarkers = (leaflet: any, eventsToRender: ProbeResultRow[]) => {
+  const renderMarkers = useCallback((leaflet: any, eventsToRender: ProbeResultRow[]) => {
     if (!markersLayerRef.current) return
 
-    const prevIds = new Set(markerMapRef.current.keys())
-    const newIds = new Set(eventsToRender.map(e => e.id))
+    // Use Map directly for stale-check — no need to copy all keys into a Set.
+    const newIds = new Set<string>()
+    for (const e of eventsToRender) newIds.add(e.id)
 
     // Remove stale markers
-    for (const id of prevIds) {
+    for (const id of markerMapRef.current.keys()) {
       if (!newIds.has(id)) {
         const staleMarker = markerMapRef.current.get(id)
         if (staleMarker) {
@@ -347,8 +357,8 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
     // Add new markers — batch for large initial loads to avoid 200 separate
     // layer-add / tile-reflow cycles. For incremental updates (1-2 new markers
     // per 60s poll) the overhead is negligible and batching is skipped.
-    const newEvents = eventsToRender.filter(e => !prevIds.has(e.id))
-    const useBatch = prevIds.size === 0 && newEvents.length > 20
+    const newEvents = eventsToRender.filter(e => !markerMapRef.current.has(e.id))
+    const useBatch = markerMapRef.current.size === 0 && newEvents.length > 20
     if (useBatch && mapRef.current) markersLayerRef.current.remove()
     for (const event of newEvents) {
       const marker = createMarker(leaflet, event)
@@ -356,7 +366,7 @@ export default function CensorshipMap({ events, sidebarOpen = true }: Censorship
       markerMapRef.current.set(event.id, marker)
     }
     if (useBatch && mapRef.current) markersLayerRef.current.addTo(mapRef.current)
-  }
+  }, [createMarker])  // createMarker is stable (empty dep array) — this is also stable
 
   // Initialize map once on mount
   useEffect(() => {

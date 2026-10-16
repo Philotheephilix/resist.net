@@ -88,12 +88,11 @@ export default function NodeCount() {
           because the region was not yet in the DOM when the announcement fired. */}
       <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
 
-      {/* Single persistent role=status div — always in DOM so AT tracks the same
-          element identity across the loading→loaded transition. Swapping two
-          separate divs (loading vs loaded) causes AT to lose the element and may
-          suppress re-announcement. We update aria-label and content in place. */}
+      {/* Visible widget — no role=status here because all children are aria-hidden,
+          which would cause the live region to announce an empty string on each update.
+          The liveRef div (above) is the sole live region. aria-label provides AT
+          navigation context without triggering unwanted live announcements. */}
       <div
-        role="status"
         className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs${loading ? '' : ' font-medium'}`}
         style={{
           backgroundColor: 'var(--wld-glass-bg-faint)',

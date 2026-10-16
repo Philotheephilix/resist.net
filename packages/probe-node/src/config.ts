@@ -114,8 +114,18 @@ export async function loadConfig(): Promise<Config> {
   if (geohash !== stored.geohash || isp !== stored.isp) {
     stored.geohash = geohash
     stored.isp = isp
-    fs.writeFileSync(CONFIG_PATH, JSON.stringify(stored, null, 2), { mode: 0o600 })
-    fs.chmodSync(CONFIG_PATH, 0o600)
+    // Atomic write: temp file + rename, matching savePrevHash's pattern.
+    // A crash between truncate and write-complete would leave a corrupt config.json
+    // and lose the private key on next startup if we wrote directly to CONFIG_PATH.
+    const tmp = CONFIG_PATH + ".tmp." + process.pid
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(stored, null, 2), { mode: 0o600 })
+      fs.chmodSync(tmp, 0o600)
+      fs.renameSync(tmp, CONFIG_PATH)
+    } catch (err) {
+      try { fs.unlinkSync(tmp) } catch { /* ignore cleanup failure */ }
+      throw err
+    }
   }
 
   return stored

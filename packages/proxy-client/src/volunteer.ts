@@ -679,7 +679,9 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         await peer.setRemoteDescription(sanitizedAnswer)
         console.log(`[volunteer] Handshake complete with ${clientWallet}`)
       } catch (err) {
-        console.error(`[volunteer] setRemoteDescription failed for ${clientWallet}:`, (err as Error).message)
+        // Redact before logging — libwebrtc/wrtc error messages for ICE/SDP failures
+        // can embed ICE candidate addresses, IP:port tuples, or SDP fragments.
+        console.error(`[volunteer] setRemoteDescription failed for ${clientWallet}:`, redactErrMsg(err, config.rpcUrl))
         peers.delete(clientWallet)
       }
     }
