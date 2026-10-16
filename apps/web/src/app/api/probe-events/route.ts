@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { TARGETS_HASH } from '@resist/probe-node/src/probe'
 
 // Dev fixture — only served when NODE_ENV=development and USE_MOCK_DATA=true.
 // Never served in production; never substitute for real Arkiv data.
@@ -62,7 +63,12 @@ async function queryArkivProbeEvents(opts: {
       since: opts.since ?? Date.now() - 48 * 3600 * 1000,
       limit: opts.limit ?? 200,
     })
-    return rows.map((r) => ({
+    // Reject rows from probes that used a non-canonical target set. A probe
+    // operator running a modified binary can embed any targetshash they like;
+    // only rows whose stored hash matches the server-known canonical value are
+    // served to the dashboard.
+    const canonicalRows = rows.filter((r) => r.targetshash === TARGETS_HASH)
+    return canonicalRows.map((r) => ({
       id: r.entityKey,
       targetUrl: r.targeturl,
       // Normalise blockType against known-good set — Arkiv rows written by adversarial
@@ -197,9 +203,31 @@ export async function GET(request: NextRequest) {
         // Quorum check: only count a URL as blocked when 3+ distinct geographic regions
         // (first 4 chars of geohash ≈ 45km cell) independently report it blocked.
         // Single-node reports are not counted — they may be fabricated by a malicious operator.
+        // Require quorum-contributing wallets to have an active NodeIdentity heartbeat
+        // that has been seen for at least 1 hour. This makes Sybil wallet creation
+        // expensive: adversaries must run N legitimate nodes for ≥1h before fabricated
+        // block reports from those wallets are counted toward blocksToday.
+        let establishedWallets: Set<string> | null = null
+        const rpcUrlForIdentity = process.env['ARKIV_RPC_URL']
+        if (rpcUrlForIdentity) {
+          try {
+            const { ArkivReadClient: ArkivReadClientInner } = await import('@resist/arkiv-sdk/src/client.js')
+            const identityClient = new ArkivReadClientInner(rpcUrlForIdentity)
+            const identities = await identityClient.queryNodeIdentities()
+            const oneHourAgo = Date.now() - 3600_000
+            establishedWallets = new Set(
+              identities
+                .filter((id) => id.lastseenms > 0 && id.lastseenms <= oneHourAgo)
+                .map((id) => id.wallet)
+            )
+          } catch {
+            // best-effort — if identity query fails, fall back to no wallet filter
+          }
+        }
         const blocksByUrl = new Map<string, Set<string>>()
         for (const e of recentAll) {
           if (e.blockType !== null && e.geohash && e.geohash.length >= 4) {
+            if (establishedWallets !== null && !establishedWallets.has(e.nodeWallet)) continue
             const region = e.geohash.slice(0, 4)
             let regions = blocksByUrl.get(e.targetUrl)
             if (!regions) { regions = new Set(); blocksByUrl.set(e.targetUrl, regions) }

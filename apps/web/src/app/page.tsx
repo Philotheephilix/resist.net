@@ -165,6 +165,13 @@ export default function HomePage() {
         <div className="flex items-center gap-2.5">
           <VolunteerCount />
           <NodeCount />
+          <a
+            href="/contribute"
+            className="hidden rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 sm:inline-flex items-center"
+            style={{ background: 'transparent', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.20)' }}
+          >
+            Run a probe
+          </a>
           <button
             ref={toggleButtonRef}
             onClick={() => setSidebarOpen((v) => !v)}

@@ -439,11 +439,27 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
     }
   }
   if (offerRejected) return  // already threw, but satisfy control-flow analysis
+  const sanitizedSdp = sanitizedOfferLines.join("\n")
+  const sdpLines = sanitizedSdp.split("\n")
+  const hasV = sdpLines.some(l => l === "v=0")
+  const hasO = sdpLines.some(l => l.startsWith("o="))
+  const hasS = sdpLines.some(l => l.startsWith("s="))
+  const hasT = sdpLines.some(l => l.startsWith("t="))
+  const hasM = sdpLines.some(l => l.startsWith("m="))
+  if (!hasV || !hasO || !hasS || !hasT || !hasM) {
+    peer.close()
+    throw new Error("Volunteer SDP offer missing required grammar fields (v=, o=, s=, t=, m=)")
+  }
   const sanitizedOffer: RTCSessionDescriptionInit = {
     type: offerDesc.type,
-    sdp: sanitizedOfferLines.join("\n"),
+    sdp: sanitizedSdp,
   }
-  await peer.setRemoteDescription(sanitizedOffer)
+  try {
+    await peer.setRemoteDescription(sanitizedOffer)
+  } catch (err) {
+    peer.close()
+    throw new Error(`Failed to set remote description: ${(err as Error).message}`)
+  }
 
   // 5. Create SDP answer
   const answer = await peer.createAnswer()

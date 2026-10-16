@@ -53,5 +53,5 @@ export const BLOCK_TYPE_LABELS: Record<string, string> = {
 
 export function blockTypeLabel(blockType: string | null): string {
   if (!blockType) return 'Reachable'
-  return BLOCK_TYPE_LABELS[blockType] ?? blockType
+  return BLOCK_TYPE_LABELS[blockType] ?? blockType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }

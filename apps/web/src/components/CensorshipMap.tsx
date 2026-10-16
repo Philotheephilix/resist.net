@@ -193,7 +193,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       const popupHtml = `
         <div tabindex="0" role="region" data-popup-content style="min-width:180px;font-family:var(--wld-font-family,sans-serif);" aria-label="${esc(event.targetUrl)}: ${esc(label)}, ${esc(ts)}, node ${esc(wallet)}">
           <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--wld-gray-0,#ffffff);">
-            ${esc(event.targetUrl)}
+            <a href="${esc(event.targetUrl)}" target="_blank" rel="noopener noreferrer" style="color:var(--wld-gray-0,#ffffff);text-decoration:underline;word-break:break-all;">${esc(event.targetUrl)}<span class="sr-only"> (opens in new tab)</span></a>
           </div>
           <div style="display:inline-block;padding:2px 8px;border-radius:9999px;font-size:11px;font-weight:600;background:${badge.bg};color:${badge.color};margin-bottom:8px;">
             <span class="sr-only">Block type: </span>${esc(label)}

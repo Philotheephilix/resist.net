@@ -39,8 +39,8 @@ async function tick() {
   }
 }
 
-export async function main() {
-  startHealthServer()
+export async function main(opts: { once?: boolean } = {}) {
+  if (!opts.once) startHealthServer()
   let running = true
   let consecutiveFailures = 0
   let currentInterval = INTERVAL_MS
@@ -82,5 +82,6 @@ export async function main() {
   } finally {
     running = false
   }
+  if (opts.once) return
   scheduleNext()
 }

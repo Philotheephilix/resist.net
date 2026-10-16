@@ -24,21 +24,8 @@ function getArkivRpcUrl(configRpcUrl?: string): string {
 // This caps the damage from a misconfigured or malicious binary running at INTERVAL_MS=0.
 // The limit is intentionally generous vs. normal usage (5 targets × 4 ticks/hour = 20/hr)
 // to give headroom for offline-cache drain bursts while still blocking flood attacks.
+// State is persisted in SQLite so process restarts do not reset the counter.
 const MAX_WRITES_PER_WALLET_PER_HOUR = 200
-// wallet → { count, windowStart }
-const _walletWriteRateMap = new Map<string, { count: number; windowStart: number }>()
-
-function checkWalletWriteRate(wallet: string): boolean {
-  const now = Date.now()
-  const entry = _walletWriteRateMap.get(wallet)
-  if (!entry || now - entry.windowStart > 3_600_000) {
-    _walletWriteRateMap.set(wallet, { count: 1, windowStart: now })
-    return true
-  }
-  if (entry.count >= MAX_WRITES_PER_WALLET_PER_HOUR) return false
-  entry.count++
-  return true
-}
 
 // Module-level singleton — opens the DB once per process and runs DDL once.
 // Previously getDb() opened + closed a connection on every syncToArkiv() call
@@ -53,6 +40,8 @@ let stmtEvict: Database.Statement | null = null
 let stmtDeleteById: Database.Statement | null = null
 let stmtInsert: Database.Statement | null = null
 let stmtSelectPending: Database.Statement | null = null
+let stmtRateLimitGet: Database.Statement | null = null
+let stmtRateLimitUpsert: Database.Statement | null = null
 
 function getDb(): Database.Database {
   if (_db) return _db
@@ -67,6 +56,11 @@ function getDb(): Database.Database {
     payload TEXT NOT NULL,
     created_at INTEGER NOT NULL
   )`)
+  _db.exec(`CREATE TABLE IF NOT EXISTS rate_limit (
+    wallet TEXT PRIMARY KEY,
+    count INTEGER NOT NULL,
+    window_start INTEGER NOT NULL
+  )`)
   stmtEvict = _db.prepare("DELETE FROM pending WHERE created_at < ?")
   stmtDeleteById = _db.prepare("DELETE FROM pending WHERE id = ?")
   stmtInsert = _db.prepare("INSERT OR IGNORE INTO pending (id, payload, created_at) VALUES (?, ?, ?)")
@@ -76,7 +70,25 @@ function getDb(): Database.Database {
   // within the 15-minute window (5 targets × 8s timeout × 100 = ~400s worst-case,
   // in practice <10s since most writes succeed in <100ms each).
   stmtSelectPending = _db.prepare("SELECT * FROM pending ORDER BY created_at ASC LIMIT 100")
+  stmtRateLimitGet = _db.prepare("SELECT count, window_start FROM rate_limit WHERE wallet = ?")
+  stmtRateLimitUpsert = _db.prepare(
+    "INSERT INTO rate_limit (wallet, count, window_start) VALUES (?, ?, ?) " +
+    "ON CONFLICT(wallet) DO UPDATE SET count = excluded.count, window_start = excluded.window_start"
+  )
   return _db
+}
+
+function checkWalletWriteRate(wallet: string): boolean {
+  getDb()  // ensure statements are initialized
+  const now = Date.now()
+  const row = stmtRateLimitGet!.get(wallet) as { count: number; window_start: number } | undefined
+  if (!row || now - row.window_start > 3_600_000) {
+    stmtRateLimitUpsert!.run(wallet, 1, now)
+    return true
+  }
+  if (row.count >= MAX_WRITES_PER_WALLET_PER_HOUR) return false
+  stmtRateLimitUpsert!.run(wallet, row.count + 1, row.window_start)
+  return true
 }
 
 /**

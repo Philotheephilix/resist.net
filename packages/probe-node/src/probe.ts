@@ -132,7 +132,7 @@ function classifyBlock(
   return null
 }
 
-async function probeTarget(url: string, config: { wallet: string; geohash: string; isp: string; prevHash: string }): Promise<ProbeResult> {
+export async function probeTarget(url: string, config: { wallet: string; geohash: string; isp: string; prevHash: string }): Promise<ProbeResult> {
   const domain = new URL(url).hostname;
   // Two-phase probing: run dnsCheck first to detect poisoning early.
   // If DNS is poisoned, abort httpCheck/tcpCheck — they would run against a bogus

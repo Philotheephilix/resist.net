@@ -102,8 +102,8 @@ function timeAgo(ts: number, now: number): string {
   const mins = Math.floor(diffMs / 60_000)
   let s: string
   if (mins < 1) s = 'just now'
-  else if (mins < 60) s = `${mins}m ago`
-  else { const hrs = Math.floor(mins / 60); s = hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago` }
+  else if (mins < 60) s = `${mins} min ago`
+  else { const hrs = Math.floor(mins / 60); s = hrs < 24 ? `${hrs} hr ago` : `${Math.floor(hrs / 24)} days ago` }
   if (timeAgoCache.size >= URL_CACHE_MAX && !timeAgoCache.has(ts)) timeAgoCache.delete(timeAgoCache.keys().next().value!)
   timeAgoCache.set(ts, { bucket, value: s })
   return s
@@ -116,7 +116,7 @@ const BLOCK_TYPE_LABELS: Record<string, string> = {
   full_unreachable: 'Unreachable',
 }
 function blockTypeLabel(blockType: BlockType): string {
-  return (blockType && BLOCK_TYPE_LABELS[blockType]) ?? 'Reachable'
+  return blockType ? (BLOCK_TYPE_LABELS[blockType] ?? blockType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())) : 'Reachable'
 }
 
 function truncateWallet(wallet: string): string {
@@ -272,6 +272,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
                   <time
                     dateTime={cachedTsIso(event.timestamp)}
                     title={cachedTsLocale(event.timestamp)}
+                    aria-label={cachedTsLocale(event.timestamp)}
                     className="flex-shrink-0 pt-0.5 text-[11px]"
                     style={{ color: 'rgba(255,255,255,0.55)' }}
                   >

@@ -559,10 +559,16 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
 
   // Use a self-rescheduling timer so we can vary the interval dynamically.
   let pollTimer: ReturnType<typeof setTimeout> | null = null
+  let consecutivePollFailures = 0
   const schedulePoll = () => {
     const elapsed = Date.now() - lastOfferPublishedAt
-    const interval = elapsed < FAST_POLL_WINDOW_MS ? FAST_POLL_INTERVAL_MS : POLL_INTERVAL_MS
-    pollTimer = setTimeout(runPoll, interval)
+    let interval: number
+    if (consecutivePollFailures >= 3) {
+      interval = Math.min(FAST_POLL_INTERVAL_MS * Math.pow(2, consecutivePollFailures - 2), 30_000)
+    } else {
+      interval = elapsed < FAST_POLL_WINDOW_MS ? FAST_POLL_INTERVAL_MS : POLL_INTERVAL_MS
+    }
+    pollTimer = setTimeout(runPoll, interval + Math.random() * 500)
   }
 
   const runPoll = async () => {
@@ -571,6 +577,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
       queryRunning = true
       try {
         const fetched = await arkiv.querySignalExchange(config.wallet)
+        consecutivePollFailures = 0
         // Merge new answers into pending, deduplicating by entityKey
         for (const row of fetched) {
           if (!pendingAnswers.some(r => r.entityKey === row.entityKey)) {
@@ -578,6 +585,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
           }
         }
       } catch (err) {
+        consecutivePollFailures++
         console.error("[volunteer] Poll failed:", redactErrMsg(err, config.rpcUrl))
       } finally {
         queryRunning = false
@@ -592,6 +600,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
     processRunning = true
     // Snapshot and clear pending; we'll process this batch
     let answers = pendingAnswers.splice(0)
+    let recreateFailed = false
     try {
     // Cap answers to prevent a flooded signal exchange from stalling the loop
     answers = answers.slice(0, 20)
@@ -609,8 +618,13 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         lastOfferPublishedAt = Date.now()
       } catch (err) {
         console.error("[volunteer] Failed to recreate mainPeer:", redactErrMsg(err, config.rpcUrl))
-        return
+        recreateFailed = true
       }
+    }
+
+    if (recreateFailed) {
+      schedulePoll()
+      return
     }
 
     // Evict stale entries from the TTL map on every poll cycle

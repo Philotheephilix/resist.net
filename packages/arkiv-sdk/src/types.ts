@@ -61,6 +61,7 @@ export interface ProbeResultRow {
   isp: string;
   networktype: string;
   prevresulthash: string;
+  targetshash: string;
   /** True when this row's prevresulthash does not match any known preceding entityKey
    *  from the same wallet — indicates a chain reset (config deleted or hash forged). */
   chainGap?: boolean;

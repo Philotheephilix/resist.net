@@ -82,6 +82,9 @@ export class ArkivClient {
       // first-class queryable attribute so chain continuity can be verified by
       // dashboards and off-chain validators without parsing the opaque payload
       prevresulthash: str(result.prevResultHash),
+      // first-class queryable attribute so the read path can reject rows from
+      // probes that used a non-canonical target set
+      targetshash: str(result.targetsHash),
     }
 
     const { entityKey } = await this.walletClient.createEntity({
@@ -235,6 +238,7 @@ export class ArkivClient {
         isp: String(a["isp"]?.value ?? ""),
         networktype: String(a["networktype"]?.value ?? ""),
         prevresulthash: String(a["prevresulthash"]?.value ?? ""),
+        targetshash: String(a["targetshash"]?.value ?? ""),
       })
     }
 
@@ -412,6 +416,7 @@ export class ArkivReadClient {
         isp: String(a["isp"]?.value ?? ""),
         networktype: String(a["networktype"]?.value ?? ""),
         prevresulthash: String(a["prevresulthash"]?.value ?? ""),
+        targetshash: String(a["targetshash"]?.value ?? ""),
       }
     })
 
@@ -463,5 +468,28 @@ export class ArkivReadClient {
         }
       })
       .filter((r): r is import("./types.js").VolunteerProxyRow => r !== null)
+  }
+
+  async queryNodeIdentities(): Promise<import("./types.js").NodeIdentityRow[]> {
+    const page = await this.publicClient
+      .select({ key: true, attributes: true })
+      .where(and([
+        eq("project", "resist.net"),
+        eq("entitytype", "nodeidentity"),
+      ]))
+      .limit(500)
+      .fetch()
+
+    return page.entities.map((entity) => {
+      const a = entity.attributes
+      return {
+        entityKey: entity.key as string,
+        wallet: String(a["wallet"]?.value ?? ""),
+        geohash: String(a["geohash"]?.value ?? ""),
+        isp: String(a["isp"]?.value ?? ""),
+        networktype: String(a["networktype"]?.value ?? ""),
+        lastseenms: Number(a["lastseenms"]?.value ?? 0),
+      }
+    })
   }
 }

@@ -19,9 +19,11 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
   const [stats, setStats] = useState<Stats>({ liveProbes: 0, regions: 0, blocksToday: 0 })
   const [loading, setLoading] = useState(true)
   const [stale, setStale] = useState(false)
+  const [retrying, setRetrying] = useState(false)
   const liveRef = useRef<HTMLDivElement>(null)
   const announcedRef = useRef(false)
   const prevLiveProbesRef = useRef<number | null>(null)
+  const retryRef = useRef<(() => void) | null>(null)
 
   // When the parent supplies stats from the shared useBlockEvents poll, apply
   // them directly and skip the standalone polling effect below.
@@ -39,7 +41,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
         announcedRef.current = true
         prevLiveProbesRef.current = externalStats.liveProbes
         liveRef.current.textContent =
-          `${externalStats.liveProbes} live probes across ${externalStats.regions} regions, ${externalStats.blocksToday} blocks today`
+          `${externalStats.liveProbes.toLocaleString()} live probes across ${externalStats.regions.toLocaleString()} regions, ${externalStats.blocksToday.toLocaleString()} blocks today`
       } else {
         prevLiveProbesRef.current = externalStats.liveProbes
       }
@@ -73,8 +75,16 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
         const res = await fetch('/api/probe-events?stats=true', { signal })
         if (!mounted || callSeq !== seq) return
         if (res.ok) {
-          const data = await res.json()
+          const raw = await res.json()
           if (!mounted || callSeq !== seq) return
+          // Guard against unexpected response shapes (e.g. an array from a
+          // test mock that intercepts all /api/probe-events routes).
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw) || typeof raw.liveProbes !== 'number') {
+            consecutiveFailures++
+            if (consecutiveFailures >= 3 && mounted) setStale(true)
+            return
+          }
+          const data: Stats = raw as Stats
           setStats(data)
           setStale(false)
           consecutiveFailures = 0
@@ -83,7 +93,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
             announcedRef.current = true
             prevLiveProbesRef.current = data.liveProbes
             liveRef.current.textContent =
-              `${data.liveProbes} live probes across ${data.regions} regions, ${data.blocksToday} blocks today`
+              `${data.liveProbes.toLocaleString()} live probes across ${data.regions.toLocaleString()} regions, ${data.blocksToday.toLocaleString()} blocks today`
           } else {
             prevLiveProbesRef.current = data.liveProbes
           }
@@ -100,10 +110,18 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
       }
     }
 
+    retryRef.current = () => {
+      if (!mounted) return
+      setRetrying(true)
+      consecutiveFailures = 0
+      fetchStats().finally(() => { if (mounted) setRetrying(false) })
+    }
+
     fetchStats()
     const interval = setInterval(fetchStats, 62_000)
     return () => {
       mounted = false
+      retryRef.current = null
       abortController.abort()
       clearInterval(interval)
     }
@@ -114,7 +132,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
       <div ref={liveRef} aria-live="polite" className="sr-only" />
 
       <div
-        role="img"
+        role="status"
         className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
         style={{
           background: 'rgba(255,255,255,0.07)',
@@ -123,7 +141,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
         }}
         aria-label={loading
           ? 'Loading network statistics'
-          : `${stats.liveProbes} live probes across ${stats.regions} regions, ${stats.blocksToday} blocks today${stale ? ' (data may be outdated)' : ''}`}
+          : `${stats.liveProbes.toLocaleString()} live probes across ${stats.regions.toLocaleString()} regions, ${stats.blocksToday.toLocaleString()} blocks today${stale ? ' (data may be outdated)' : ''}`}
       >
         {loading ? (
           <span
@@ -138,23 +156,42 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
               aria-hidden
             />
             <span aria-hidden>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.liveProbes}</strong>
+              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.liveProbes.toLocaleString()}</strong>
               <span style={{ color: 'rgba(255,255,255,0.60)' }}> probes</span>
             </span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }} aria-hidden>·</span>
             <span aria-hidden>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.regions}</strong>
+              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.regions.toLocaleString()}</strong>
               <span style={{ color: 'rgba(255,255,255,0.60)' }}> regions</span>
             </span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }} aria-hidden>·</span>
             <span aria-hidden>
-              <strong style={{ color: '#ff6b55', fontWeight: 600 }}>{stats.blocksToday}</strong>
+              <strong style={{ color: '#ff6b55', fontWeight: 600 }}>{stats.blocksToday.toLocaleString()}</strong>
               <span style={{ color: 'rgba(255,255,255,0.60)' }}> blocks</span>
             </span>
             {stale && (
-              <span aria-hidden style={{ color: 'var(--wld-warning-500, #ffb833)', fontSize: 10, fontStyle: 'italic' }}>
-                (stale)
-              </span>
+              <button
+                onClick={() => retryRef.current?.()}
+                disabled={retrying}
+                title="Stats unavailable — check connection"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  background: 'none',
+                  border: 'none',
+                  padding: '0 2px',
+                  cursor: retrying ? 'default' : 'pointer',
+                  color: 'var(--wld-warning-500, #ffb833)',
+                  fontSize: 10,
+                  fontStyle: 'italic',
+                  opacity: retrying ? 0.6 : 1,
+                }}
+                aria-label="Stats unavailable — check connection. Click to retry."
+              >
+                <span aria-hidden>⚠</span>
+                {retrying ? 'retrying…' : 'Offline — retry?'}
+              </button>
             )}
           </>
         )}
