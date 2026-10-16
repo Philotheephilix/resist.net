@@ -29,7 +29,8 @@ export function useBlockEvents(filters: BlockEventFilters) {
     const prev = prevEventsRef.current
     if (next.length === 0 && prev.length === 0) return
     if (next.length === prev.length && next.length > 0) {
-      const prevIds = new Set(prev.map(e => e.id))
+      const prevIds = new Set<string>()
+      for (const e of prev) prevIds.add(e.id)
       if (next.every(e => prevIds.has(e.id))) return
     }
     prevEventsRef.current = next

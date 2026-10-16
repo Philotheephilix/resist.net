@@ -47,7 +47,7 @@ async function queryArkivProbeEvents(opts: {
   const rpcUrl = process.env['ARKIV_RPC_URL']
   if (!rpcUrl) {
     if (process.env['NODE_ENV'] !== 'development') {
-      console.warn('[probe-events] ARKIV_RPC_URL not set — returning empty dataset')
+      throw new Error('ARKIV_RPC_URL not configured')
     }
     return null
   }
@@ -120,15 +120,17 @@ function checkRateLimit(ip: string): boolean {
 
 export async function GET(request: NextRequest) {
   const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
-  // Fall back to connection-level IP from Next.js when x-real-ip is absent or invalid.
-  // Without this fallback, all requests with no/invalid x-real-ip share the '127.0.0.1'
-  // bucket and exhaust the rate limit for legitimate loopback callers.
   const connIp = (request as any).ip ?? ''
   const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
   const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
-  const ip = validatedRaw || validatedConn || 'unknown'
-  const isLoopback = (validatedConn === '127.0.0.1' || validatedConn === '::1') && !validatedRaw
-  if (!isLoopback && !checkRateLimit(ip)) {
+  // In development/test, fall back to loopback so direct API calls (e.g. Playwright
+  // request fixture) are not rejected. In production, the missing IP is a hard error.
+  const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
+  const ip = validatedRaw || validatedConn || devFallback
+  if (!ip) {
+    return new Response('Bad Request: client IP could not be determined', { status: 400 })
+  }
+  if (!checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,
       headers: { 'Retry-After': '60' },
@@ -224,7 +226,10 @@ export async function GET(request: NextRequest) {
     let statsResult
     try {
       statsResult = await statsInFlight
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.message === 'ARKIV_RPC_URL not configured') {
+        return Response.json({ error: 'ARKIV_RPC_URL not configured' }, { status: 503 })
+      }
       return Response.json(
         { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 },
         { status: 200 },
@@ -237,12 +242,20 @@ export async function GET(request: NextRequest) {
 
   // For normal (map/list) queries, push geohash and blockType filters to Arkiv
   // so the server-side query only returns matching rows.
-  let events = await queryArkivProbeEvents({
-    geohash: geohashFilter,
-    blockType: blockTypeFilter,
-    limit: 200,
-    includeRawWallets: false,
-  })
+  let events: Awaited<ReturnType<typeof queryArkivProbeEvents>>
+  try {
+    events = await queryArkivProbeEvents({
+      geohash: geohashFilter,
+      blockType: blockTypeFilter,
+      limit: 200,
+      includeRawWallets: false,
+    })
+  } catch (err) {
+    if (err instanceof Error && err.message === 'ARKIV_RPC_URL not configured') {
+      return Response.json({ error: 'ARKIV_RPC_URL not configured' }, { status: 503 })
+    }
+    events = null
+  }
   const DEV_FIXTURE = getDevFixture()
   if (!events) events = DEV_FIXTURE ?? []
 

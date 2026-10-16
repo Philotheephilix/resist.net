@@ -92,12 +92,12 @@ interface BlockEventListProps {
 }
 
 const timeAgoCache = new Map<string, string>()
-function timeAgo(ts: number): string {
-  const bucket = Math.floor(Date.now() / 60_000)
+function timeAgo(ts: number, now: number): string {
+  const bucket = Math.floor(now / 60_000)
   const key = `${ts}:${bucket}`
   let s = timeAgoCache.get(key)
   if (s !== undefined) return s
-  const diffMs = bucket * 60_000 - ts
+  const diffMs = now - ts
   const mins = Math.floor(diffMs / 60_000)
   if (mins < 1) s = 'just now'
   else if (mins < 60) s = `${mins}m ago`
@@ -143,9 +143,12 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
   // context so AT users hear "42 events loaded" not just "42".
   const liveRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef<number | null>(null)
+  const didMountRef = useRef(false)
+  useEffect(() => { didMountRef.current = true }, [])
   useEffect(() => {
     if (!liveRef.current) return
     if (loading) return
+    if (!didMountRef.current) return
     const count = sorted.length
     if (count !== prevCountRef.current) {
       prevCountRef.current = count
@@ -201,7 +204,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
           </div>
         ) : (
           <ul aria-labelledby="events-list-heading" className="px-3 py-2">
-            {sorted.map((event, i) => (
+            {(() => { const renderNow = Date.now(); return sorted.map((event, i) => (
               <li
                 key={event.id}
                 className="event-item rounded-2xl px-3 py-3 transition-[background-color] duration-100 hover:bg-white/5"
@@ -250,11 +253,11 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                     className="flex-shrink-0 pt-0.5 text-[11px]"
                     style={{ color: 'rgba(255,255,255,0.55)' }}
                   >
-                    {timeAgo(event.timestamp)}
+                    {timeAgo(event.timestamp, renderNow)}
                   </time>
                 </div>
               </li>
-            ))}
+            ))})()}
           </ul>
         )}
       </div>

@@ -54,8 +54,11 @@ function loadBootstrapCache(): BootstrapEntry[] {
 
 function saveBootstrapCache(entries: BootstrapEntry[]): void {
   try {
-    fs.mkdirSync(path.dirname(BOOTSTRAP_CACHE_PATH), { recursive: true })
-    fs.writeFileSync(BOOTSTRAP_CACHE_PATH, JSON.stringify(entries, null, 2), { mode: 0o600 })
+    const dir = path.dirname(BOOTSTRAP_CACHE_PATH)
+    fs.mkdirSync(dir, { recursive: true })
+    const tmp = path.join(dir, `.bootstrap-cache.tmp.${process.pid}.${Date.now().toString(16)}.json`)
+    fs.writeFileSync(tmp, JSON.stringify(entries, null, 2), { mode: 0o600 })
+    fs.renameSync(tmp, BOOTSTRAP_CACHE_PATH)
   } catch {
     // ignore
   }
@@ -233,9 +236,29 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   } catch (err) {
     console.error("[user] Arkiv query failed, trying bootstrap cache:", (err as Error).message)
     // Fall back to bootstrap cache, excluding same geohash prefix
-    const cached = loadBootstrapCache().filter(
+    let cached = loadBootstrapCache().filter(
       (e) => !e.geohash.startsWith(geohashPrefix)
     )
+    if (cached.length === 0) {
+      const bootstrapUrl = process.env["BOOTSTRAP_URL"]
+      if (bootstrapUrl) {
+        try {
+          const res = await fetch(bootstrapUrl, { signal: AbortSignal.timeout(5000) })
+          if (res.ok) {
+            const data = (await res.json()) as Array<{
+              wallet: string
+              sdpOffer: string
+              geohash: string
+            }>
+            cached = data
+              .filter((e) => e.sdpOffer && e.wallet && !e.geohash.startsWith(geohashPrefix))
+              .map((e) => ({ wallet: e.wallet, sdpOffer: e.sdpOffer, geohash: e.geohash }))
+          }
+        } catch {
+          // ignore — bootstrap URL unreachable
+        }
+      }
+    }
     if (cached.length === 0) throw new Error("No volunteers available — Arkiv unreachable and cache empty")
     // Convert to VolunteerProxyRow shape
     volunteers = cached.map((e) => ({
@@ -425,6 +448,12 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
       return line.replace(/ raddr \S+ rport \d+/g, ` raddr ${raddrFill}`)
     })
     .join("\n")
+  const publicCandidateCount = safeAnswerSdp.split("\n").filter(l => l.startsWith("a=candidate:")).length
+  if (publicCandidateCount === 0) {
+    peer.close()
+    throw new Error("No public ICE candidates gathered — STUN unreachable or symmetric NAT detected")
+  }
+
   const sdpAnswerJson = JSON.stringify({ type: peer.localDescription?.type, sdp: safeAnswerSdp })
   try {
     await arkiv.writeSignalExchange({

@@ -17,7 +17,11 @@ export default function VolunteerCount({ externalVolunteerCount }: VolunteerCoun
   // When the parent supplies the volunteer count from the shared useBlockEvents
   // poll, apply it directly and skip the standalone polling effect below.
   useEffect(() => {
-    if (externalVolunteerCount == null) return
+    if (externalVolunteerCount == null) {
+      setIsResolved(false)
+      setCount(null)
+      return
+    }
     const newCount = externalVolunteerCount
     if (prevCountRef.current !== newCount && liveRef.current) {
       liveRef.current.textContent = `${newCount} volunteer ${newCount === 1 ? 'node' : 'nodes'} now active`

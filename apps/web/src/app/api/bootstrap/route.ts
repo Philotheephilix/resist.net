@@ -52,10 +52,11 @@ export async function GET(request: NextRequest) {
     const volunteers = await client.queryVolunteers()
 
     const entries = volunteers.map((v) => ({
-      wallet: v.wallet.length > 10 ? v.wallet.slice(0, 6) + '…' + v.wallet.slice(-4) : v.wallet,
+      wallet: v.wallet,
       geohash: v.geohash ? v.geohash.slice(0, 5) : v.geohash,
       capacitySlots: v.capacityslots,
       createdAt: v.createdat,
+      sdpOffer: v.sdpoffer,
     }))
 
     return Response.json(entries)

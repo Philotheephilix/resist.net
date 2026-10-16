@@ -427,22 +427,36 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
 
     const sdpOfferJson = JSON.stringify(peer.localDescription)
 
-    let entityKey: string
-    try {
-      entityKey = await arkiv.writeVolunteerProxy({
-        wallet: config.wallet,
-        sdpOffer: sdpOfferJson,
-        geohash: config.geohash,
-        capacitySlots: config.capacitySlots ?? 5,
-        createdAt: Date.now(),
-      })
-      // Update bootstrap cache
-      const cache = loadBootstrapCache().filter((e) => e.wallet !== config.wallet)
-      cache.unshift({ wallet: config.wallet, sdpOffer: sdpOfferJson, geohash: config.geohash })
-      saveBootstrapCache(cache.slice(0, 50))
-    } catch (err) {
-      console.error("[volunteer] Arkiv write failed, running offline:", redactErrMsg(err, config.rpcUrl))
-      entityKey = ""
+    const MAX_PUBLISH_ATTEMPTS = 4
+    let entityKey = ""
+    for (let attempt = 1; attempt <= MAX_PUBLISH_ATTEMPTS; attempt++) {
+      try {
+        entityKey = await arkiv.writeVolunteerProxy({
+          wallet: config.wallet,
+          sdpOffer: sdpOfferJson,
+          geohash: config.geohash,
+          capacitySlots: config.capacitySlots ?? 5,
+          createdAt: Date.now(),
+        })
+        // Update bootstrap cache
+        const cache = loadBootstrapCache().filter((e) => e.wallet !== config.wallet)
+        cache.unshift({ wallet: config.wallet, sdpOffer: sdpOfferJson, geohash: config.geohash })
+        saveBootstrapCache(cache.slice(0, 50))
+        break
+      } catch (err) {
+        const backoffMs = Math.min(1000 * 2 ** (attempt - 1), 16000)
+        if (attempt < MAX_PUBLISH_ATTEMPTS) {
+          console.error(
+            `[volunteer] Arkiv write failed (attempt ${attempt}/${MAX_PUBLISH_ATTEMPTS}), retrying in ${backoffMs}ms:`,
+            redactErrMsg(err, config.rpcUrl),
+          )
+          await new Promise((res) => setTimeout(res, backoffMs))
+        } else {
+          throw new Error(
+            `[volunteer] FATAL: volunteer not discoverable via Arkiv after ${MAX_PUBLISH_ATTEMPTS} attempts — users cannot find this node. Last error: ${redactErrMsg(err, config.rpcUrl)}`,
+          )
+        }
+      }
     }
 
     return { peer, sdpOfferJson, entityKey }

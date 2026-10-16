@@ -95,12 +95,14 @@ export default function HomePage() {
       >
         Skip to map
       </a>
-      <a
-        href={isDesktop ? '#events-panel' : '#mobile-events-panel'}
-        className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
-      >
-        Skip to events list
-      </a>
+      {(!isDesktop || sidebarOpen) && (
+        <a
+          href={isDesktop && sidebarOpen ? '#events-panel' : '#mobile-events-panel'}
+          className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold focus:text-black"
+        >
+          Skip to events list
+        </a>
+      )}
       {/* ─── Top bar ── glass morphism header ── */}
       <header
         className="z-20 flex flex-shrink-0 items-center justify-between gap-4 px-5 py-3"
@@ -152,7 +154,7 @@ export default function HomePage() {
             }
             aria-label={sidebarOpen ? 'Hide events panel' : 'Show events panel'}
             aria-expanded={sidebarOpen}
-            aria-controls={sidebarOpen ? 'events-panel' : undefined}
+            aria-controls="events-panel"
           >
             {sidebarOpen ? 'Hide' : 'Events'}
           </button>
@@ -289,6 +291,7 @@ export default function HomePage() {
         role="region"
         className="flex-shrink-0 sm:hidden"
         aria-label="Block events feed"
+        aria-hidden={isDesktop ? true : undefined}
         style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
       >
         <div

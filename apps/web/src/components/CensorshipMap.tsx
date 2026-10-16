@@ -542,18 +542,21 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
   useEffect(() => {
     if (!mapRef.current || !markersLayerRef.current) return
 
+    let mounted = true
     const updateMarkers = async () => {
       const gen = ++markerGenRef.current
       // Use cached leaflet module — avoids a dynamic import() call on every events change.
       // leafletRef is populated by the init effect; if it's still null, init hasn't finished
       // yet and pendingEventsRef will ensure markers are applied once init completes.
       const leaflet = leafletRef.current ?? await import('leaflet')
+      if (!mounted) return
       leafletRef.current = leaflet
       if (gen !== markerGenRef.current) return
       renderMarkers(leaflet, events)
     }
 
     updateMarkers()
+    return () => { mounted = false }
   }, [events, renderMarkers])
 
   // Announce empty-map state to AT after a filter change zeroes the results.
@@ -645,7 +648,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           No aria-label: role=generic does not support name-from-author per ARIA 1.2,
           so any aria-label would be silently ignored. The region content is self-
           describing (URL + block type + timestamp), so no label is needed. */}
-      <div ref={liveRegionRef} aria-live="polite" aria-atomic="true" className="sr-only" />
+      <div ref={liveRegionRef} aria-live="polite" className="sr-only" />
 
       {/* Filter state live region — separate from popup region so background polls
           that clear this (when count > 0) do not interrupt popup announcements.
