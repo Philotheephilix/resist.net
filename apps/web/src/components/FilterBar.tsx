@@ -17,30 +17,22 @@ const FILTERS: { key: FilterType; label: string }[] = [
   { key: 'full_unreachable', label: 'Unreachable' },
 ]
 
-// Hoisted to module level — stable object identity prevents recreation on every render.
+// World UI Kit Pill pattern — active: dark fill, inactive: transparent with border
 const LABEL_STYLE_ACTIVE: React.CSSProperties = {
-  backgroundColor: 'var(--wld-gray-0)',
-  color: 'var(--wld-gray-900)',
-  border: '1px solid var(--wld-gray-0)',
-  transitionDuration: 'var(--wld-duration-base)',
-  transitionTimingFunction: 'var(--wld-ease-default)',
-  transition: 'background-color var(--wld-duration-base) var(--wld-ease-default)',
+  backgroundColor: '#181818',
+  color: '#ffffff',
+  border: '1px solid #181818',
+  transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1)',
 }
 const LABEL_STYLE_INACTIVE: React.CSSProperties = {
-  backgroundColor: 'var(--wld-glass-bg-muted)',
-  color: 'var(--wld-gray-300)',
-  border: '1px solid var(--wld-glass-bg-active)',
-  transitionDuration: 'var(--wld-duration-base)',
-  transitionTimingFunction: 'var(--wld-ease-default)',
-  transition: 'background-color var(--wld-duration-base) var(--wld-ease-default)',
+  backgroundColor: 'transparent',
+  color: '#181818',
+  border: '1px solid #ebecef',
+  transition: 'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1)',
 }
 
 export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
   return (
-    // role=radiogroup with native <input type="radio"> elements gives full AT support
-    // across all assistive technology versions — JAWS, NVDA, VoiceOver on iOS/macOS.
-    // Native inputs handle arrow-key navigation, checked semantics, and group
-    // name announcement without needing ARIA role overrides on non-radio elements.
     <div
       role="radiogroup"
       aria-label="Filter events by block type"
@@ -64,7 +56,7 @@ export default memo(function FilterBar({ active, onChange }: FilterBarProps) {
               onChange={() => onChange(key)}
               className="sr-only"
             />
-            <span className="block px-3 py-1.5 text-xs font-semibold focus-within:ring-2 focus-within:ring-white/50 focus-within:rounded-full">
+            <span className="block px-3 py-1.5 text-xs font-semibold focus-within:ring-2 focus-within:ring-[#181818]/30 focus-within:rounded-full">
               {label}
             </span>
           </label>

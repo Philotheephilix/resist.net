@@ -12,9 +12,6 @@ export default function NodeCount() {
   const [stats, setStats] = useState<Stats>({ liveProbes: 0, regions: 0, blocksToday: 0 })
   const [loading, setLoading] = useState(true)
   const [stale, setStale] = useState(false)
-  // Off-screen live region — announced on initial load and when liveProbes changes
-  // by ≥1 (a meaningful network change). Subsequent silent polls that return the same
-  // numbers produce no AT interruption. Decoupled from the visible widget.
   const liveRef = useRef<HTMLDivElement>(null)
   const announcedRef = useRef(false)
   const prevLiveProbesRef = useRef<number | null>(null)
@@ -37,10 +34,6 @@ export default function NodeCount() {
           setStats(data)
           setStale(false)
           consecutiveFailures = 0
-          // Announce on initial load AND when liveProbes changes (meaningful network event).
-          // Silent polls that return the same numbers produce no AT interruption.
-          // aria-label mutation alone does not trigger re-announcement in most AT;
-          // updating textContent on the live region is the reliable mechanism.
           const probesChanged = prevLiveProbesRef.current !== null && prevLiveProbesRef.current !== data.liveProbes
           if ((!announcedRef.current || probesChanged) && liveRef.current) {
             announcedRef.current = true
@@ -64,8 +57,6 @@ export default function NodeCount() {
     }
 
     fetchStats()
-    // 62s offset avoids polling in lockstep with BlockEventList's 60s tick,
-    // spreading API requests across the minute instead of batching them at :00.
     const interval = setInterval(fetchStats, 62_000)
     return () => {
       mounted = false
@@ -74,29 +65,16 @@ export default function NodeCount() {
     }
   }, [])
 
-  const sep = (
-    <span style={{ color: 'var(--wld-gray-500)' }} aria-hidden>
-      •
-    </span>
-  )
-
   return (
     <>
-      {/* Always-mounted off-screen live region — AT must see it at first render so
-          the polite region is registered before any announcement fires. Putting it
-          inside the loading branch would cause AT to miss the initial announcement
-          because the region was not yet in the DOM when the announcement fired. */}
       <div ref={liveRef} aria-live="polite" aria-atomic="true" className="sr-only" />
 
-      {/* Visible widget — no role=status here because all children are aria-hidden,
-          which would cause the live region to announce an empty string on each update.
-          The liveRef div (above) is the sole live region. aria-label provides AT
-          navigation context without triggering unwanted live announcements. */}
       <div
-        className={`flex items-center gap-2 rounded-full px-4 py-2 text-xs${loading ? '' : ' font-medium'}`}
+        className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs${loading ? '' : ' font-medium'}`}
         style={{
-          backgroundColor: 'var(--wld-glass-bg-faint)',
-          color: loading ? 'var(--wld-gray-400)' : 'var(--wld-gray-300)',
+          backgroundColor: '#ffffff',
+          borderColor: '#ebecef',
+          color: loading ? '#717680' : '#181818',
         }}
         aria-label={loading
           ? 'Loading network statistics'
@@ -104,36 +82,36 @@ export default function NodeCount() {
       >
         {loading ? (
           <span
-            className="inline-block h-1.5 w-16 rounded-full"
-            style={{ backgroundColor: 'var(--wld-glass-bg)' }}
+            className="inline-block h-1.5 w-16 animate-pulse rounded-full"
+            style={{ backgroundColor: '#ebecef' }}
           />
         ) : (
           <>
             <span
               className="inline-block h-1.5 w-1.5 rounded-full"
-              style={{ backgroundColor: 'var(--wld-success-600)' }}
+              style={{ backgroundColor: '#00c230' }}
               aria-hidden
             />
             <span aria-hidden>
-              <strong style={{ color: 'var(--wld-gray-0)', fontWeight: 600 }}>{stats.liveProbes}</strong>{' '}
-              live probes
+              <strong style={{ color: '#181818', fontWeight: 600 }}>{stats.liveProbes}</strong>{' '}
+              probes
             </span>
-            {sep}
+            <span style={{ color: '#d6d9dd' }} aria-hidden>•</span>
             <span aria-hidden>
-              <strong style={{ color: 'var(--wld-gray-0)', fontWeight: 600 }}>{stats.regions}</strong>{' '}
+              <strong style={{ color: '#181818', fontWeight: 600 }}>{stats.regions}</strong>{' '}
               regions
             </span>
-            {sep}
+            <span style={{ color: '#d6d9dd' }} aria-hidden>•</span>
             <span aria-hidden>
-              <strong style={{ color: 'var(--wld-error-400)', fontWeight: 600 }}>
+              <strong style={{ color: '#f2280d', fontWeight: 600 }}>
                 {stats.blocksToday}
               </strong>{' '}
-              blocks today
+              blocks
             </span>
             {stale && (
               <span
                 aria-hidden
-                style={{ color: 'var(--wld-warning-600)', fontSize: 10, fontStyle: 'italic' }}
+                style={{ color: '#ffae00', fontSize: 10, fontStyle: 'italic' }}
               >
                 (stale)
               </span>

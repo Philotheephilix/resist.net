@@ -1,0 +1,51 @@
+@import '../../../../design-system/tokens.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: var(--wld-font-family);
+}
+
+body {
+  background-color: #f3f4f5;
+  color: #181818;
+  min-height: 100vh;
+}
+
+/* Alert slide-in animation (design-system rule 4) */
+@keyframes slideInFromTop {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Leaflet overrides for dark theme */
+.leaflet-container {
+  background: var(--wld-gray-900) !important;
+}
+
+.leaflet-popup-content-wrapper {
+  background: var(--wld-gray-700) !important;
+  color: var(--wld-gray-0) !important;
+  border-radius: var(--wld-radius-md) !important;
+  box-shadow: var(--wld-shadow-lg) !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--wld-gray-700) !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--wld-gray-300) !important;
+}
+
+.leaflet-control-zoom a {
+  background: var(--wld-gray-700) !important;
+  color: var(--wld-gray-0) !important;
+  border-color: var(--wld-gray-500) !important;
+}
+
+.leaflet-control-attribution {
+  background: color-mix(in srgb, var(--wld-bg-primary) 70%, transparent) !important;
+  color: var(--wld-gray-400) !important;
+}

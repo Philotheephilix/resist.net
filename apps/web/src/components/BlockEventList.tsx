@@ -155,23 +155,17 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: '1px solid var(--wld-glass-bg-muted)' }}
+        style={{ borderBottom: '1px solid #ebecef' }}
       >
-        {/* Native h2: the page h1 is "resist.net" in the top bar.
-            Native heading elements get heading-navigation shortcuts (H key in JAWS/NVDA)
-            which role=heading on a span does not reliably provide across all AT. */}
         <h2
           className="text-xs font-semibold uppercase tracking-wider"
-          style={{ color: 'var(--wld-gray-400)', margin: 0 }}
+          style={{ color: '#717680', margin: 0 }}
         >
           Recent Events
         </h2>
-        {/* Visual count badge — plain div, no role=status, no aria-live.
-            AT announcements handled by the liveRef region above to avoid
-            announcing a bare number on every poll cycle with no context. */}
         <div
-          className="rounded-full px-2 py-0.5 text-xs font-semibold"
-          style={{ backgroundColor: 'var(--wld-glass-bg-faint)', color: 'var(--wld-gray-300)' }}
+          className="rounded-full border px-2 py-0.5 text-xs font-medium"
+          style={{ backgroundColor: '#f3f4f5', borderColor: '#ebecef', color: '#717680' }}
           aria-hidden="true"
         >
           {sorted.length}
@@ -181,38 +175,35 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
       {/* List */}
       <div className="flex-1 overflow-y-auto">
         {loading && sorted.length === 0 ? (
-          // role=status: ARIA 1.2 requires a named role to expose aria-label.
-          // Plain div (role=generic) silently drops aria-label; role=status
-          // conveys loading semantics and accepts aria-label.
           <div role="status" aria-label="Loading events" aria-busy="true" className="space-y-2 p-4">
             {[...Array(5)].map((_, i) => (
               <div
                 key={i}
                 className="h-16 animate-pulse rounded-xl"
-                style={{ backgroundColor: 'var(--wld-glass-border-subtle)' }}
+                style={{ backgroundColor: '#f3f4f5' }}
               />
             ))}
           </div>
         ) : sorted.length === 0 ? (
           <div
             className="flex h-32 items-center justify-center text-sm"
-            style={{ color: 'var(--wld-gray-400)' }}
+            style={{ color: '#717680' }}
           >
             No events yet
           </div>
         ) : (
-          <ul aria-label="Recent censorship events, sorted newest first" className="divide-y divide-white/5 px-4 py-2">
+          <ul aria-label="Recent censorship events, sorted newest first" className="px-4 py-2">
             {sorted.map((event) => (
-              <li key={event.id} className="py-3">
+              <li key={event.id} className="py-3" style={{ borderBottom: '1px solid #ebecef' }}>
                 <div className="flex items-start justify-between gap-3">
                   {/* Left: chip + url */}
                   <div className="min-w-0 flex-1">
-                    <div className="mb-1 flex items-center gap-2">
+                    <div className="mb-1.5 flex items-center gap-2">
                       <StatusChip blockType={event.blockType} />
                     </div>
                     <p
                       className="truncate text-sm font-medium"
-                      style={{ color: 'var(--wld-gray-0)' }}
+                      style={{ color: '#181818' }}
                       title={event.targetUrl}
                     >
                       <span aria-hidden="true">{cachedTruncateUrl(event.targetUrl)}</span>
@@ -220,7 +211,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                     </p>
                     <p
                       className="mt-0.5 text-xs"
-                      style={{ color: 'var(--wld-gray-400)' }}
+                      style={{ color: '#717680' }}
                       title={event.nodeWallet}
                     >
                       <span aria-hidden="true">{truncateWallet(event.nodeWallet)}</span>
@@ -233,7 +224,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents }: B
                     dateTime={cachedTsIso(event.timestamp)}
                     title={cachedTsLocale(event.timestamp)}
                     className="flex-shrink-0 pt-0.5 text-xs"
-                    style={{ color: 'var(--wld-gray-400)' }}
+                    style={{ color: '#717680' }}
                   >
                     {timeAgo(event.timestamp)}
                   </time>

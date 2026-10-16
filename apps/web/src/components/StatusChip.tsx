@@ -12,38 +12,38 @@ interface StatusChipProps {
 const CHIP_CONFIG: Record<string, { label: string; bg: string; text: string }> = {
   dns_poisoning: {
     label: 'DNS Poisoning',
-    bg: 'var(--wld-warning-100)',
-    text: 'var(--wld-warning-800)',
+    bg: '#fff6e6',
+    text: '#996800',
   },
   tcp_rst: {
     label: 'TCP Reset',
-    bg: 'var(--wld-error-100)',
-    text: 'var(--wld-error-700)',
+    bg: '#fee9e7',
+    text: '#c2200a',
   },
   http_block: {
     label: 'HTTP Block',
-    bg: 'var(--wld-error-100)',
-    text: 'var(--wld-error-700)',
+    bg: '#fee9e7',
+    text: '#c2200a',
   },
   full_unreachable: {
     label: 'Unreachable',
-    bg: 'var(--wld-error-100)',
-    text: 'var(--wld-error-700)',
+    bg: '#fee9e7',
+    text: '#c2200a',
   },
   reachable: {
     label: 'Reachable',
-    bg: 'var(--wld-success-100)',
-    text: 'var(--wld-success-800)',
+    bg: '#e6f9ec',
+    text: '#00741d',
   },
 }
 
 export default memo(function StatusChip({ blockType, className = '' }: StatusChipProps) {
   const key = blockType ?? 'reachable'
-  const config = CHIP_CONFIG[key] ?? CHIP_CONFIG.reachable
+  const config = CHIP_CONFIG[key] ?? CHIP_CONFIG.reachable!
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${className}`}
+      className={`inline-flex h-7 items-center rounded-full px-3 text-[13px] font-medium ${className}`}
       style={{ backgroundColor: config.bg, color: config.text }}
     >
       {config.label}
