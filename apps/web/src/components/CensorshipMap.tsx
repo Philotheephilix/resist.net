@@ -534,6 +534,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       mounted = false
       localMap?.remove()
       localMap = null
+      mapRef.current = null
     }
   }, [])
 
@@ -602,6 +603,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
       // were already in the map (IDs are the same but the Leaflet layer is gone).
       markerMapRef.current.clear()
       markersLayerRef.current = null
+      hasEverHadEventsRef.current = false
     }
   }, [])
 

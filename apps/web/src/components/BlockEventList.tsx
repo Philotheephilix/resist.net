@@ -91,14 +91,20 @@ interface BlockEventListProps {
   sortedEvents?: ProbeResultRow[]
 }
 
+const timeAgoCache = new Map<string, string>()
 function timeAgo(ts: number): string {
-  const diffMs = Date.now() - ts
+  const bucket = Math.floor(Date.now() / 60_000)
+  const key = `${ts}:${bucket}`
+  let s = timeAgoCache.get(key)
+  if (s !== undefined) return s
+  const diffMs = bucket * 60_000 - ts
   const mins = Math.floor(diffMs / 60_000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.floor(hrs / 24)}d ago`
+  if (mins < 1) s = 'just now'
+  else if (mins < 60) s = `${mins}m ago`
+  else { const hrs = Math.floor(mins / 60); s = hrs < 24 ? `${hrs}h ago` : `${Math.floor(hrs / 24)}d ago` }
+  if (timeAgoCache.size >= URL_CACHE_MAX) timeAgoCache.delete(timeAgoCache.keys().next().value!)
+  timeAgoCache.set(key, s)
+  return s
 }
 
 function truncateWallet(wallet: string): string {

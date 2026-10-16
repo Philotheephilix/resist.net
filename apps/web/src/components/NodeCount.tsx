@@ -114,7 +114,7 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
 
       <div
         role="img"
-        className={`flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs${loading ? '' : ' font-medium'}`}
+        className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium"
         style={{
           background: 'rgba(255,255,255,0.07)',
           border: '1px solid rgba(255,255,255,0.10)',

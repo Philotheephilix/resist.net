@@ -152,7 +152,7 @@ export default function HomePage() {
             }
             aria-label={sidebarOpen ? 'Hide events panel' : 'Show events panel'}
             aria-expanded={sidebarOpen}
-            aria-controls="events-panel"
+            aria-controls={sidebarOpen ? 'events-panel' : undefined}
           >
             {sidebarOpen ? 'Hide' : 'Events'}
           </button>
@@ -236,9 +236,6 @@ export default function HomePage() {
 
           {/* Event count badge */}
           <div
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
             className={!loading && events.length > 0
               ? 'absolute bottom-5 left-5 rounded-full px-4 py-2 text-xs font-semibold'
               : undefined}
@@ -260,9 +257,6 @@ export default function HomePage() {
               whiteSpace: 'nowrap',
               border: 0,
             }}
-            aria-label={!loading && events.length > 0
-              ? `${blockedCount} blocked, ${reachableCount} reachable`
-              : undefined}
           >
             {!loading && events.length > 0
               ? <>{blockedCount} blocked<span aria-hidden="true" style={{ color: 'rgba(255,255,255,0.25)' }}> · </span>{reachableCount} reachable</>

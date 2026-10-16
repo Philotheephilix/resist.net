@@ -28,11 +28,10 @@ export function useBlockEvents(filters: BlockEventFilters) {
   const setStableEvents = useCallback((next: ProbeResultRow[]) => {
     const prev = prevEventsRef.current
     if (next.length === 0 && prev.length === 0) return
-    if (
-      next.length === prev.length &&
-      next.length > 0 &&
-      next.every((e, i) => e.id === prev[i]!.id)
-    ) return
+    if (next.length === prev.length && next.length > 0) {
+      const prevIds = new Set(prev.map(e => e.id))
+      if (next.every(e => prevIds.has(e.id))) return
+    }
     prevEventsRef.current = next
     setEvents(next)
   }, [])

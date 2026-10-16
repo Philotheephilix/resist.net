@@ -109,6 +109,7 @@ function checkRateLimit(ip: string): boolean {
         if (oldestKey !== undefined) rateLimitMap.delete(oldestKey)
       }
     }
+    rateLimitMap.delete(ip)
     rateLimitMap.set(ip, { count: 1, windowStart: now })
     return true
   }
@@ -125,8 +126,8 @@ export async function GET(request: NextRequest) {
   const connIp = (request as any).ip ?? ''
   const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
   const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
-  const ip = validatedRaw || validatedConn || '127.0.0.1'
-  const isLoopback = ip === '127.0.0.1' || ip === '::1'
+  const ip = validatedRaw || validatedConn || 'unknown'
+  const isLoopback = (validatedConn === '127.0.0.1' || validatedConn === '::1') && !validatedRaw
   if (!isLoopback && !checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,

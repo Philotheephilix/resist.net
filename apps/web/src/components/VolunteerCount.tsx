@@ -10,6 +10,7 @@ interface VolunteerCountProps {
 
 export default function VolunteerCount({ externalVolunteerCount }: VolunteerCountProps = {}) {
   const [count, setCount] = useState<number | null>(null)
+  const [isResolved, setIsResolved] = useState(false)
   const liveRef = useRef<HTMLDivElement>(null)
   const prevCountRef = useRef<number | null>(null)
 
@@ -23,6 +24,7 @@ export default function VolunteerCount({ externalVolunteerCount }: VolunteerCoun
     }
     prevCountRef.current = newCount
     setCount(newCount)
+    setIsResolved(true)
   }, [externalVolunteerCount])
 
   useEffect(() => {
@@ -50,6 +52,7 @@ export default function VolunteerCount({ externalVolunteerCount }: VolunteerCoun
             }
             prevCountRef.current = newCount
             setCount(newCount)
+            setIsResolved(true)
           }
         }
       } catch (err) {
@@ -66,7 +69,17 @@ export default function VolunteerCount({ externalVolunteerCount }: VolunteerCoun
     }
   }, [externalVolunteerCount])
 
-  if (count === null) return null
+  if (count === null) {
+    if (isResolved) return null
+    return (
+      <div
+        className="flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs"
+        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)' }}
+      >
+        <span className="inline-block h-1.5 w-24 rounded-full skeleton-shimmer" />
+      </div>
+    )
+  }
 
   return (
     <>

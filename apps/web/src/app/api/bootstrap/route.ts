@@ -21,6 +21,7 @@ function checkRateLimit(ip: string): boolean {
         if (oldestKey !== undefined) rateLimitMap.delete(oldestKey)
       }
     }
+    rateLimitMap.delete(ip)
     rateLimitMap.set(ip, { count: 1, windowStart: now })
     return true
   }
