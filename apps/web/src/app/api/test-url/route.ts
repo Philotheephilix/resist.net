@@ -1,0 +1,149 @@
+import { NextRequest } from 'next/server'
+
+export interface TestUrlRequest {
+  url: string
+  method: 'HTTP' | 'DNS' | 'TCP'
+  region?: string
+}
+
+export interface TestUrlResult {
+  url: string
+  method: 'HTTP' | 'DNS' | 'TCP'
+  reachable: boolean
+  statusCode?: number
+  latencyMs?: number
+  errorType?: 'dns_poisoning' | 'tcp_rst' | 'http_block' | 'full_unreachable' | null
+  errorDetail?: string
+  checkedAt: number
+  region: string
+}
+
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
+const VALID_METHODS = new Set(['HTTP', 'DNS', 'TCP'])
+
+// Dev fixture — returns a deterministic simulated result without making real
+// outbound connections. Only active when USE_MOCK_DATA=true in development.
+function devFixtureResult(url: string, method: string, region: string): TestUrlResult {
+  const seed = url.length + url.charCodeAt(0)
+  const reachable = seed % 3 !== 0
+  const latencyMs = 80 + (seed % 400)
+  let statusCode: number | undefined
+  let errorType: TestUrlResult['errorType'] = null
+
+  if (method === 'HTTP') {
+    statusCode = reachable ? 200 : seed % 2 === 0 ? 403 : 503
+    if (!reachable) errorType = seed % 2 === 0 ? 'http_block' : 'tcp_rst'
+  } else if (method === 'DNS') {
+    if (!reachable) errorType = 'dns_poisoning'
+  } else {
+    if (!reachable) errorType = seed % 2 === 0 ? 'tcp_rst' : 'full_unreachable'
+  }
+
+  return {
+    url,
+    method: method as TestUrlResult['method'],
+    reachable,
+    statusCode,
+    latencyMs,
+    errorType,
+    errorDetail: reachable ? undefined : `Simulated ${errorType} for dev fixture`,
+    checkedAt: Date.now(),
+    region,
+  }
+}
+
+async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult> {
+  const start = Date.now()
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10_000)
+    const res = await fetch(url, {
+      method: 'HEAD',
+      signal: controller.signal,
+      redirect: 'follow',
+    })
+    clearTimeout(timeout)
+    const latencyMs = Date.now() - start
+    const reachable = res.status < 500
+    let errorType: TestUrlResult['errorType'] = null
+    if (!reachable) {
+      errorType = res.status === 403 || res.status === 451 ? 'http_block' : 'full_unreachable'
+    }
+    return { url, method: 'HTTP', reachable, statusCode: res.status, latencyMs, errorType, checkedAt: Date.now(), region }
+  } catch (err) {
+    const latencyMs = Date.now() - start
+    const msg = err instanceof Error ? err.message : String(err)
+    let errorType: TestUrlResult['errorType'] = 'full_unreachable'
+    if (msg.toLowerCase().includes('dns') || msg.toLowerCase().includes('enotfound')) {
+      errorType = 'dns_poisoning'
+    } else if (msg.toLowerCase().includes('reset') || msg.toLowerCase().includes('econnreset')) {
+      errorType = 'tcp_rst'
+    }
+    return { url, method: 'HTTP', reachable: false, latencyMs, errorType, errorDetail: msg, checkedAt: Date.now(), region }
+  }
+}
+
+export async function POST(request: NextRequest) {
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return Response.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return Response.json({ error: 'Body must be a JSON object' }, { status: 400 })
+  }
+
+  const { url, method = 'HTTP', region = 'Auto' } = body as Record<string, unknown>
+
+  if (typeof url !== 'string' || !url.trim()) {
+    return Response.json({ error: 'url is required' }, { status: 400 })
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(url.trim())
+  } catch {
+    return Response.json({ error: 'url must be a valid absolute URL' }, { status: 400 })
+  }
+
+  if (!ALLOWED_PROTOCOLS.has(parsed.protocol)) {
+    return Response.json({ error: 'url must use http or https' }, { status: 400 })
+  }
+
+  const methodStr = typeof method === 'string' ? method.toUpperCase() : 'HTTP'
+  if (!VALID_METHODS.has(methodStr)) {
+    return Response.json({ error: 'method must be HTTP, DNS, or TCP' }, { status: 400 })
+  }
+
+  const regionStr = typeof region === 'string' && region.trim() ? region.trim() : 'Auto'
+
+  // Dev mode: return fixture without making real outbound requests
+  if (process.env['NODE_ENV'] === 'development' && process.env['USE_MOCK_DATA'] === 'true') {
+    const result = devFixtureResult(parsed.href, methodStr, regionStr)
+    return Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
+  }
+
+  // Production / non-mock: perform real probe (HTTP only for now; DNS/TCP require
+  // server-side infrastructure that routes through volunteer nodes in production)
+  if (methodStr === 'HTTP') {
+    const result = await probeHttpUrl(parsed.href, regionStr)
+    return Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
+  }
+
+  // DNS and TCP probes require volunteer node infrastructure — not yet available
+  // in this deployment tier. Return a meaningful error rather than silently failing.
+  return Response.json(
+    {
+      url: parsed.href,
+      method: methodStr,
+      reachable: null,
+      errorDetail: `${methodStr} probing requires volunteer node infrastructure (coming soon)`,
+      checkedAt: Date.now(),
+      region: regionStr,
+      notSupported: true,
+    },
+    { status: 202 }
+  )
+}

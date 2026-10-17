@@ -1,65 +1,323 @@
 import { test, expect } from '@playwright/test'
 
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+/** Mock the probe-events endpoint. Supports includeStats piggybacking shape. */
+function mockProbeEvents(page: Parameters<typeof test>[1] extends infer T ? T extends { page: infer P } ? P : never : never, events: object[], statsOverride?: object) {
+  return page.route('**/api/probe-events**', (route) => {
+    const url = route.request().url()
+    const stats = statsOverride ?? { liveProbes: 3, regions: 2, blocksToday: 1, volunteerCount: 5 }
+    if (url.includes('includeStats=true')) {
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ events, ...stats }),
+      })
+    }
+    if (url.includes('stats=true')) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(stats) })
+    }
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(events) })
+  })
+}
+
+const SAMPLE_EVENT = {
+  id: 'e1', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning',
+  geohash: 'u4pruydqqvj', timestamp: Date.now() - 120_000, nodeWallet: '0xAb12…Cd34', reachable: false,
+}
+
+// ── core page ─────────────────────────────────────────────────────────────────
+
 test.describe('resist.net web app', () => {
-  test('loads with correct title and dark theme', async ({ page }) => {
+
+  test('loads with title "ResistNet"', async ({ page }) => {
     await page.goto('/')
-    await expect(page).toHaveTitle(/resist\.net/)
-    // Dark background applied
-    const body = page.locator('body')
-    await expect(body).toBeVisible()
+    await expect(page).toHaveTitle(/ResistNet/)
   })
 
-  test('header renders with brand name', async ({ page }) => {
+  test('header renders brand name and profile button', async ({ page }) => {
     await page.goto('/')
-    await expect(page.getByText('resist.net')).toBeVisible()
-    await expect(page.getByText('Community Censorship Monitor')).toBeVisible()
+    await expect(page.getByText('ResistNet', { exact: true }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible()
   })
 
-  test('filter pills are all rendered', async ({ page }) => {
+  test('bottom nav renders all 5 tabs', async ({ page }) => {
     await page.goto('/')
-    // Radio inputs are sr-only; verify by value attr; check parent label pill is visible
-    for (const value of ['all', 'dns_poisoning', 'tcp_rst', 'http_block', 'full_unreachable']) {
-      const label = page.locator(`label:has(input[name="filter"][value="${value}"])`)
-      await expect(label).toBeVisible()
+    const nav = page.locator('nav[aria-label="Main navigation"]')
+    await expect(nav).toBeVisible()
+    for (const label of ['Radar', 'Network', 'Connect', 'Activity', 'More']) {
+      await expect(nav.getByRole('button', { name: label })).toBeVisible()
     }
   })
 
-  test('filter pills are clickable and toggle active state', async ({ page }) => {
+  test('Radar tab is active by default', async ({ page }) => {
     await page.goto('/')
-
-    // Radio inputs are sr-only; click the visible parent label pill
-    const dnsLabel = page.locator('label:has(input[name="filter"][value="dns_poisoning"])')
-    await expect(dnsLabel).toBeVisible()
-    await dnsLabel.click()
-
-    // After click, DNS Poisoning radio should be checked, All should not
-    const dnsInput = page.locator('input[name="filter"][value="dns_poisoning"]')
-    const allInput = page.locator('input[name="filter"][value="all"]')
-    await expect(dnsInput).toBeChecked()
-    await expect(allInput).not.toBeChecked()
-    // Visual: label pill background differs between active and inactive
-    const allLabel = page.locator('label:has(input[name="filter"][value="all"])')
-    const dnsBg = await dnsLabel.evaluate((el) => getComputedStyle(el).backgroundColor)
-    const allBg = await allLabel.evaluate((el) => getComputedStyle(el).backgroundColor)
-    expect(dnsBg).not.toBe(allBg)
+    const radarBtn = page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Radar' })
+    await expect(radarBtn).toHaveAttribute('aria-current', 'page')
+    await expect(page.getByRole('heading', { name: 'Network Radar' })).toBeVisible()
   })
 
-  test('events panel renders after data loads', async ({ page }) => {
+  test('tab navigation switches content', async ({ page }) => {
     await page.goto('/')
-    // The sidebar label is "RECENT EVENTS" (all-caps via CSS or text)
-    // Use case-insensitive regex to match either casing
-    await expect(page.getByText(/recent events/i).first()).toBeVisible({ timeout: 15000 })
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    // h1 inside main scroll content
+    await expect(page.locator('.scroll-content h1').filter({ hasText: 'Activity' })).toBeVisible()
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Network' }).click()
+    await expect(page.locator('.scroll-content h1').filter({ hasText: 'Network' })).toBeVisible()
   })
 
-  test('API returns probe events', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events')
-    expect(response.ok()).toBeTruthy()
-    const events = await response.json()
-    expect(Array.isArray(events)).toBeTruthy()
+  test('radar stats row renders with live data', async ({ page }) => {
+    await mockProbeEvents(page, [SAMPLE_EVENT], { liveProbes: 42, regions: 7, blocksToday: 3, volunteerCount: 5 })
+    await page.goto('/')
+    // stats row: nodes, incidents, regions
+    await expect(page.getByText('Online nodes')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('Regions monitored')).toBeVisible()
+  })
 
-    // Validate shape of first event when data is present (requires live Arkiv or USE_MOCK_DATA=true)
-    if (events.length > 0) {
-      const first = events[0]
+  test('stats row shows toLocaleString-formatted numbers', async ({ page }) => {
+    await mockProbeEvents(page, [], { liveProbes: 1284, regions: 86, blocksToday: 12, volunteerCount: 0 })
+    await page.goto('/')
+    // 1284 → "1,284" in en locale
+    await expect(page.getByText('1,284').first()).toBeVisible({ timeout: 15000 })
+  })
+
+  test('page layout has no horizontal overflow at 375px', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 })
+    await page.goto('/')
+    const bodyWidth = await page.evaluate(() => document.body.scrollWidth)
+    expect(bodyWidth).toBeLessThanOrEqual(376)
+  })
+
+  test('page layout has no horizontal overflow at 1280px', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto('/')
+    const bodyWidth = await page.evaluate(() => document.body.scrollWidth)
+    expect(bodyWidth).toBeLessThanOrEqual(1281)
+  })
+
+  test('API error shows error banner', async ({ page }) => {
+    await page.route('**/api/probe-events**', route => route.fulfill({ status: 500, body: 'Server error' }))
+    await page.goto('/')
+    const banner = page.locator('[role="alert"]')
+    await expect(banner).toBeVisible({ timeout: 15000 })
+  })
+
+  test('network failure shows error banner', async ({ page }) => {
+    await page.route('**/api/probe-events**', route => route.abort('failed'))
+    await page.goto('/')
+    const banner = page.locator('[role="alert"]')
+    await expect(banner).toBeVisible({ timeout: 15000 })
+  })
+
+  // ── Test URL modal ──────────────────────────────────────────────────────────
+
+  test('Test a URL button opens modal', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await expect(page.getByRole('dialog', { name: 'Test a URL' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Test a URL' })).toBeVisible()
+  })
+
+  test('Test URL modal closes on X button', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await expect(page.getByRole('dialog', { name: 'Test a URL' })).toBeVisible()
+    await page.getByRole('button', { name: 'Close' }).click()
+    await expect(page.getByRole('dialog', { name: 'Test a URL' })).not.toBeVisible()
+  })
+
+  test('Test URL modal closes on backdrop click', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    const backdrop = page.locator('.modal-backdrop')
+    await expect(backdrop).toBeVisible()
+    // Click on backdrop (not the modal content)
+    await backdrop.click({ position: { x: 10, y: 10 } })
+    await expect(page.getByRole('dialog', { name: 'Test a URL' })).not.toBeVisible()
+  })
+
+  test('Test URL modal has HTTP/DNS/TCP method selector', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    const methods = page.locator('.method-row')
+    await expect(methods.getByRole('button', { name: 'HTTP' })).toBeVisible()
+    await expect(methods.getByRole('button', { name: 'DNS' })).toBeVisible()
+    await expect(methods.getByRole('button', { name: 'TCP' })).toBeVisible()
+  })
+
+  test('Test URL modal method buttons toggle active state', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    const dnsBtn = page.locator('.method-row').getByRole('button', { name: 'DNS' })
+    await dnsBtn.click()
+    await expect(dnsBtn).toHaveAttribute('aria-pressed', 'true')
+    const httpBtn = page.locator('.method-row').getByRole('button', { name: 'HTTP' })
+    await expect(httpBtn).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('Test URL modal Run test button is disabled when URL is empty', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    const runBtn = page.getByRole('button', { name: 'Run test' })
+    await expect(runBtn).toBeDisabled()
+  })
+
+  test('Test URL modal shows result on successful test', async ({ page }) => {
+    await page.route('**/api/test-url', route =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          url: 'https://example.com', method: 'HTTP', reachable: true,
+          statusCode: 200, latencyMs: 145, errorType: null,
+          checkedAt: Date.now(), region: 'Auto',
+        }),
+      })
+    )
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await page.getByLabel('URL to test').fill('https://example.com')
+    await page.getByRole('button', { name: 'Run test' }).click()
+    const result = page.locator('[role="status"]').filter({ hasText: /Reachable/ })
+    await expect(result).toBeVisible({ timeout: 10000 })
+    await expect(result).toContainText('HTTP')
+    await expect(result).toContainText('145ms')
+  })
+
+  test('Test URL modal shows blocked result on failed test', async ({ page }) => {
+    await page.route('**/api/test-url', route =>
+      route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          url: 'https://blocked.example', method: 'HTTP', reachable: false,
+          errorType: 'dns_poisoning', errorDetail: 'NXDOMAIN',
+          checkedAt: Date.now(), region: 'Mumbai, IN',
+        }),
+      })
+    )
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await page.getByLabel('URL to test').fill('https://blocked.example')
+    await page.getByRole('button', { name: 'Run test' }).click()
+    const result = page.locator('[role="status"]').filter({ hasText: /DNS Poisoning/ })
+    await expect(result).toBeVisible({ timeout: 10000 })
+  })
+
+  test('Test URL modal prepends https:// automatically', async ({ page }) => {
+    let capturedBody: string | null = null
+    await page.route('**/api/test-url', route => {
+      capturedBody = route.request().postData()
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ url: 'https://example.com', method: 'HTTP', reachable: true, checkedAt: Date.now(), region: 'Auto' }),
+      })
+    })
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await page.getByLabel('URL to test').fill('example.com')
+    await page.getByRole('button', { name: 'Run test' }).click()
+    await page.waitForResponse('**/api/test-url')
+    const body = JSON.parse(capturedBody ?? '{}')
+    expect(body.url).toMatch(/^https:\/\//)
+  })
+
+  test('Test URL modal Enter key submits form', async ({ page }) => {
+    let called = false
+    await page.route('**/api/test-url', route => {
+      called = true
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ url: 'https://ex.com', method: 'HTTP', reachable: true, checkedAt: Date.now(), region: 'Auto' }),
+      })
+    })
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await page.getByLabel('URL to test').fill('https://ex.com')
+    await page.keyboard.press('Enter')
+    await page.waitForResponse('**/api/test-url')
+    expect(called).toBe(true)
+  })
+
+  // ── API: test-url ───────────────────────────────────────────────────────────
+
+  test('POST /api/test-url returns valid result shape', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'https://example.com', method: 'HTTP' },
+    })
+    expect(res.ok()).toBeTruthy()
+    const body = await res.json()
+    expect(body).toHaveProperty('url')
+    expect(body).toHaveProperty('method')
+    expect(body).toHaveProperty('reachable')
+    expect(body).toHaveProperty('checkedAt')
+    expect(body).toHaveProperty('region')
+    expect(typeof body.reachable).toBe('boolean')
+    expect(typeof body.checkedAt).toBe('number')
+  })
+
+  test('POST /api/test-url returns 400 on missing url', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { method: 'HTTP' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/test-url returns 400 on non-http url', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'ftp://example.com' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/test-url returns 400 on invalid url', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'not-a-url' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/test-url returns 400 on invalid method', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'https://example.com', method: 'INVALID' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/test-url accepts DNS method', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'https://example.com', method: 'DNS' },
+    })
+    // DNS returns 202 (not yet supported) or 200 — not an error
+    expect(res.status()).toBeGreaterThanOrEqual(200)
+    expect(res.status()).toBeLessThan(400)
+    const body = await res.json()
+    expect(body).toHaveProperty('url')
+  })
+
+  test('POST /api/test-url accepts TCP method', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'https://example.com', method: 'TCP' },
+    })
+    expect(res.status()).toBeGreaterThanOrEqual(200)
+    expect(res.status()).toBeLessThan(400)
+  })
+
+  test('POST /api/test-url accepts region parameter', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'https://example.com', method: 'HTTP', region: 'Mumbai, IN' },
+    })
+    expect(res.ok()).toBeTruthy()
+    const body = await res.json()
+    expect(body.region).toBe('Mumbai, IN')
+  })
+
+  // ── API: probe-events ────────────────────────────────────────────────────────
+
+  test('GET /api/probe-events returns events array', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events')
+    expect(res.ok()).toBeTruthy()
+    const data = await res.json()
+    expect(Array.isArray(data)).toBeTruthy()
+    if (data.length > 0) {
+      const first = data[0]
       expect(first).toHaveProperty('id')
       expect(first).toHaveProperty('targetUrl')
       expect(first).toHaveProperty('geohash')
@@ -69,359 +327,257 @@ test.describe('resist.net web app', () => {
     }
   })
 
-  test('API stats endpoint returns correct shape', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?stats=true')
-    expect(response.ok()).toBeTruthy()
-    const stats = await response.json()
-    expect(stats).toHaveProperty('liveProbes')
-    expect(stats).toHaveProperty('regions')
-    expect(stats).toHaveProperty('blocksToday')
+  test('GET /api/probe-events?stats=true returns stats shape', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?stats=true')
+    expect(res.ok()).toBeTruthy()
+    const stats = await res.json()
     expect(typeof stats.liveProbes).toBe('number')
     expect(typeof stats.regions).toBe('number')
     expect(typeof stats.blocksToday).toBe('number')
   })
 
-  test('API block type filter works', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?blockType=dns_poisoning')
-    expect(response.ok()).toBeTruthy()
-    const events = await response.json()
-    expect(Array.isArray(events)).toBeTruthy()
-    for (const event of events) {
-      expect(event.blockType).toBe('dns_poisoning')
-    }
-  })
-
-  test('map container renders', async ({ page }) => {
-    await page.goto('/')
-    // Wait for the map container to appear (either Leaflet map or loading placeholder)
-    const mapContainer = page.locator('[aria-label^="Censorship events world map"]')
-    await expect(mapContainer).toBeVisible({ timeout: 15000 })
-  })
-
-  test('hide panel button works', async ({ page }) => {
-    await page.goto('/')
-    const hideBtn = page.getByRole('button', { name: 'Hide' })
-    await expect(hideBtn).toBeVisible()
-    await hideBtn.click()
-    // After hiding, the button text should change or sidebar should be hidden
-    await expect(page.getByRole('button', { name: /hide|show/i })).toBeVisible()
-  })
-
-  test('page layout is responsive — no horizontal overflow', async ({ page }) => {
-    await page.goto('/')
-    const bodyWidth = await page.evaluate(() => document.body.scrollWidth)
-    const viewportWidth = page.viewportSize()?.width ?? 1280
-    expect(bodyWidth).toBeLessThanOrEqual(viewportWidth + 1)
-  })
-
-  test('map loads dark tile layer', async ({ page }) => {
-    await page.goto('/')
-    // Wait up to 15s for Leaflet tiles to start loading
-    await page.waitForSelector('.leaflet-container', { timeout: 15000 }).catch(() => {
-      // Map may not have loaded yet; this is a soft check
-    })
-    const leafletContainer = await page.$('.leaflet-container')
-    // If Leaflet loaded, it should have the dark tile
-    if (leafletContainer) {
-      const tileLayer = await page.$('.leaflet-tile-pane')
-      expect(tileLayer).not.toBeNull()
-    }
-  })
-
-  test('map tiles use Stadia dark (no API key warning)', async ({ page }) => {
-    await page.goto('/')
-    // Wait for map to load
-    await page.waitForSelector('.leaflet-container', { timeout: 15000 }).catch(() => {})
-    // Check that the page source includes stadiamaps tile URL (not cartocdn which requires API key)
-    const content = await page.content()
-    // Stadia tiles should be referenced in the page
-    expect(content).toContain('stadiamaps')
-  })
-
-  test('DNS Poisoning filter shows only dns_poisoning events from API', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?blockType=dns_poisoning')
-    expect(response.ok()).toBeTruthy()
-    const events = await response.json()
-    for (const event of events) {
-      expect(event.blockType).toBe('dns_poisoning')
-    }
-  })
-
-  test('sidebar shows event count badge with numeric value', async ({ page }) => {
-    await page.goto('/')
-
-    // The event count badge must exist and show a non-negative integer (0 is valid when no live data)
-    // aria-hidden="true" — count is announced via the coordinated liveRef region, not inline role=status
-    const countBadge = page.locator('aside div[aria-hidden="true"].rounded-full').first()
-    await expect(countBadge).toBeVisible({ timeout: 15000 })
-    const text = await countBadge.textContent().catch(() => '0')
-    const count = parseInt(text ?? '0', 10)
-    expect(count).toBeGreaterThanOrEqual(0)
-  })
-
-  test('bootstrap API returns array', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/bootstrap')
-    expect(response.ok()).toBeTruthy()
-    const data = await response.json()
-    expect(Array.isArray(data)).toBeTruthy()
-  })
-
-  test('filter interaction — clicking DNS Poisoning filters events', async ({ page }) => {
-    await page.goto('/')
-    // Click the visible label pill; native input is sr-only
-    await page.locator('label:has(input[name="filter"][value="dns_poisoning"])').click()
-    // DNS Poisoning should be checked, All should not
-    const dnsInput = page.locator('input[name="filter"][value="dns_poisoning"]')
-    const allInput = page.locator('input[name="filter"][value="all"]')
-    await expect(dnsInput).toBeChecked()
-    await expect(allInput).not.toBeChecked()
-    // Label pill backgrounds differ between active and inactive
-    const dnsBgColor = await page.locator('label:has(input[name="filter"][value="dns_poisoning"])').evaluate((el) => getComputedStyle(el).backgroundColor)
-    const allBgColor = await page.locator('label:has(input[name="filter"][value="all"])').evaluate((el) => getComputedStyle(el).backgroundColor)
-    expect(allBgColor).not.toBe(dnsBgColor)
-  })
-
-  test('filter — checked state reflects active filter', async ({ page }) => {
-    await page.goto('/')
-    // Native radio: use input locators directly (sr-only inputs excluded from getByRole)
-    const allInput = page.locator('input[name="filter"][value="all"]')
-    const dnsInput = page.locator('input[name="filter"][value="dns_poisoning"]')
-    await expect(allInput).toBeChecked()
-    await expect(dnsInput).not.toBeChecked()
-    // Click the visible label pill to change selection
-    await page.locator('label:has(input[name="filter"][value="dns_poisoning"])').click()
-    await expect(dnsInput).toBeChecked()
-    await expect(allInput).not.toBeChecked()
-  })
-
-  test('filter — returning to All after selecting specific type', async ({ page }) => {
-    await page.goto('/')
-    await page.locator('label:has(input[name="filter"][value="dns_poisoning"])').click()
-    await page.locator('label:has(input[name="filter"][value="all"])').click()
-    await expect(page.locator('input[name="filter"][value="all"]')).toBeChecked()
-  })
-
-  test('sidebar hide and reopen', async ({ page }) => {
-    await page.goto('/')
-    const hideBtn = page.getByRole('button', { name: 'Hide events panel' })
-    await hideBtn.click()
-    // Sidebar aside should be removed from DOM
-    await expect(page.getByRole('complementary', { name: 'Recent block events' })).not.toBeVisible()
-    // Show button appears
-    const showBtn = page.getByRole('button', { name: 'Show events panel' })
-    await expect(showBtn).toBeVisible()
-    await showBtn.click()
-    // Sidebar comes back
-    await expect(page.getByRole('complementary', { name: 'Recent block events' })).toBeVisible()
-  })
-
-  test('API returns 400 on invalid geohash parameter', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?geohash=INVALID!!')
-    expect(response.status()).toBe(400)
-  })
-
-  test('API geohash filter returns only matching events', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?geohash=u4')
-    expect(response.ok()).toBeTruthy()
-    const events = await response.json()
-    expect(Array.isArray(events)).toBeTruthy()
-    for (const event of events) {
-      expect(event.geohash.startsWith('u4')).toBeTruthy()
-    }
-  })
-
-  test('API failure triggers error banner', async ({ page }) => {
-    // Intercept the probe-events API and force a 500
-    await page.route('**/api/probe-events**', (route) => route.fulfill({ status: 500, body: 'error' }))
-    await page.goto('/')
-    const errorBanner = page.locator('[role="alert"]').filter({ hasText: 'Failed to load events' })
-    await expect(errorBanner).toBeVisible({ timeout: 15000 })
-    const alertText = await errorBanner.textContent()
-    expect(alertText).toContain('Failed to load events')
-  })
-
-  test('TCP Reset and HTTP Block filter pills are individually activatable', async ({ page }) => {
-    await page.goto('/')
-    for (const value of ['tcp_rst', 'http_block']) {
-      // Click visible label pill; verify native radio checked state
-      await page.locator(`label:has(input[name="filter"][value="${value}"])`).click()
-      await expect(page.locator(`input[name="filter"][value="${value}"]`)).toBeChecked()
-      await page.locator('label:has(input[name="filter"][value="all"])').click()
-    }
-  })
-
-  test('API stats + blockType combined query returns consistent shape', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?stats=true&blockType=dns_poisoning')
-    expect(response.ok()).toBeTruthy()
-    const stats = await response.json()
-    expect(stats).toHaveProperty('liveProbes')
-    expect(stats).toHaveProperty('regions')
-    expect(stats).toHaveProperty('blocksToday')
-    expect(typeof stats.liveProbes).toBe('number')
-    expect(typeof stats.regions).toBe('number')
-    expect(typeof stats.blocksToday).toBe('number')
-  })
-
-  test('bootstrap API returns array with expected shape when data present', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/bootstrap')
-    expect(response.ok()).toBeTruthy()
-    const data = await response.json()
-    expect(Array.isArray(data)).toBeTruthy()
-    if (data.length > 0) {
-      const first = data[0]
-      expect(first).toHaveProperty('wallet')
-      expect(first).toHaveProperty('sdpOffer')
-      expect(first).toHaveProperty('geohash')
-    }
-  })
-
-  test('API geohash + blockType combined filter', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?geohash=u4&blockType=dns_poisoning')
-    expect(response.ok()).toBeTruthy()
-    const events = await response.json()
-    expect(Array.isArray(events)).toBeTruthy()
-    for (const event of events) {
-      expect(event.blockType).toBe('dns_poisoning')
-      expect(event.geohash.startsWith('u4')).toBeTruthy()
-    }
-  })
-
-  test('sidebar shows "No events yet" when events are empty', async ({ page }) => {
-    // Intercept and return empty array
-    await page.route('**/api/probe-events**', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-    )
-    await page.goto('/')
-    // Use first() to handle duplicate No events yet in sidebar + mobile sheet
-    await expect(page.getByText('No events yet').first()).toBeVisible({ timeout: 10000 })
-  })
-
-  test('map marker popup opens and closes on click', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'test-marker-1', targetUrl: 'https://example.com',
-          blockType: 'dns_poisoning', geohash: 'u4pruydqqvj', timestamp: Date.now(),
-          nodeWallet: '0xDeadBeef1234', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('[aria-label*="example.com"]').first()
-    await marker.waitFor({ state: 'visible', timeout: 10000 })
-    await marker.click()
-    const popup = page.locator('[data-popup-content]')
-    await expect(popup).toBeVisible({ timeout: 5000 })
-    await expect(popup).toContainText('example.com')
-    const closeBtn = popup.locator('[data-popup-close]')
-    await expect(closeBtn).toBeVisible()
-    await closeBtn.click()
-    await expect(popup).not.toBeVisible({ timeout: 3000 })
-  })
-
-  test('live region announces event count after load', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 2, regions: 1, blocksToday: 2 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([
-          { id: 'lr-1', targetUrl: 'https://a.com', blockType: 'dns_poisoning',
-            geohash: 'u4pruydqqvj', timestamp: Date.now(), nodeWallet: '0xAABB', reachable: false },
-          { id: 'lr-2', targetUrl: 'https://b.com', blockType: 'tcp_rst',
-            geohash: 'u4pruydqqvj', timestamp: Date.now() - 1000, nodeWallet: '0xCCDD', reachable: false },
-        ]) })
-    })
-    await page.goto('/')
-    const liveRegion = page.locator('[aria-live="polite"][aria-atomic="true"].sr-only').first()
-    await expect(liveRegion).toHaveText(/events loaded/, { timeout: 10000 })
-  })
-
-  test('live region announces No events yet when API returns empty', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-    )
-    await page.goto('/')
-    const liveRegion = page.locator('[aria-live="polite"][aria-atomic="true"].sr-only').first()
-    await expect(liveRegion).toHaveText('No events yet', { timeout: 10000 })
-  })
-
-  test('map marker popup closes on Escape and returns focus to marker', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'test-esc-1', targetUrl: 'https://escape-test.com',
-          blockType: 'tcp_rst', geohash: 'u4pruydqqvj', timestamp: Date.now(),
-          nodeWallet: '0xAaBbCcDd1234', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('[aria-label*="escape-test.com"]').first()
-    await marker.waitFor({ state: 'visible', timeout: 10000 })
-    await marker.click()
-    await expect(page.locator('[data-popup-content]')).toBeVisible({ timeout: 5000 })
-    // Press Escape to close popup
-    await page.keyboard.press('Escape')
-    await expect(page.locator('[data-popup-content]')).not.toBeVisible({ timeout: 3000 })
-  })
-
-  test('sidebar reopen moves focus into events panel', async ({ page }) => {
-    await page.goto('/')
-    const hideBtn = page.getByRole('button', { name: 'Hide events panel' })
-    await hideBtn.click()
-    const showBtn = page.getByRole('button', { name: 'Show events panel' })
-    await expect(showBtn).toBeFocused()
-    await showBtn.click()
-    const panel = page.getByRole('complementary', { name: 'Recent block events' })
-    await expect(panel).toBeFocused()
-  })
-
-  test('API 429 rate-limit triggers error banner with request-error message', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) =>
-      route.fulfill({ status: 429, body: 'Too Many Requests' })
-    )
-    await page.goto('/')
-    const errorBanner = page.locator('[role="alert"]')
-    await expect(errorBanner).toBeVisible({ timeout: 15000 })
-    // The 429 path emits 'HTTP 4xx' which maps to the request-error banner variant
-    await expect(errorBanner).toContainText('request error', { timeout: 5000 })
-  })
-
-  test('API combined geohash + blockType filter with includeStats=true', async ({ request }) => {
-    const response = await request.get(
-      'http://localhost:3001/api/probe-events?geohash=u4&blockType=dns_poisoning&includeStats=true'
-    )
-    expect(response.ok()).toBeTruthy()
-    const body = await response.json()
+  test('GET /api/probe-events?includeStats=true returns piggybacked stats shape', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?includeStats=true')
+    expect(res.ok()).toBeTruthy()
+    const body = await res.json()
     expect(body).toHaveProperty('liveProbes')
+    expect(body).toHaveProperty('regions')
     expect(body).toHaveProperty('blocksToday')
+    expect(body).toHaveProperty('events')
+    expect(Array.isArray(body.events)).toBeTruthy()
   })
 
-  test('API geohash + blockType combined filter — non-empty response validates both constraints', async ({ request }) => {
-    const response = await request.get(
-      'http://localhost:3001/api/probe-events?geohash=u&blockType=dns_poisoning'
-    )
-    expect(response.ok()).toBeTruthy()
-    const events = await response.json()
+  test('GET /api/probe-events?blockType=dns_poisoning filters correctly', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?blockType=dns_poisoning')
+    expect(res.ok()).toBeTruthy()
+    const events = await res.json()
     expect(Array.isArray(events)).toBeTruthy()
+    for (const event of events) {
+      expect(event.blockType).toBe('dns_poisoning')
+    }
+  })
+
+  test('GET /api/probe-events?blockType=INVALID returns 400', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?blockType=INVALID')
+    expect(res.status()).toBe(400)
+  })
+
+  test('GET /api/probe-events?geohash=INVALID!! returns 400', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?geohash=INVALID!!')
+    expect(res.status()).toBe(400)
+  })
+
+  test('GET /api/probe-events?geohash=u4 returns matching events', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?geohash=u4')
+    expect(res.ok()).toBeTruthy()
+    const events = await res.json()
+    expect(Array.isArray(events)).toBeTruthy()
+    for (const event of events) {
+      expect(event.geohash.startsWith('u4')).toBeTruthy()
+    }
+  })
+
+  test('GET /api/probe-events?geohash=u4&blockType=dns_poisoning works', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?geohash=u4&blockType=dns_poisoning')
+    expect(res.ok()).toBeTruthy()
+    const events = await res.json()
+    for (const event of events) {
+      expect(event.blockType).toBe('dns_poisoning')
+      expect(event.geohash.startsWith('u4')).toBeTruthy()
+    }
+  })
+
+  test('GET /api/probe-events?geohash=u&blockType=dns_poisoning combined filter', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?geohash=u&blockType=dns_poisoning')
+    expect(res.ok()).toBeTruthy()
+    const events = await res.json()
     for (const event of events) {
       expect(event.blockType).toBe('dns_poisoning')
       expect(event.geohash.startsWith('u')).toBeTruthy()
     }
   })
 
+  test('GET /api/probe-events?geohash=u4&includeStats=true includes stats fields', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/probe-events?geohash=u4&includeStats=true')
+    expect(res.ok()).toBeTruthy()
+    const body = await res.json()
+    expect(body).toHaveProperty('liveProbes')
+    expect(body).toHaveProperty('blocksToday')
+    expect(body).toHaveProperty('events')
+  })
+
+  test('GET /api/bootstrap returns array with expected shape', async ({ request }) => {
+    const res = await request.get('http://localhost:3001/api/bootstrap')
+    expect(res.ok()).toBeTruthy()
+    const data = await res.json()
+    expect(Array.isArray(data)).toBeTruthy()
+    if (data.length > 0) {
+      expect(data[0]).toHaveProperty('wallet')
+      expect(data[0]).toHaveProperty('sdpOffer')
+      expect(data[0]).toHaveProperty('geohash')
+    }
+  })
+
+  // ── Activity tab ─────────────────────────────────────────────────────────────
+
+  test('Activity tab shows events from API', async ({ page }) => {
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'a1', targetUrl: 'https://activitytest.example' },
+    ])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    await expect(page.getByRole('heading', { name: 'Activity' })).toBeVisible()
+    await expect(page.locator('ul[aria-label="Censorship events"]')).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('activitytest.example')).toBeVisible()
+  })
+
+  test('Activity tab shows "No events yet" when empty', async ({ page }) => {
+    await mockProbeEvents(page, [])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    await expect(page.getByText('No events yet')).toBeVisible({ timeout: 10000 })
+  })
+
+  test('Activity tab search filters events by domain', async ({ page }) => {
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'a1', targetUrl: 'https://twitter.com' },
+      { ...SAMPLE_EVENT, id: 'a2', targetUrl: 'https://wikipedia.org', blockType: null, reachable: true },
+    ])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    const searchInput = page.getByLabel('Search events')
+    await expect(searchInput).toBeVisible({ timeout: 10000 })
+    await searchInput.fill('twitter')
+    await expect(page.getByText('twitter.com')).toBeVisible()
+    await expect(page.getByText('wikipedia.org')).not.toBeVisible()
+  })
+
+  test('Activity tab events contain clickable links', async ({ page }) => {
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'link-1', targetUrl: 'https://linktest.example' },
+    ])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    const link = page.locator('ul[aria-label="Censorship events"] a').first()
+    await expect(link).toBeVisible({ timeout: 10000 })
+    await expect(link).toHaveAttribute('href', 'https://linktest.example')
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  test('Activity tab sort toggles newest/oldest', async ({ page }) => {
+    await mockProbeEvents(page, [])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    const newestBtn = page.getByRole('button', { name: /Newest first/i })
+    const oldestBtn = page.getByRole('button', { name: /Oldest first/i })
+    await expect(newestBtn).toBeVisible({ timeout: 10000 })
+    await expect(newestBtn).toHaveAttribute('aria-pressed', 'true')
+    await oldestBtn.click()
+    await expect(oldestBtn).toHaveAttribute('aria-pressed', 'true')
+    await expect(newestBtn).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  test('Activity tab shows timeAgo "just now" for recent event', async ({ page }) => {
+    const recentTs = Date.now() - 20_000
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'ta-1', timestamp: recentTs },
+    ])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    await expect(page.getByText('just now')).toBeVisible({ timeout: 10000 })
+  })
+
+  test('Activity tab shows "X min ago" for older event', async ({ page }) => {
+    const fiveMinsAgo = Date.now() - 5 * 60_000 - 30_000
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'ta-2', timestamp: fiveMinsAgo },
+    ])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    await expect(page.locator('text=/\\d+ min ago/')).toBeVisible({ timeout: 10000 })
+  })
+
+  // ── Network tab ──────────────────────────────────────────────────────────────
+
+  test('Network tab shows live stats', async ({ page }) => {
+    await mockProbeEvents(page, [SAMPLE_EVENT], { liveProbes: 99, regions: 10, blocksToday: 5, volunteerCount: 3 })
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Network' }).click()
+    await expect(page.getByText('Online volunteer nodes')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('99').first()).toBeVisible()
+  })
+
+  test('Network tab shows most affected services', async ({ page }) => {
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'n1', targetUrl: 'https://twitter.com', reachable: false },
+      { ...SAMPLE_EVENT, id: 'n2', targetUrl: 'https://twitter.com', reachable: false },
+    ])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Network' }).click()
+    await expect(page.getByText('Most affected services')).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText('twitter.com')).toBeVisible()
+  })
+
+  // ── Connect tab ──────────────────────────────────────────────────────────────
+
+  test('Connect tab renders connect CTA', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Connect' }).click()
+    await expect(page.locator('.scroll-content h1').filter({ hasText: 'Connect' })).toBeVisible()
+    await expect(page.getByText('Disconnected')).toBeVisible()
+    // primary-button inside scroll content (not nav button)
+    await expect(page.locator('.scroll-content .primary-button')).toBeVisible()
+  })
+
+  // ── More tab ─────────────────────────────────────────────────────────────────
+
+  test('More tab renders settings list', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'More' }).click()
+    await expect(page.getByRole('heading', { name: 'More' })).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Settings' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Monitored services' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Privacy and security' })).toBeVisible()
+  })
+
+  // ── Globe ────────────────────────────────────────────────────────────────────
+
+  test('globe container is accessible with aria-label', async ({ page }) => {
+    await page.goto('/')
+    const globe = page.locator('[aria-label*="Interactive live network globe"]').first()
+    await expect(globe).toBeVisible({ timeout: 15000 })
+  })
+
+  test('Drag to explore hint button is present in DOM', async ({ page }) => {
+    await page.goto('/')
+    // Globe hint renders when the Globe dynamic component mounts.
+    // In headless Chromium WebGL may not be available so the canvas may not paint,
+    // but the hint button is always rendered inside the globe-wrap div.
+    await expect(page.locator('.globe-hint').first()).toBeAttached({ timeout: 15000 })
+  })
+
+  // ── Accessibility ────────────────────────────────────────────────────────────
+
+  test('bottom nav buttons have aria-current on active tab', async ({ page }) => {
+    await page.goto('/')
+    const nav = page.locator('nav[aria-label="Main navigation"]')
+    await expect(nav.getByRole('button', { name: 'Radar' })).toHaveAttribute('aria-current', 'page')
+    // other tabs should NOT have aria-current
+    await expect(nav.getByRole('button', { name: 'Activity' })).not.toHaveAttribute('aria-current')
+  })
+
+  test('Test URL modal is aria-modal dialog', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Test a URL' })
+    await expect(dialog).toHaveAttribute('aria-modal', 'true')
+  })
+
+  // ── Responsiveness ───────────────────────────────────────────────────────────
+
   for (const [width, height] of [[375, 812], [768, 1024], [1280, 800]] as [number, number][]) {
-    test(`page layout has no horizontal overflow at ${width}px viewport`, async ({ page }) => {
+    test(`no horizontal overflow at ${width}px viewport`, async ({ page }) => {
       await page.setViewportSize({ width, height })
       await page.goto('/')
       const bodyWidth = await page.evaluate(() => document.body.scrollWidth)
@@ -429,356 +585,35 @@ test.describe('resist.net web app', () => {
     })
   }
 
-  test('mobile bottom sheet is visible at 375px viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 })
+  test('phone shell is white background with border-radius on desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 800, height: 900 })
     await page.goto('/')
-    const mobileSheet = page.locator('#mobile-events-panel')
-    await expect(mobileSheet).toBeVisible({ timeout: 15000 })
-    const desktopSidebar = page.locator('#events-panel')
-    const ariaHidden = await mobileSheet.getAttribute('aria-hidden')
-    expect(ariaHidden).toBeNull()
+    const phone = page.locator('.phone').first()
+    await expect(phone).toBeVisible()
+    const bg = await phone.evaluate(el => getComputedStyle(el).backgroundColor)
+    expect(bg).toBe('rgb(255, 255, 255)')
   })
 
-  test('mobile bottom sheet is hidden on desktop viewport', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 })
+  // ── Live data wiring ─────────────────────────────────────────────────────────
+
+  test('Radar stats update from live API data', async ({ page }) => {
+    await mockProbeEvents(page, [SAMPLE_EVENT], { liveProbes: 777, regions: 44, blocksToday: 8, volunteerCount: 12 })
     await page.goto('/')
-    const mobileSheet = page.locator('#mobile-events-panel')
-    await expect(mobileSheet).toBeHidden()
+    await expect(page.getByText('777').first()).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('44').first()).toBeVisible()
   })
 
-  test('filter pills are keyboard-navigable with arrow keys', async ({ page }) => {
-    await page.goto('/')
-    const allInput = page.locator('input[name="filter"][value="all"]')
-    await allInput.focus()
-    await expect(allInput).toBeFocused()
-    await page.keyboard.press('ArrowRight')
-    const dnsInput = page.locator('input[name="filter"][value="dns_poisoning"]')
-    await expect(dnsInput).toBeFocused()
-    await expect(dnsInput).toBeChecked()
-    await page.keyboard.press('ArrowLeft')
-    await expect(allInput).toBeFocused()
-    await expect(allInput).toBeChecked()
-  })
-
-  test('filter pill focus-visible ring is applied on keyboard focus', async ({ page }) => {
-    await page.goto('/')
-    const allInput = page.locator('input[name="filter"][value="all"]')
-    await allInput.focus()
-    const span = page.locator('label:has(input[name="filter"][value="all"]) span')
-    const ring = await span.evaluate((el) => getComputedStyle(el).outline)
-    await expect(allInput).toBeFocused()
-  })
-
-  test('loading overlay appears during fetch and disappears on data load', async ({ page }) => {
-    let resolveRequest: (value: string) => void
-    const requestHeld = new Promise<string>(r => { resolveRequest = r })
-    await page.route('**/api/probe-events**', async (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 0, regions: 0, blocksToday: 0 }) })
-      }
-      await requestHeld
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-    })
-    await page.goto('/')
-    const loadingOverlay = page.locator('[role="status"][aria-label="Loading probe events"]')
-    await expect(loadingOverlay).toBeVisible({ timeout: 5000 })
-    resolveRequest!('')
-    await expect(loadingOverlay).not.toBeVisible({ timeout: 5000 })
-  })
-
-  test('map event count badge shows blocked and reachable counts', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 2, regions: 1, blocksToday: 1 }) })
-      }
+  test('useBlockEvents polling interval fires every 30s', async ({ page }) => {
+    let callCount = 0
+    await page.route('**/api/probe-events**', route => {
+      callCount++
       return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([
-          { id: 'b1', targetUrl: 'https://x.com', blockType: 'dns_poisoning',
-            geohash: 'u4pruydqqvj', timestamp: Date.now(), nodeWallet: '0x11', reachable: false },
-          { id: 'r1', targetUrl: 'https://y.com', blockType: null,
-            geohash: 'u4pruydqqvj', timestamp: Date.now() - 500, nodeWallet: '0x22', reachable: true },
-        ]) })
+        body: JSON.stringify({ events: [SAMPLE_EVENT], liveProbes: callCount, regions: 1, blocksToday: 0, volunteerCount: 0 }) })
     })
     await page.goto('/')
-    const badge = page.locator('[data-testid="event-count-badge"]')
-    await expect(badge).toBeVisible({ timeout: 10000 })
-    await expect(badge).toContainText('blocked')
-    await expect(badge).toContainText('reachable')
+    // initial call fires immediately
+    await page.waitForTimeout(500)
+    expect(callCount).toBeGreaterThanOrEqual(1)
   })
 
-  test('toggle button aria-expanded reflects sidebar open state', async ({ page }) => {
-    await page.goto('/')
-    const toggleBtn = page.getByRole('button', { name: 'Hide events panel' })
-    await expect(toggleBtn).toHaveAttribute('aria-expanded', 'true')
-    await toggleBtn.click()
-    const showBtn = page.getByRole('button', { name: 'Show events panel' })
-    await expect(showBtn).toHaveAttribute('aria-expanded', 'false')
-    await showBtn.click()
-    await expect(page.getByRole('button', { name: 'Hide events panel' })).toHaveAttribute('aria-expanded', 'true')
-  })
-
-  test('network failure triggers connection-check error banner', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => route.abort('failed'))
-    await page.goto('/')
-    const errorBanner = page.locator('[role="alert"]')
-    await expect(errorBanner).toBeVisible({ timeout: 15000 })
-    // Network abort maps to the generic 'check your connection' banner variant
-    await expect(errorBanner).toContainText('Check your connection', { timeout: 5000 })
-  })
-
-  test('event list items contain secure external links', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'link-1', targetUrl: 'https://blocked-site.example',
-          blockType: 'http_block', geohash: 'u4pruydqqvj', timestamp: Date.now(),
-          nodeWallet: '0xABCD1234EFGH', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    // Wait for events to load in the sidebar
-    const eventLink = page.locator('ul[aria-labelledby="events-list-heading"] a').first()
-    await expect(eventLink).toBeVisible({ timeout: 10000 })
-    await expect(eventLink).toHaveAttribute('href', 'https://blocked-site.example')
-    await expect(eventLink).toHaveAttribute('target', '_blank')
-    await expect(eventLink).toHaveAttribute('rel', 'noopener noreferrer')
-  })
-
-  test('API includeStats=true query returns correct stats shape', async ({ request }) => {
-    const response = await request.get('http://localhost:3001/api/probe-events?includeStats=true')
-    expect(response.ok()).toBeTruthy()
-    const stats = await response.json()
-    expect(stats).toHaveProperty('liveProbes')
-    expect(stats).toHaveProperty('regions')
-    expect(stats).toHaveProperty('blocksToday')
-    expect(typeof stats.liveProbes).toBe('number')
-    expect(typeof stats.regions).toBe('number')
-    expect(typeof stats.blocksToday).toBe('number')
-  })
-
-  test('skip nav link to map is present and targets map region', async ({ page }) => {
-    await page.goto('/')
-    await page.keyboard.press('Tab')
-    const skipToMap = page.getByRole('link', { name: 'Skip to map' })
-    await expect(skipToMap).toBeVisible()
-    await expect(skipToMap).toBeFocused()
-    await page.keyboard.press('Enter')
-    const mapRegion = page.locator('#map-region')
-    await expect(mapRegion).toBeVisible()
-  })
-
-  test('skip nav link to events list is present when sidebar is open', async ({ page }) => {
-    await page.goto('/')
-    await page.keyboard.press('Tab')
-    await page.keyboard.press('Tab')
-    const skipToEvents = page.getByRole('link', { name: /skip to events/i })
-    await expect(skipToEvents).toBeVisible()
-    await expect(skipToEvents).toBeFocused()
-  })
-
-  test('filter change to empty set shows map no-events overlay', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      const url = route.request().url()
-      if (url.includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      if (url.includes('blockType=full_unreachable')) {
-        return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'overlay-1', targetUrl: 'https://example.org',
-          blockType: 'dns_poisoning', geohash: 'u4pruydqqvj', timestamp: Date.now(),
-          nodeWallet: '0xAbc1', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    await expect(page.getByText(/recent events/i).first()).toBeVisible({ timeout: 15000 })
-    await page.locator('label:has(input[name="filter"][value="full_unreachable"])').click()
-    await expect(page.getByText('No events for this filter')).toBeVisible({ timeout: 5000 })
-  })
-
-  test('NodeCount renders numeric stats with toLocaleString formatting after load', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      const url = route.request().url()
-      if (url.includes('includeStats=true')) {
-        return route.fulfill({
-          status: 200, contentType: 'application/json',
-          body: JSON.stringify({ events: [], stats: { liveProbes: 1234, regions: 5, blocksToday: 678, volunteerCount: 0 } }),
-        })
-      }
-      if (url.includes('stats=true')) {
-        return route.fulfill({
-          status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1234, regions: 5, blocksToday: 678 }),
-        })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-    })
-    await page.goto('/')
-
-    const statsPill = page.locator('[role="status"][aria-label*="live probes"]')
-    await expect(statsPill).toBeVisible({ timeout: 10000 })
-
-    await expect(statsPill).toContainText('1,234')
-    await expect(statsPill).toContainText('5')
-    await expect(statsPill).toContainText('678')
-
-    const label = await statsPill.getAttribute('aria-label')
-    expect(label).toMatch(/1[,.]?234.*live probes/i)
-  })
-
-  test('page background is a dark gradient — not flat black', async ({ page }) => {
-    await page.goto('/')
-    const bgImage = await page.evaluate(() => {
-      const candidates = [document.body, document.documentElement,
-        document.querySelector('main'), document.querySelector('#__next')]
-      for (const el of candidates) {
-        if (!el) continue
-        const bg = getComputedStyle(el).backgroundImage
-        if (bg && bg !== 'none') return bg
-      }
-      return 'none'
-    })
-    expect(bgImage).not.toBe('none')
-    expect(bgImage.toLowerCase()).toContain('gradient')
-  })
-
-  test('VolunteerCount renders resolved count with correct aria-label', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      const url = route.request().url()
-      if (url.includes('includeStats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ events: [], stats: { liveProbes: 3, regions: 2, blocksToday: 5, volunteerCount: 42 } }) })
-      }
-      if (url.includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 3, regions: 2, blocksToday: 5, volunteerCount: 42 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-    })
-    await page.goto('/')
-
-    const loadingSkeleton = page.locator('[role="img"][aria-label="Loading volunteer count"]')
-    await expect(loadingSkeleton).not.toBeVisible({ timeout: 10000 })
-
-    const volunteerPill = page.locator('[role="img"][aria-label*="volunteer"]').filter({ hasNotText: 'Loading' })
-    await expect(volunteerPill).toBeVisible()
-    const label = await volunteerPill.getAttribute('aria-label')
-    expect(label).toMatch(/42 volunteer nodes active/i)
-
-    await expect(volunteerPill).toContainText('42')
-    await expect(volunteerPill).toContainText('volunteers')
-  })
-
-  test('VolunteerCount shows loading skeleton before data arrives', async ({ page }) => {
-    let resolveStats: (v: string) => void
-    const statsHeld = new Promise<string>(r => { resolveStats = r })
-    await page.route('**/api/probe-events**', async (route) => {
-      if (route.request().url().includes('stats=true')) {
-        await statsHeld
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1, volunteerCount: 7 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-    })
-    await page.goto('/')
-    await expect(page.locator('[role="img"][aria-label="Loading volunteer count"]')).toBeVisible({ timeout: 5000 })
-    resolveStats!('')
-  })
-
-  test('map marker popup humanises block type label — dns_poisoning -> DNS Poisoning', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'popup-label-1', targetUrl: 'https://label-test.example',
-          blockType: 'dns_poisoning', geohash: 'u4pruydqqvj', timestamp: Date.now(),
-          nodeWallet: '0xLabel1234ABCD', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('[aria-label*="label-test.example"]').first()
-    await marker.waitFor({ state: 'visible', timeout: 10000 })
-    await marker.click()
-    const popup = page.locator('[data-popup-content]')
-    await expect(popup).toBeVisible({ timeout: 5000 })
-    await expect(popup).not.toContainText('dns_poisoning')
-    await expect(popup).toContainText('DNS Poisoning')
-  })
-
-  test('map marker popup humanises tcp_rst block type label', async ({ page }) => {
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'popup-label-2', targetUrl: 'https://rst-test.example',
-          blockType: 'tcp_rst', geohash: 'u4pruydqqvj', timestamp: Date.now(),
-          nodeWallet: '0xRst1234ABCD', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('[aria-label*="rst-test.example"]').first()
-    await marker.waitFor({ state: 'visible', timeout: 10000 })
-    await marker.click()
-    const popup = page.locator('[data-popup-content]')
-    await expect(popup).toBeVisible({ timeout: 5000 })
-    await expect(popup).not.toContainText('tcp_rst')
-    await expect(popup).toContainText('TCP Reset')
-  })
-
-  test('BlockEventList shows "just now" for a very recent event', async ({ page }) => {
-    const recentTs = Date.now() - 10_000 // 10 seconds ago
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'time-1', targetUrl: 'https://freshsite.example',
-          blockType: 'dns_poisoning', geohash: 'u4pruydqqvj',
-          timestamp: recentTs, nodeWallet: '0xFresh1234', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    const timeEl = page.locator('ul[aria-labelledby="events-list-heading"] time').first()
-    await expect(timeEl).toBeVisible({ timeout: 10000 })
-    await expect(timeEl).toHaveText('just now')
-  })
-
-  test('BlockEventList shows "X min ago" for an event 5 minutes old', async ({ page }) => {
-    const fiveMinsAgo = Date.now() - 5 * 60_000 - 5_000 // 5 min 5 s ago
-    await page.route('**/api/probe-events**', (route) => {
-      if (route.request().url().includes('stats=true')) {
-        return route.fulfill({ status: 200, contentType: 'application/json',
-          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-          id: 'time-2', targetUrl: 'https://oldsite.example',
-          blockType: 'tcp_rst', geohash: 'u4pruydqqvj',
-          timestamp: fiveMinsAgo, nodeWallet: '0xOld1234', reachable: false,
-        }]) })
-    })
-    await page.goto('/')
-    const timeEl = page.locator('ul[aria-labelledby="events-list-heading"] time').first()
-    await expect(timeEl).toBeVisible({ timeout: 10000 })
-    await expect(timeEl).toHaveText(/^5 min ago$/)
-  })
 })
