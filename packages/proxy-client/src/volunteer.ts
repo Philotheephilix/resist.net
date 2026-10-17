@@ -465,6 +465,9 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
         })
         // Update bootstrap cache
         const cache = loadBootstrapCache().filter((e) => e.wallet !== config.wallet)
+        if (cache.length === 0) {
+          console.warn("[volunteer] Bootstrap cache is empty — this node is starting in cold-start isolation with no known peers")
+        }
         cache.unshift({ wallet: config.wallet, sdpOffer: sdpOfferJson, geohash: config.geohash })
         saveBootstrapCache(cache.slice(0, 50))
         break
@@ -543,8 +546,9 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
   // Poll for incoming SDP answers.
   // Orphaned signalExchange entities (created by users whose ICE timed out before
   // the volunteer processed the answer) accumulate on Arkiv until their on-chain TTL
-  // expires (~2 min). No explicit cleanup is needed from either side — expiry is
-  // automatic.  processedAnswers TTL (10 min) exceeds the signalExchange TTL so a
+  // expires (~2 min). On a successful connection the user deletes the entity immediately
+  // after ICE connects; Arkiv TTL expiry is a safety net for abrupt disconnects only.
+  // processedAnswers TTL (10 min) exceeds the signalExchange TTL so a
   // re-published answer from a retrying client is still accepted.
   //
   // The Arkiv query and the answer-processing loop are decoupled: `queryRunning`

@@ -251,7 +251,7 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
     )
     if (cached.length === 0) {
       const bootstrapUrl = process.env["BOOTSTRAP_URL"]
-      if (bootstrapUrl) {
+      if (bootstrapUrl && new URL(bootstrapUrl).protocol === "https:") {
         try {
           const res = await fetch(bootstrapUrl, { signal: AbortSignal.timeout(5000) })
           if (res.ok) {
@@ -265,13 +265,22 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
               if (total > 1_048_576) { reader.cancel(); throw new Error('Bootstrap URL response too large') }
               chunks.push(value)
             }
-            const data = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Array<{
-              wallet: string
-              sdpOffer: string
-              geohash: string
-            }>
-            cached = data
-              .filter((e) => e.sdpOffer && e.sdpOffer.length <= 131072 && e.wallet && !e.wallet.includes('…') && !e.geohash.startsWith(geohashPrefix))
+            const data = JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown[]
+            cached = (Array.isArray(data) ? data : [])
+              .filter((e): e is BootstrapEntry =>
+                e !== null &&
+                typeof e === "object" &&
+                typeof (e as BootstrapEntry).wallet === "string" &&
+                (e as BootstrapEntry).wallet.length > 0 &&
+                (e as BootstrapEntry).wallet.length <= 256 &&
+                typeof (e as BootstrapEntry).sdpOffer === "string" &&
+                (e as BootstrapEntry).sdpOffer.length > 0 &&
+                (e as BootstrapEntry).sdpOffer.length <= 131072 &&
+                typeof (e as BootstrapEntry).geohash === "string" &&
+                (e as BootstrapEntry).geohash.length > 0 &&
+                (e as BootstrapEntry).geohash.length <= 64 &&
+                !(e as BootstrapEntry).geohash.startsWith(geohashPrefix)
+              )
               .map((e) => ({ wallet: e.wallet, sdpOffer: e.sdpOffer, geohash: e.geohash }))
           }
         } catch {
@@ -522,6 +531,9 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   let server: import("net").Server
   try {
     await waitForIceConnected(peer)
+    if (signalExchangeKey) {
+      arkiv.deleteEntity(signalExchangeKey).catch(() => { /* best-effort */ })
+    }
     console.log(`[user] WebRTC connected to ${chosen.wallet}`)
     server = await startLocalProxy(peer, LOCAL_PROXY_PORT)
     console.log(`[user] Local HTTP proxy listening on 127.0.0.1:${LOCAL_PROXY_PORT}`)

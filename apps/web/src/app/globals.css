@@ -10,6 +10,7 @@
 }
 
 * { box-sizing: border-box; }
+/* ignore-value overused-font Arial */
 html, body { margin: 0; min-height: 100%; background: #f1f1f1; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
 
@@ -123,7 +124,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .quick-actions svg { width: 22px; }
 
 .search-box, .input-field { height: 56px; background: #f7f7f7; border-radius: 16px; display: flex; align-items: center; gap: 12px; padding: 0 17px; color: #999; margin: 28px 0 14px; }
-.input-field.active { background: #fff; border: 1.5px solid #111; color: #111; }
+.input-field.active, .input-field:focus-within { background: #fff; border: 1.5px solid #111; color: #111; }
 .input-field input { background: none; border: none; outline: none; color: #111; font: inherit; font-size: 15px; flex: 1; }
 .input-field input::placeholder { color: #999; }
 

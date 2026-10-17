@@ -13,20 +13,39 @@ const arkivRpcOrigin = (() => {
   }
 })()
 
+// Privy optional peer deps we don't want to install — skip bundling them
+const PRIVY_OPTIONAL_PEERS = [
+  '@farcaster/mini-app-solana',
+  '@farcaster/frame-sdk',
+  '@solana-program/memo',
+  '@solana-program/system',
+  '@solana-program/token',
+  '@solana/kit',
+  'permissionless',
+  '@abstract-foundation/agw-client',
+  '@reown/appkit',
+  '@reown/appkit-adapter-wagmi',
+  '@reown/appkit-adapter-ethers',
+]
+
 const nextConfig = {
   transpilePackages: ['@resist/shared', '@resist/arkiv-sdk', '@resist/map-ui'],
+  turbopack: {},
+  serverExternalPackages: ['better-sqlite3', 'ngeohash'],
   webpack: (config) => {
-    // Resolve workspace symlinks correctly
     config.resolve.symlinks = true
-    // Handle .js extension for TypeScript source files
     config.resolve.extensionAlias = {
       '.js': ['.ts', '.tsx', '.js', '.jsx'],
     }
+    const prevExternals = config.externals || []
+    config.externals = [
+      ...(Array.isArray(prevExternals) ? prevExternals : [prevExternals]),
+      ({ request }, callback) => {
+        if (PRIVY_OPTIONAL_PEERS.includes(request)) return callback(null, `commonjs ${request}`)
+        callback()
+      },
+    ]
     return config
-  },
-  // Server-only packages that shouldn't be bundled for client (Next 14 uses experimental.serverComponentsExternalPackages)
-  experimental: {
-    serverComponentsExternalPackages: ['better-sqlite3', 'ngeohash'],
   },
   async headers() {
     return [

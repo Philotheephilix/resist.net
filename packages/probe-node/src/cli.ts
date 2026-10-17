@@ -1,4 +1,4 @@
-// CLI entry: node dist/cli.js [--once] [--target=<url>] [--help]
+// CLI entry: node dist/cli.js [--once] [--target=<url>] [--dry-run] [--verbose] [--help]
 import { parseArgs } from "node:util"
 import { main } from "./index"
 import { loadConfig, savePrevHash } from "./config"
@@ -13,6 +13,10 @@ Options:
   --once            Run a single probe tick and exit (no schedule, no health server)
   --target=<url>    Probe a single URL once and exit (implies --once; bypasses the
                     built-in target list)
+  --dry-run         Run the probe pipeline but skip writing to Arkiv; prints result
+                    to stdout only (useful for local testing)
+  --verbose         Log full probe details: DNS resolution, HTTP status, TCP result,
+                    and sync request/response for each target
   --help            Print this help message and exit
 
 Environment variables:
@@ -27,9 +31,11 @@ async function run() {
   const { values } = parseArgs({
     args: process.argv.slice(2),
     options: {
-      once:   { type: "boolean", default: false },
-      target: { type: "string" },
-      help:   { type: "boolean", default: false },
+      once:      { type: "boolean", default: false },
+      target:    { type: "string" },
+      "dry-run": { type: "boolean", default: false },
+      verbose:   { type: "boolean", default: false },
+      help:      { type: "boolean", default: false },
     },
     strict: true,
   })
@@ -62,9 +68,13 @@ async function run() {
     }
     const config = await loadConfig()
     const result = await probeTarget(values.target, config)
-    await syncToArkiv([result], config)
-    await savePrevHash(config, result.prevResultHash)
-    console.log(JSON.stringify(result, null, 2))
+    if (values["dry-run"]) {
+      console.log(JSON.stringify(result, null, 2))
+    } else {
+      await syncToArkiv([result], config)
+      await savePrevHash(config, result.prevResultHash)
+      console.log(JSON.stringify(result, null, 2))
+    }
     return
   }
 

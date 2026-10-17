@@ -1,4 +1,6 @@
 import { NextRequest } from 'next/server'
+import dns from 'dns/promises'
+import net from 'net'
 
 export interface TestUrlRequest {
   url: string
@@ -9,17 +11,56 @@ export interface TestUrlRequest {
 export interface TestUrlResult {
   url: string
   method: 'HTTP' | 'DNS' | 'TCP'
-  reachable: boolean
+  reachable: boolean | null
   statusCode?: number
   latencyMs?: number
   errorType?: 'dns_poisoning' | 'tcp_rst' | 'http_block' | 'full_unreachable' | null
   errorDetail?: string
   checkedAt: number
   region: string
+  /** True when the requested probe method is not yet implemented server-side. */
+  notSupported?: boolean
 }
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 const VALID_METHODS = new Set(['HTTP', 'DNS', 'TCP'])
+
+function isPrivateIP(ip: string): boolean {
+  if (net.isIPv4(ip)) {
+    const parts = ip.split('.').map(Number)
+    const [a, b] = parts
+    return (
+      a === 10 ||
+      a === 127 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 169 && b === 254) ||
+      (a === 0) ||
+      (a === 100 && b >= 64 && b <= 127)
+    )
+  }
+  if (net.isIPv6(ip)) {
+    const normalized = ip.toLowerCase()
+    return (
+      normalized === '::1' ||
+      normalized.startsWith('fc') ||
+      normalized.startsWith('fd') ||
+      normalized.startsWith('fe80') ||
+      normalized === '::' ||
+      normalized.startsWith('::ffff:')
+    )
+  }
+  return true
+}
+
+async function assertPublicHostname(hostname: string): Promise<void> {
+  if (net.isIP(hostname)) {
+    if (isPrivateIP(hostname)) throw new Error('Private/reserved IP address not allowed')
+    return
+  }
+  const { address } = await dns.lookup(hostname)
+  if (isPrivateIP(address)) throw new Error('Hostname resolves to a private/reserved IP address')
+}
 
 // Dev fixture — returns a deterministic simulated result without making real
 // outbound connections. Only active when USE_MOCK_DATA=true in development.
@@ -54,15 +95,15 @@ function devFixtureResult(url: string, method: string, region: string): TestUrlR
 
 async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult> {
   const start = Date.now()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 10_000)
+    await assertPublicHostname(new URL(url).hostname)
     const res = await fetch(url, {
       method: 'HEAD',
       signal: controller.signal,
-      redirect: 'follow',
+      redirect: 'error',
     })
-    clearTimeout(timeout)
     const latencyMs = Date.now() - start
     const reachable = res.status < 500
     let errorType: TestUrlResult['errorType'] = null
@@ -80,6 +121,8 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
       errorType = 'tcp_rst'
     }
     return { url, method: 'HTTP', reachable: false, latencyMs, errorType, errorDetail: msg, checkedAt: Date.now(), region }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -118,9 +161,10 @@ export async function POST(request: NextRequest) {
   }
 
   const regionStr = typeof region === 'string' && region.trim() ? region.trim() : 'Auto'
+  if (regionStr.length > 128) return Response.json({ error: 'region too long' }, { status: 400 })
 
-  // Dev mode: return fixture without making real outbound requests
-  if (process.env['NODE_ENV'] === 'development' && process.env['USE_MOCK_DATA'] === 'true') {
+  // Mock mode: return fixture without making real outbound requests
+  if (process.env['USE_MOCK_DATA'] === 'true') {
     const result = devFixtureResult(parsed.href, methodStr, regionStr)
     return Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
   }
@@ -144,6 +188,6 @@ export async function POST(request: NextRequest) {
       region: regionStr,
       notSupported: true,
     },
-    { status: 202 }
+    { status: 501 }
   )
 }

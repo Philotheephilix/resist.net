@@ -7,6 +7,13 @@ import type { ProbeResultRow } from './BlockEventList'
 
 const GEO_CACHE_MAX = 1000
 
+const mapEscapeStyle: React.CSSProperties = {
+  backgroundColor: 'var(--wld-surface-dark-skip)',
+  color: 'var(--wld-glass-text-near-white)',
+  backdropFilter: 'blur(12px)',
+  border: '1px solid var(--wld-glass-highlight)',
+}
+
 // Module-level geohash→LatLng cache — decode is O(N) bit-interleaving; cache
 // avoids repeating it for events that share the same geohash cell (common in
 // country-level censorship data where many events map to the same 4-char cell).
@@ -74,10 +81,11 @@ const TOKEN_SUCCESS_600 = '#00c230'
 const COLOR_MAP = { warning: TOKEN_WARNING_600, error: TOKEN_ERROR_600, success: TOKEN_SUCCESS_600 }
 
 // Popup badge tokens — alpha-glass bg + light text for dark popup (rgba(16,16,20,0.97))
+// Injected into Leaflet innerHTML so CSS vars cannot be used; values must stay in sync with tokens manually.
 const BADGE_TOKENS: Record<string, { bg: string; color: string }> = {
-  warning: { bg: 'rgba(255,174,0,0.15)', color: '#ffb733' },
-  error:   { bg: 'rgba(242,40,13,0.15)',  color: '#ff6b55' },
-  success: { bg: 'rgba(0,194,48,0.12)',   color: '#33d167' },
+  warning: { bg: 'rgba(255,174,0,0.15)' /* --wld-warning-bg-badge */, color: '#ffb733' /* --wld-warning-text */ },
+  error:   { bg: 'rgba(242,40,13,0.15)' /* --wld-error-bg-badge */,   color: '#ff6b55' /* --wld-error-text */ },
+  success: { bg: 'rgba(0,194,48,0.12)'  /* --wld-success-bg-badge */,  color: '#33d167' /* --wld-success-500 */ },
 }
 
 function markerColor(blockType: string | null): string {
@@ -204,7 +212,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
             data-popup-close
             class="popup-close-btn"
             aria-label="Close popup"
-            style="display:block;width:100%;padding:13px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:transparent;color:var(--wld-gray-300,#d1d5db);font-size:11px;cursor:pointer;"
+            style="display:block;width:100%;padding:13px 0;border:1px solid var(--wld-glass-highlight);border-radius:6px;background:transparent;color:var(--wld-gray-300,#d1d5db);font-size:11px;cursor:pointer;"
           >Close</button>
         </div>
       `
@@ -617,7 +625,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         <a
           href="#events-panel"
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-xs focus:font-semibold"
-          style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
+          style={mapEscapeStyle}
           data-map-escape-target
         >
           Go to events panel
@@ -626,7 +634,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
         <button
           type="button"
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-xs focus:font-semibold"
-          style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
+          style={mapEscapeStyle}
           data-map-escape-target
           onClick={() => {
             // Move focus to the first interactive element outside the map container
@@ -672,10 +680,10 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           <span
             className="rounded-full px-4 py-2 text-sm font-semibold"
             style={{
-              background: 'rgba(15,13,22,0.80)',
+              background: 'var(--wld-surface-dark-filter)',
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255,255,255,0.12)',
+              border: '1px solid var(--wld-glass-bg-active)',
               color: 'var(--wld-gray-0, #ffffff)',
             }}
           >

@@ -117,6 +117,44 @@ Then query the Arkiv API with that address:
 curl "https://arkiv.resist.net/results?wallet=0xYOUR_WALLET_ADDRESS&limit=5"
 ```
 
+## Testing
+
+End-to-end tests for the resist.net web app are written with [Playwright](https://playwright.dev/) and live in `e2e/app.spec.ts` at the repo root.
+
+**Run E2E tests**
+
+Start the dev server first, then run the suite in a second terminal:
+
+```sh
+# Terminal 1 — start the Next.js dev server on port 3001
+pnpm dev
+
+# Terminal 2 — run all Playwright tests against localhost:3001
+pnpm test
+```
+
+To run tests against mock data without a live Arkiv endpoint, set `USE_MOCK_DATA=true`:
+
+```sh
+USE_MOCK_DATA=true pnpm dev
+```
+
+**Environment variables used during tests**
+
+| Variable         | Required | Description                                              |
+|------------------|----------|----------------------------------------------------------|
+| `USE_MOCK_DATA`  | No       | Set to `true` to skip Arkiv and serve synthetic events   |
+| `ARKIV_URL`      | No       | Live Arkiv endpoint; omit when `USE_MOCK_DATA=true`      |
+
+**What the tests cover**
+
+- Page title, dark theme, and header rendering
+- Filter pill rendering, keyboard navigation, and active-state toggling
+- Sidebar show/hide with focus management and `aria-expanded` state
+- Map container, tile layer, marker popups, and Escape-to-close behaviour
+- API routes: `/api/probe-events` (filters, stats, geohash), `/api/bootstrap`, error and rate-limit responses
+- Accessibility: skip-nav links, live regions, loading overlays, responsive layout at 375 px / 768 px / 1280 px
+
 ## Configuration
 
 On first start a wallet and config file are created at `~/.resist-net/config.json` (mode `0600`). The wallet address and private key are generated locally and never transmitted. The config is updated on each startup with the latest geohash and ISP detected via ip-api.com.

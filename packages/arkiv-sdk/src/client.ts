@@ -109,6 +109,10 @@ export class ArkivClient {
       expires: ExpirationTime.fromHours(48),
     })
 
+    if (!entityKey || typeof entityKey !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(entityKey)) {
+      throw new Error("createEntity returned invalid entityKey: " + String(entityKey))
+    }
+
     return entityKey
   }
 
@@ -132,6 +136,10 @@ export class ArkivClient {
       expires: ExpirationTime.fromMinutes(5),
     })
 
+    if (!entityKey || typeof entityKey !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(entityKey)) {
+      throw new Error("createEntity returned invalid entityKey: " + String(entityKey))
+    }
+
     return entityKey
   }
 
@@ -139,6 +147,9 @@ export class ArkivClient {
    * Extend a VolunteerProxy TTL by 5 minutes (called every 4min to keep it alive).
    */
   async refreshVolunteerProxy(entityId: string): Promise<void> {
+    if (!entityId || typeof entityId !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(entityId)) {
+      throw new Error("refreshVolunteerProxy: invalid entityId: " + String(entityId))
+    }
     await this.walletClient.extendEntity({
       entityKey: entityId as `0x${string}`,
       expires: ExpirationTime.fromMinutes(5),
@@ -184,6 +195,11 @@ export class ArkivClient {
       },
       expires: ExpirationTime.fromMinutes(2),
     })
+
+    if (!entityKey || typeof entityKey !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(entityKey)) {
+      throw new Error("createEntity returned invalid entityKey: " + String(entityKey))
+    }
+
     return entityKey
   }
 
@@ -191,6 +207,9 @@ export class ArkivClient {
    * Delete an entity by its key (best-effort cleanup).
    */
   async deleteEntity(entityKey: string): Promise<void> {
+    if (!entityKey || typeof entityKey !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(entityKey)) {
+      throw new Error("deleteEntity: invalid entityKey: " + String(entityKey))
+    }
     await this.walletClient.deleteEntity({ entityKey: entityKey as `0x${string}` })
   }
 

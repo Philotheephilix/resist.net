@@ -97,14 +97,15 @@ test.describe('resist.net web app', () => {
   test('API error shows error banner', async ({ page }) => {
     await page.route('**/api/probe-events**', route => route.fulfill({ status: 500, body: 'Server error' }))
     await page.goto('/')
-    const banner = page.locator('[role="alert"]')
+    // Use .first() to avoid matching Next.js route-announcer which also has role="alert"
+    const banner = page.locator('[role="alert"]').first()
     await expect(banner).toBeVisible({ timeout: 15000 })
   })
 
   test('network failure shows error banner', async ({ page }) => {
     await page.route('**/api/probe-events**', route => route.abort('failed'))
     await page.goto('/')
-    const banner = page.locator('[role="alert"]')
+    const banner = page.locator('[role="alert"]').first()
     await expect(banner).toBeVisible({ timeout: 15000 })
   })
 
@@ -285,7 +286,7 @@ test.describe('resist.net web app', () => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'https://example.com', method: 'DNS' },
     })
-    // DNS returns 202 (not yet supported) or 200 — not an error
+    // DNS returns 200 (mock mode) or 501 (not yet supported in production) — test only covers mock mode
     expect(res.status()).toBeGreaterThanOrEqual(200)
     expect(res.status()).toBeLessThan(400)
     const body = await res.json()
@@ -603,7 +604,7 @@ test.describe('resist.net web app', () => {
     await expect(page.getByText('44').first()).toBeVisible()
   })
 
-  test('useBlockEvents polling interval fires every 30s', async ({ page }) => {
+  test('useBlockEvents polling interval fires every 30s', { timeout: 10_000 }, async ({ page }) => {
     let callCount = 0
     await page.route('**/api/probe-events**', route => {
       callCount++

@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useState, useCallback, useRef } from 'react'
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { feature } from 'topojson-client'
 import countries from 'world-atlas/countries-110m.json'
 import {
@@ -14,16 +14,20 @@ import {
   Grid2X2,
   Home,
   Loader2,
+  LogIn,
+  LogOut,
   Menu,
   Network,
   Search,
   Shield,
   SlidersHorizontal,
   TrendingUp,
+  Wallet,
   Wifi,
   X,
   Zap,
 } from 'lucide-react'
+import { usePrivy } from '@privy-io/react-auth'
 import { useBlockEvents } from '../hooks/useBlockEvents'
 import type { TestUrlResult } from './api/test-url/route'
 
@@ -69,10 +73,54 @@ function timeAgo(ts: number): string {
   return days === 1 ? '1 day ago' : `${days} days ago`
 }
 
-function Header() {
+/** Truncate an Ethereum address: 0xAbCd…1234 */
+function truncAddr(addr: string): string {
+  if (!addr || addr.length < 10) return addr
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+/** Two-letter initials from a wallet address for the avatar */
+function walletInitials(addr: string): string {
+  if (!addr) return 'R'
+  return addr.slice(2, 4).toUpperCase()
+}
+
+/** Deterministic hue from address for avatar background */
+function addrHue(addr: string): string {
+  if (!addr) return '#ffe3ee'
+  const n = parseInt(addr.slice(2, 8), 16) || 0
+  const hue = n % 360
+  return `hsl(${hue}, 80%, 88%)`
+}
+
+function addrFg(addr: string): string {
+  if (!addr) return '#e65c90'
+  const n = parseInt(addr.slice(2, 8), 16) || 0
+  const hue = n % 360
+  return `hsl(${hue}, 60%, 35%)`
+}
+
+// ─── Header ───────────────────────────────────────────────────────────────────
+
+function Header({ onAvatarClick }: { onAvatarClick: () => void }) {
+  const { ready, authenticated, user } = usePrivy()
+
+  const walletAddr = user?.wallet?.address ?? ''
+  const initials = authenticated && walletAddr ? walletInitials(walletAddr) : 'R'
+  const bg = authenticated && walletAddr ? addrHue(walletAddr) : '#ffe3ee'
+  const fg = authenticated && walletAddr ? addrFg(walletAddr) : '#e65c90'
+
   return (
     <header className="topbar">
-      <div className="profile" aria-label="User profile">R</div>
+      <button
+        className="profile"
+        style={{ background: bg, color: fg, border: 'none', cursor: 'pointer' }}
+        onClick={onAvatarClick}
+        aria-label={authenticated ? `Wallet: ${truncAddr(walletAddr)}` : 'Sign in'}
+        title={authenticated ? walletAddr : 'Sign in with Ethereum'}
+      >
+        {!ready ? '…' : initials}
+      </button>
       <div className="brand">
         <span className="brand-mark" aria-hidden="true"><Network size={16} /></span>
         <span>ResistNet</span>
@@ -81,6 +129,8 @@ function Header() {
     </header>
   )
 }
+
+// ─── Globe ────────────────────────────────────────────────────────────────────
 
 function DottedGlobe({ compact = false, points }: {
   compact?: boolean
@@ -195,7 +245,6 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
   const runTest = useCallback(async () => {
     const raw = urlInput.trim()
     if (!raw) { inputRef.current?.focus(); return }
-    // Prepend https:// if no protocol given
     const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
     setRunning(true)
     setResult(null)
@@ -207,7 +256,7 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({ url, method, region }),
       })
       const data = await res.json()
-      if (res.ok || res.status === 202) {
+      if (res.ok || res.status === 501) {
         setResult(data as TestUrlResult)
       } else {
         setError(data.error ?? 'Test failed')
@@ -330,13 +379,111 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ─── Wallet login sheet ───────────────────────────────────────────────────────
+
+function WalletSheet({ onClose }: { onClose: () => void }) {
+  const { ready, authenticated, user, login, logout } = usePrivy()
+  const walletAddr = user?.wallet?.address ?? ''
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Wallet" onClick={onClose}>
+      <div className="test-modal" onClick={e => e.stopPropagation()}>
+        <button className="close" onClick={onClose} aria-label="Close"><X /></button>
+
+        {!ready ? (
+          <div style={{ padding: '24px 0', textAlign: 'center', color: '#999' }}>
+            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+          </div>
+        ) : authenticated && walletAddr ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, marginTop: 8 }}>
+              <div
+                className="profile large"
+                style={{
+                  width: 56, height: 56, fontSize: 20, flexShrink: 0,
+                  background: addrHue(walletAddr), color: addrFg(walletAddr),
+                }}
+                aria-hidden="true"
+              >
+                {walletInitials(walletAddr)}
+              </div>
+              <div>
+                <b style={{ fontSize: 18, display: 'block' }}>Connected</b>
+                <code
+                  style={{
+                    fontSize: 13, color: '#555', background: '#f5f5f5',
+                    padding: '3px 8px', borderRadius: 8, display: 'block', marginTop: 6,
+                    fontFamily: 'monospace', letterSpacing: '0.04em',
+                  }}
+                  title={walletAddr}
+                >
+                  {truncAddr(walletAddr)}
+                </code>
+              </div>
+            </div>
+
+            <div className="health-row" style={{ marginBottom: 0 }}>
+              <span style={{ color: '#888', fontSize: 13 }}>Full address</span>
+              <code
+                style={{
+                  fontSize: 11, color: '#444', fontFamily: 'monospace',
+                  maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                }}
+                title={walletAddr}
+                onClick={() => navigator.clipboard?.writeText(walletAddr)}
+              >
+                {walletAddr}
+              </code>
+            </div>
+
+            {user?.wallet?.chainType && (
+              <div className="health-row">
+                <span style={{ color: '#888', fontSize: 13 }}>Network</span>
+                <b style={{ fontSize: 13, textTransform: 'capitalize' }}>{user.wallet.chainType}</b>
+              </div>
+            )}
+
+            <button
+              className="primary-button"
+              style={{ background: '#f7f7f7', color: '#111', marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              onClick={async () => { await logout(); onClose() }}
+            >
+              <LogOut size={18} aria-hidden="true" />
+              Disconnect wallet
+            </button>
+          </>
+        ) : (
+          <>
+            <h2 style={{ marginBottom: 8 }}>Connect wallet</h2>
+            <p style={{ color: '#888', marginBottom: 24 }}>Sign in with your Ethereum wallet to track your probe history and volunteer node.</p>
+            <button
+              className="primary-button"
+              onClick={login}
+              style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+            >
+              <Wallet size={20} aria-hidden="true" />
+              Sign in with Ethereum
+            </button>
+            <p style={{ color: '#aaa', fontSize: 12, textAlign: 'center', marginTop: 16 }}>
+              Powered by Privy · Your keys, your control
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── Radar tab ─────────────────────────────────────────────────────────────────
 
-function Radar({ onTest, liveProbes, regions, blocksToday }: {
+function Radar({ onTest, liveProbes, regions, blocksToday, loading }: {
   onTest: () => void
   liveProbes: number
   regions: number
   blocksToday: number
+  loading: boolean
 }) {
   return (
     <>
@@ -348,15 +495,27 @@ function Radar({ onTest, liveProbes, regions, blocksToday }: {
         </div>
         <div className="stats-row">
           <div>
-            <strong>{liveProbes > 0 ? liveProbes.toLocaleString() : <span className="skeleton" style={{ height: 24, width: 60, display: 'inline-block' }} />}</strong>
+            <strong>
+              {loading
+                ? <span className="skeleton" style={{ height: 24, width: 60, display: 'inline-block', borderRadius: 6 }} />
+                : liveProbes.toLocaleString()}
+            </strong>
             <span>Online nodes</span>
           </div>
           <div>
-            <strong>{blocksToday > 0 ? blocksToday.toLocaleString() : '—'}</strong>
+            <strong>
+              {loading
+                ? <span className="skeleton" style={{ height: 24, width: 60, display: 'inline-block', borderRadius: 6 }} />
+                : blocksToday.toLocaleString()}
+            </strong>
             <span>Active incidents</span>
           </div>
           <div>
-            <strong>{regions > 0 ? regions.toLocaleString() : '—'}</strong>
+            <strong>
+              {loading
+                ? <span className="skeleton" style={{ height: 24, width: 60, display: 'inline-block', borderRadius: 6 }} />
+                : regions.toLocaleString()}
+            </strong>
             <span>Regions monitored</span>
           </div>
         </div>
@@ -427,7 +586,9 @@ function NetworkPage({ events, stats, loading }: {
       <DottedGlobe compact />
       <div className="big-stat">
         <strong>
-          {loading ? <span className="skeleton" style={{ height: 35, width: 80, display: 'inline-block' }} /> : (stats?.liveProbes ?? 0).toLocaleString()}
+          {loading
+            ? <span className="skeleton" style={{ height: 35, width: 80, display: 'inline-block', borderRadius: 6 }} />
+            : (stats?.liveProbes ?? 0).toLocaleString()}
         </strong>
         <span>Online volunteer nodes</span>
         <small>Across {(stats?.regions ?? 0).toLocaleString()} regions worldwide</small>
@@ -545,10 +706,9 @@ function ActivityPage({ events, loading }: {
         <h1>Activity</h1>
         <StatusLine>All activity</StatusLine>
       </div>
-      <div className="search-box">
+      <div className={`input-field${search ? ' active' : ''}`}>
         <Search size={20} aria-hidden="true" />
         <input
-          style={{ background: 'none', border: 'none', outline: 'none', flex: 1, fontSize: 15, color: '#111' }}
           placeholder="Search domains, regions…"
           value={search}
           onChange={e => setSearch(e.target.value)}
@@ -578,8 +738,8 @@ function ActivityPage({ events, loading }: {
             <div key={i} className="activity-row">
               <span className="event-icon" />
               <div>
-                <span className="skeleton" style={{ width: 140, height: 14, display: 'block' }} />
-                <small className="skeleton" style={{ width: 100, height: 12, display: 'block', marginTop: 6 }} />
+                <span className="skeleton" style={{ width: 140, height: 14, display: 'block', borderRadius: 6 }} />
+                <small className="skeleton" style={{ width: 100, height: 12, display: 'block', marginTop: 6, borderRadius: 6 }} />
               </div>
             </div>
           ))}
@@ -622,21 +782,100 @@ function ActivityPage({ events, loading }: {
 
 // ─── More tab ──────────────────────────────────────────────────────────────────
 
-function MorePage() {
+function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
+  const { ready, authenticated, user, login, logout } = usePrivy()
+  const walletAddr = user?.wallet?.address ?? ''
+
   return (
     <>
       <div className="page-title">
         <h1>More</h1>
         <StatusLine>ResistNet</StatusLine>
       </div>
-      <div className="profile-card">
-        <div className="profile large" aria-hidden="true">R</div>
+
+      {/* Profile card */}
+      <div
+        className="profile-card"
+        style={{ cursor: 'pointer' }}
+        onClick={onOpenWallet}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => e.key === 'Enter' && onOpenWallet()}
+        aria-label={authenticated ? `Wallet: ${truncAddr(walletAddr)}` : 'Sign in with Ethereum'}
+      >
+        <div
+          className="profile large"
+          style={{
+            background: authenticated && walletAddr ? addrHue(walletAddr) : '#ffe3ee',
+            color: authenticated && walletAddr ? addrFg(walletAddr) : '#e65c90',
+            fontSize: 18,
+          }}
+          aria-hidden="true"
+        >
+          {!ready ? '…' : authenticated && walletAddr ? walletInitials(walletAddr) : 'R'}
+        </div>
         <div>
-          <b>ResistNet user</b>
-          <span>Manage your profile and device</span>
+          {authenticated && walletAddr ? (
+            <>
+              <b>Connected wallet</b>
+              <span
+                style={{
+                  fontFamily: 'monospace', fontSize: 13, marginTop: 4,
+                  color: '#555', letterSpacing: '0.03em',
+                }}
+              >
+                {truncAddr(walletAddr)}
+              </span>
+            </>
+          ) : (
+            <>
+              <b>Not signed in</b>
+              <span style={{ color: '#19b955', fontWeight: 600 }}>Sign in with Ethereum →</span>
+            </>
+          )}
         </div>
         <ChevronRight aria-hidden="true" />
       </div>
+
+      {/* Auth action */}
+      {authenticated ? (
+        <button
+          onClick={() => logout()}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+            padding: '14px 0', borderBottom: '1px solid var(--line)',
+            textAlign: 'left', color: '#e24a47',
+          }}
+          aria-label="Disconnect wallet"
+        >
+          <span className="setting-icon" style={{ color: '#e24a47' }}>
+            <LogOut size={20} aria-hidden="true" />
+          </span>
+          <span>
+            <b>Disconnect wallet</b>
+            <small style={{ color: '#e24a47', opacity: 0.7 }}>Sign out of ResistNet</small>
+          </span>
+        </button>
+      ) : (
+        <button
+          onClick={login}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+            padding: '14px 0', borderBottom: '1px solid var(--line)',
+            textAlign: 'left', color: '#19b955',
+          }}
+          aria-label="Sign in with Ethereum"
+        >
+          <span className="setting-icon" style={{ color: '#19b955' }}>
+            <LogIn size={20} aria-hidden="true" />
+          </span>
+          <span>
+            <b>Sign in with Ethereum</b>
+            <small>Connect your wallet to ResistNet</small>
+          </span>
+        </button>
+      )}
+
       <section className="settings-list" aria-label="Settings">
         {[
           ['Monitored services', '3 services saved', Globe2],
@@ -667,6 +906,12 @@ function MorePage() {
 export default function Page() {
   const [tab, setTab] = useState<Tab>('radar')
   const [testOpen, setTestOpen] = useState(false)
+  const [walletOpen, setWalletOpen] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [tab])
 
   const { events, stats, loading, error } = useBlockEvents({})
 
@@ -676,7 +921,7 @@ export default function Page() {
 
   let content: React.ReactNode
   if (tab === 'radar') {
-    content = <Radar onTest={() => setTestOpen(true)} liveProbes={liveProbes} regions={regions} blocksToday={blocksToday} />
+    content = <Radar onTest={() => setTestOpen(true)} liveProbes={liveProbes} regions={regions} blocksToday={blocksToday} loading={loading} />
   } else if (tab === 'network') {
     content = <NetworkPage events={events} stats={stats} loading={loading} />
   } else if (tab === 'connect') {
@@ -684,13 +929,13 @@ export default function Page() {
   } else if (tab === 'activity') {
     content = <ActivityPage events={events} loading={loading} />
   } else {
-    content = <MorePage />
+    content = <MorePage onOpenWallet={() => setWalletOpen(true)} />
   }
 
   return (
     <main className="app-shell">
       <div className="phone">
-        <Header />
+        <Header onAvatarClick={() => setWalletOpen(true)} />
 
         {error && (
           <div
@@ -709,7 +954,7 @@ export default function Page() {
           </div>
         )}
 
-        <div className="scroll-content" id="main-content">
+        <div ref={scrollRef} className="scroll-content" id="main-content">
           {content}
         </div>
 
@@ -729,6 +974,7 @@ export default function Page() {
         </nav>
 
         {testOpen && <TestUrlModal onClose={() => setTestOpen(false)} />}
+        {walletOpen && <WalletSheet onClose={() => setWalletOpen(false)} />}
       </div>
     </main>
   )

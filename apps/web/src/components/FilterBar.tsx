@@ -18,16 +18,16 @@ const FILTERS: { key: FilterType; label: string }[] = [
 ]
 
 const LABEL_STYLE_ACTIVE: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.14)',
-  color: '#ffffff',
-  border: '1px solid rgba(255,255,255,0.20)',
-  boxShadow: '0 1px 6px rgba(0,0,0,0.25)',
+  background: 'var(--wld-glass-bg-hover)',
+  color: 'var(--wld-gray-0)',
+  border: '1px solid var(--wld-glass-divider)',
+  boxShadow: '0 1px 6px var(--wld-dark-overlay-light)',
   transition: 'background-color 150ms cubic-bezier(0.16,1,0.3,1), color 150ms cubic-bezier(0.16,1,0.3,1), border-color 150ms cubic-bezier(0.16,1,0.3,1), transform 150ms cubic-bezier(0.16,1,0.3,1)',
 }
 const LABEL_STYLE_INACTIVE: React.CSSProperties = {
-  background: 'rgba(255,255,255,0.04)',
-  color: 'rgba(255,255,255,0.55)',
-  border: '1px solid rgba(255,255,255,0.07)',
+  background: 'var(--wld-glass-border-subtle)',
+  color: 'var(--wld-glass-text-muted)',
+  border: '1px solid var(--wld-glass-border-strong)',
   transition: 'background-color 150ms cubic-bezier(0.16,1,0.3,1), color 150ms cubic-bezier(0.16,1,0.3,1), border-color 150ms cubic-bezier(0.16,1,0.3,1), transform 150ms cubic-bezier(0.16,1,0.3,1)',
 }
 

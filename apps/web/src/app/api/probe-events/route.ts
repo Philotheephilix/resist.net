@@ -322,24 +322,51 @@ export async function GET(request: NextRequest) {
     events = fixture
   }
 
-  // Build quorum-verified URL set: a URL is verified when 3+ distinct 4-char geohash
-  // regions (≈45km cells) independently report it blocked within the last 48h.
-  // Single-node block reports are labelled unverified so the UI can surface the caveat.
-  const BLOCK_QUORUM = 3
+  // Build quorum-verified URL set: a URL is verified when 5+ distinct 4-char geohash
+  // regions (≈45km cells) independently report it blocked within the last 48h, AND
+  // those reports come from established wallets (active NodeIdentity heartbeat ≥1h).
+  // Single-node or unestablished block reports are labelled unverified.
+  // NOTE: 'verified' is a probabilistic geographic-quorum heuristic, not a cryptographic
+  // proof. An adversary controlling 5+ established wallets in different cities could
+  // satisfy this threshold. The quorumStrength field in the response conveys this caveat.
+  const BLOCK_QUORUM = 5
+  let establishedWalletsForQuorum: Set<string> | null = null
+  const rpcUrlForQuorum = process.env['ARKIV_RPC_URL']
+  if (rpcUrlForQuorum) {
+    try {
+      const { ArkivReadClient: ArkivReadClientQuorum } = await import('@resist/arkiv-sdk/src/client.js')
+      const identityClientQuorum = new ArkivReadClientQuorum(rpcUrlForQuorum)
+      const identities = await identityClientQuorum.queryNodeIdentities()
+      const oneHourAgo = Date.now() - 3600_000
+      // Wallets in the events array are truncated (first 6 + last 4 chars with '…').
+      // Truncate established wallet addresses the same way for matching.
+      establishedWalletsForQuorum = new Set(
+        identities
+          .filter((id) => id.lastseenms > 0 && id.lastseenms > oneHourAgo)
+          .map((id) => {
+            const w = id.wallet
+            return w.length > 10 ? w.slice(0, 6) + '…' + w.slice(-4) : w
+          })
+      )
+    } catch {
+      // best-effort — if identity query fails, fall back to no wallet filter
+    }
+  }
   const eventsForQuorum = events ?? []
   const quorumRegionsByUrl = new Map<string, Set<string>>()
   for (const e of eventsForQuorum) {
     if (e.blockType !== null && e.geohash && e.geohash.length >= 4) {
+      if (establishedWalletsForQuorum !== null && !establishedWalletsForQuorum.has(e.nodeWallet)) continue
       const region = (e.geohash as string).slice(0, 4)
       let regions = quorumRegionsByUrl.get(e.targetUrl)
       if (!regions) { regions = new Set(); quorumRegionsByUrl.set(e.targetUrl, regions) }
       regions.add(region)
     }
   }
-  const verifiedUrls = new Set(
+  const verifiedUrls = new Map(
     [...quorumRegionsByUrl.entries()]
       .filter(([, regions]) => regions.size >= BLOCK_QUORUM)
-      .map(([url]) => url)
+      .map(([url, regions]) => [url, regions.size] as [string, number])
   )
 
   // Strip events with non-http(s) targetUrl before sending to clients — a malicious
@@ -353,9 +380,13 @@ export async function GET(request: NextRequest) {
     }
   }).map(e => ({
     ...e,
-    // verified=true means quorum of 3+ distinct regions corroborate this block report.
-    // verified=false means the report is from a single node and may be fabricated.
+    // verified=true means quorum of 5+ distinct established-wallet regions corroborate
+    // this block report. This is a probabilistic heuristic, not a cryptographic proof.
     verified: e.blockType === null ? true : verifiedUrls.has(e.targetUrl),
+    // quorumStrength: number of distinct geographic regions that corroborate this URL
+    // being blocked (0 if unverified). Signals confidence level to UI consumers.
+    quorumStrength: e.blockType === null ? null : (verifiedUrls.get(e.targetUrl) ?? 0),
+    verificationNote: 'geographic-quorum heuristic: not a cryptographic proof',
   }))
 
   const safeSlice = safe.slice(0, 200)
