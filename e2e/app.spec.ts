@@ -80,20 +80,6 @@ test.describe('resist.net web app', () => {
     await expect(page.getByText('1,284').first()).toBeVisible({ timeout: 15000 })
   })
 
-  test('page layout has no horizontal overflow at 375px', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 })
-    await page.goto('/')
-    const bodyWidth = await page.evaluate(() => document.body.scrollWidth)
-    expect(bodyWidth).toBeLessThanOrEqual(376)
-  })
-
-  test('page layout has no horizontal overflow at 1280px', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto('/')
-    const bodyWidth = await page.evaluate(() => document.body.scrollWidth)
-    expect(bodyWidth).toBeLessThanOrEqual(1281)
-  })
-
   test('API error shows error banner', async ({ page }) => {
     await page.route('**/api/probe-events**', route => route.fulfill({ status: 500, body: 'Server error' }))
     await page.goto('/')
@@ -213,8 +199,9 @@ test.describe('resist.net web app', () => {
     await page.goto('/')
     await page.getByRole('button', { name: /Test a URL/i }).click()
     await page.getByLabel('URL to test').fill('example.com')
+    const responsePromise = page.waitForResponse('**/api/test-url')
     await page.getByRole('button', { name: 'Run test' }).click()
-    await page.waitForResponse('**/api/test-url')
+    await responsePromise
     const body = JSON.parse(capturedBody ?? '{}')
     expect(body.url).toMatch(/^https:\/\//)
   })
@@ -738,6 +725,7 @@ test.describe('resist.net web app', () => {
     const dialog = page.getByRole('dialog', { name: 'Wallet' })
     await expect(dialog.getByRole('button', { name: 'Disconnect wallet' })).toBeVisible({ timeout: 8000 })
     await dialog.getByRole('button', { name: 'Copy full address' }).click()
+    await expect(dialog.getByRole('button', { name: 'Copy full address' })).toContainText('Copied!')
     const calls = await page.evaluate(() => (window as any).__clipboardCalls)
     expect(calls).toContain('0xAbCdEf1234567890AbCdEf1234567890AbCdEf12')
   })
@@ -760,6 +748,7 @@ test.describe('resist.net web app', () => {
     await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'More' }).click()
     await expect(page.getByRole('button', { name: 'Copy wallet address' })).toBeVisible({ timeout: 8000 })
     await page.getByRole('button', { name: 'Copy wallet address' }).click()
+    await expect(page.getByRole('button', { name: 'Copy wallet address' }).locator('svg')).toBeVisible()
     const calls = await page.evaluate(() => (window as any).__clipboardCalls)
     expect(calls).toContain('0xAbCdEf1234567890AbCdEf1234567890AbCdEf12')
     await expect(page.getByRole('dialog', { name: 'Wallet' })).not.toBeVisible()

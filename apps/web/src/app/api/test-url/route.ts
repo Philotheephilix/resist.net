@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import dns from 'dns/promises'
 import net from 'net'
+import { Agent } from 'undici'
 
 export interface TestUrlRequest {
   url: string
@@ -42,19 +43,24 @@ function isPrivateIP(ip: string): boolean {
     )
   }
   if (net.isIPv6(ip)) {
-    const normalized = ip.toLowerCase()
+    let canonical: string
+    try {
+      canonical = new URL(`http://[${ip}]`).hostname.replace(/^\[|\]$/g, '').toLowerCase()
+    } catch {
+      return true
+    }
     return (
-      normalized === '::1' ||
-      normalized.startsWith('fc') ||
-      normalized.startsWith('fd') ||
-      normalized.startsWith('fe80') ||
-      normalized === '::' ||
-      normalized.startsWith('::ffff:') ||
-      normalized.startsWith('64:ff9b:') ||
-      normalized.startsWith('0064:ff9b:') ||
-      normalized.startsWith('100:') ||
-      normalized.startsWith('2001:db8:') ||
-      normalized.startsWith('2002:')
+      canonical === '::1' ||
+      canonical.startsWith('fc') ||
+      canonical.startsWith('fd') ||
+      canonical.startsWith('fe80') ||
+      canonical === '::' ||
+      canonical.startsWith('::ffff:') ||
+      canonical.startsWith('64:ff9b:') ||
+      canonical.startsWith('0064:ff9b:') ||
+      canonical.startsWith('100:') ||
+      canonical.startsWith('2001:db8:') ||
+      canonical.startsWith('2002:')
     )
   }
   return true
@@ -112,13 +118,19 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
     while (true) {
       const parsed = new URL(currentUrl)
       const resolvedIP = await resolvePublicHostname(parsed.hostname)
-      const fetchUrl = new URL(currentUrl)
-      fetchUrl.hostname = net.isIPv6(resolvedIP) ? `[${resolvedIP}]` : resolvedIP
-      res = await fetch(fetchUrl.toString(), {
+      const dispatcher = new Agent({
+        connect: {
+          lookup: (_hostname, _options, callback) => {
+            callback(null, resolvedIP, net.isIPv6(resolvedIP) ? 6 : 4)
+          },
+        },
+      })
+      res = await fetch(currentUrl, {
         method: 'HEAD',
         signal: controller.signal,
         redirect: 'manual',
-        headers: { Host: parsed.host },
+        // @ts-expect-error undici dispatcher not in standard fetch types
+        dispatcher,
       } as RequestInit)
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location')
@@ -128,6 +140,7 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
           return { url, method: 'HTTP', reachable: false, latencyMs: Date.now() - start, errorType: 'full_unreachable', errorDetail: 'Too many redirects', checkedAt: Date.now(), region }
         }
         currentUrl = new URL(location, currentUrl).toString()
+        if (!ALLOWED_PROTOCOLS.has(new URL(currentUrl).protocol)) break
         continue
       }
       break

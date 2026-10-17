@@ -431,6 +431,11 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
   const walletAddr = user?.wallet?.address ?? ''
   const panelRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(id)
+  }, [copied])
   useFocusTrap(panelRef, onClose)
 
   return (
@@ -482,7 +487,7 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
                 }}
                 title={walletAddr}
                 aria-label="Copy full address"
-                onClick={() => { navigator.clipboard?.writeText(walletAddr); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+                onClick={() => { navigator.clipboard?.writeText(walletAddr); setCopied(true) }}
               >
                 {copied ? 'Copied!' : walletAddr}
               </button>
@@ -673,13 +678,18 @@ function NetworkPage({ events, stats, loading }: {
           ))}
         </section>
       )}
+      {!loading && events.length === 0 && (
+        <div style={{ color: '#999', textAlign: 'center', padding: '40px 0' }}>
+          No network events recorded yet
+        </div>
+      )}
     </>
   )
 }
 
 // ─── Connect tab ───────────────────────────────────────────────────────────────
 
-function ConnectPage() {
+function ConnectPage({ onConnect }: { onConnect: () => void }) {
   return (
     <>
       <div className="page-title">
@@ -706,7 +716,7 @@ function ConnectPage() {
         <button disabled aria-disabled="true">7D</button>
         <button disabled aria-disabled="true">30D</button>
       </div>
-      <button className="primary-button">Connect</button>
+      <button className="primary-button" onClick={onConnect}>Connect</button>
       <div className="quick-actions">
         <button><Globe2 aria-hidden="true" /><span>Choose region</span></button>
         <button><Zap aria-hidden="true" /><span>Find best route</span></button>
@@ -800,7 +810,7 @@ function ActivityPage({ events, loading }: {
           {search ? 'No events match this search' : 'No events yet'}
         </div>
       ) : (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }} aria-label="Censorship events">
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0, opacity: search !== debouncedSearch ? 0.5 : 1, transition: 'opacity 0.15s' }} aria-label="Censorship events" aria-busy={search !== debouncedSearch}>
           {filtered.map(event => {
             const color = statusColor(event.blockType, event.reachable)
             const label = statusLabel(event.blockType, event.reachable)
@@ -837,6 +847,11 @@ function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
   const { ready, authenticated, user, login, logout } = usePrivy()
   const walletAddr = user?.wallet?.address ?? ''
   const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const id = setTimeout(() => setCopied(false), 2000)
+    return () => clearTimeout(id)
+  }, [copied])
 
   return (
     <>
@@ -882,7 +897,7 @@ function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
                 <button
                   type="button"
                   aria-label="Copy wallet address"
-                  onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(walletAddr); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                  onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(walletAddr); setCopied(true) }}
                   style={{
                     background: 'none', border: 'none', padding: '2px 4px',
                     cursor: 'pointer', color: copied ? '#19b955' : '#888', display: 'flex', alignItems: 'center',
@@ -1001,7 +1016,7 @@ export default function Page() {
   } else if (tab === 'network') {
     content = <NetworkPage events={events} stats={stats} loading={loading} />
   } else if (tab === 'connect') {
-    content = <ConnectPage />
+    content = <ConnectPage onConnect={() => setWalletOpen(true)} />
   } else if (tab === 'activity') {
     content = <ActivityPage events={events} loading={loading} />
   } else {
