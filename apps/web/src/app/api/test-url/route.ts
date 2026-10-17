@@ -169,8 +169,8 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
           method: 'HEAD',
           signal: controller.signal,
           redirect: 'manual',
-          // @ts-expect-error undici dispatcher not in standard fetch types
-          dispatcher,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          dispatcher: dispatcher as any,
         } as RequestInit)
       } finally {
         await dispatcher.destroy()

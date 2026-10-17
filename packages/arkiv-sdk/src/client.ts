@@ -32,6 +32,8 @@ import type {
   ProbeResultRow,
   VolunteerProxyRow,
   SignalExchangeRow,
+  ProbeQueueEntry,
+  ProbeQueueRow,
 } from "./types.js"
 
 export interface ArkivClientConfig {
@@ -211,6 +213,33 @@ export class ArkivClient {
       throw new Error("deleteEntity: invalid entityKey: " + String(entityKey))
     }
     await this.walletClient.deleteEntity({ entityKey: entityKey as `0x${string}` })
+  }
+
+  /**
+   * Write a ProbeQueueEntry — a custom URL probe job with GLM reward.
+   * TTL is set to expiresAt - now, capped at 7 days.
+   */
+  async writeProbeQueueEntry(entry: ProbeQueueEntry): Promise<string> {
+    const ttlMs = Math.max(60_000, Math.min(entry.expiresAt - Date.now(), 7 * 24 * 60 * 60 * 1000))
+    const ttlHours = Math.ceil(ttlMs / (60 * 60 * 1000))
+    const { entityKey } = await this.walletClient.createEntity({
+      payload: new TextEncoder().encode(JSON.stringify({ targetUrl: entry.targetUrl })),
+      contentType: 'application/json',
+      expires: ExpirationTime.fromHours(ttlHours),
+      attributes: {
+        project: "resist.net",
+        entitytype: "probequeue",
+        requesterwallet: str(entry.requesterWallet),
+        targeturl: str(entry.targetUrl.slice(0, 128)),
+        volunteercount: i32(Math.min(entry.volunteerCount, 100)),
+        repeatcount: i32(Math.min(entry.repeatCount, 50)),
+        intervalseconds: i32(Math.min(entry.intervalSeconds, 86400)),
+        paymentglm: i32(Math.round(entry.paymentGlm * 1000)), // store as millionths
+        createdat: u64(BigInt(entry.createdAt)),
+        expiresat: u64(BigInt(entry.expiresAt)),
+      },
+    })
+    return entityKey as string
   }
 
   /**
@@ -516,6 +545,34 @@ export class ArkivReadClient {
         isp: String(a["isp"]?.value ?? ""),
         networktype: String(a["networktype"]?.value ?? ""),
         lastseenms: Number(a["lastseenms"]?.value ?? 0),
+      }
+    })
+  }
+
+  async queryProbeQueue(opts: { limit?: number; since?: number } = {}): Promise<import("./types.js").ProbeQueueRow[]> {
+    const filters: Expression[] = [
+      eq("project", "resist.net"),
+      eq("entitytype", "probequeue"),
+    ]
+    if (opts.since !== undefined) filters.push(gte("createdat", u64(BigInt(opts.since))))
+    const page = await this.publicClient
+      .select({ key: true, attributes: true })
+      .where(and(filters))
+      .limit(opts.limit ?? 50)
+      .fetch()
+
+    return page.entities.map((entity) => {
+      const a = entity.attributes
+      return {
+        entityKey: entity.key as string,
+        requesterwallet: String(a["requesterwallet"]?.value ?? ""),
+        targeturl: String(a["targeturl"]?.value ?? ""),
+        volunteercount: Number(a["volunteercount"]?.value ?? 1),
+        repeatcount: Number(a["repeatcount"]?.value ?? 1),
+        intervalseconds: Number(a["intervalseconds"]?.value ?? 60),
+        paymentglm: Number(a["paymentglm"]?.value ?? 0) / 1000,
+        createdat: Number(a["createdat"]?.value ?? 0),
+        expiresat: Number(a["expiresat"]?.value ?? 0),
       }
     })
   }

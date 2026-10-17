@@ -174,13 +174,13 @@ function DottedGlobe({ compact = false, points, arcs }: {
 }) {
   const [autoRotate, setAutoRotate] = useState(true)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const [countryFeatures, setCountryFeatures] = useState<unknown[]>([])
+  const [countryFeatures, setCountryFeatures] = useState<object[]>([])
   useEffect(() => {
     Promise.all([
       import('topojson-client'),
       import('world-atlas/countries-110m.json'),
     ]).then(([{ feature }, countries]) => {
-      setCountryFeatures((feature as (t: unknown, o: unknown) => { features: unknown[] })(countries, (countries as { objects: { countries: unknown } }).objects.countries).features)
+      setCountryFeatures((feature as (t: unknown, o: unknown) => { features: object[] })(countries, (countries as { objects: { countries: unknown } }).objects.countries).features)
     }).catch(err => console.error('Failed to load world atlas', err))
   }, [])
   const displayPoints = useMemo(() => points ?? DEFAULT_POINTS, [points])
@@ -208,7 +208,7 @@ function DottedGlobe({ compact = false, points, arcs }: {
         height={295}
         backgroundColor="rgba(0,0,0,0)"
         globeImageUrl="/resistnet-world-globe.png"
-        polygonsData={countryFeatures}
+        polygonsData={countryFeatures as object[]}
         polygonGeoJsonGeometry="geometry"
         polygonCapColor={POLY_CAP_COLOR}
         polygonSideColor={POLY_SIDE_COLOR}
@@ -233,6 +233,7 @@ function DottedGlobe({ compact = false, points, arcs }: {
         arcDashAnimateTime={1600}
         enablePointerInteraction
         animateIn
+        // @ts-expect-error controlsOptions valid prop, missing from type defs
         controlsOptions={controlsOptions}
         onGlobeClick={handleGlobeClick}
       />
@@ -342,12 +343,23 @@ function useFocusTrap(panelRef: { current: HTMLElement | null }, onClose: () => 
 
 type TestMethod = 'HTTP' | 'DNS' | 'TCP'
 
-function TestUrlModal({ onClose }: { onClose: () => void }) {
-  const [urlInput, setUrlInput] = useState('')
+function TestUrlModal({ onClose, initialUrl }: { onClose: () => void; initialUrl?: string }) {
+  const { user } = usePrivy()
+  const walletAddr = user?.wallet?.address ?? ''
+  const [urlInput, setUrlInput] = useState(initialUrl ?? '')
   const [method, setMethod] = useState<TestMethod>('HTTP')
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<TestUrlResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Queue section
+  const [queueOpen, setQueueOpen] = useState(false)
+  const [qVolunteers, setQVolunteers] = useState(3)
+  const [qRepeat, setQRepeat] = useState(3)
+  const [qInterval, setQInterval] = useState(60)
+  const [qPayment, setQPayment] = useState(0.1)
+  const [qSubmitting, setQSubmitting] = useState(false)
+  const [qSuccess, setQSuccess] = useState(false)
+  const [qError, setQError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -386,11 +398,42 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
     }
   }, [urlInput, method])
 
+  const submitQueue = useCallback(async () => {
+    const raw = urlInput.trim()
+    if (!raw) return
+    const url = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`
+    if (!walletAddr) { setQError('Connect your wallet first'); return }
+    setQSubmitting(true)
+    setQSuccess(false)
+    setQError(null)
+    try {
+      const res = await fetch('/api/probe-queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetUrl: url,
+          volunteerCount: qVolunteers,
+          repeatCount: qRepeat,
+          intervalSeconds: qInterval,
+          paymentGlm: qPayment,
+          requesterWallet: walletAddr,
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setQSuccess(true)
+      } else {
+        setQError(data.error ?? 'Submission failed')
+      }
+    } catch {
+      setQError('Network error')
+    } finally {
+      setQSubmitting(false)
+    }
+  }, [urlInput, walletAddr, qVolunteers, qRepeat, qInterval, qPayment])
+
   return (
-    <div
-      className="modal-backdrop"
-      onClick={onClose}
-    >
+    <div className="modal-backdrop" onClick={onClose}>
       <div ref={panelRef} className="test-modal" role="dialog" aria-modal="true" aria-labelledby="test-modal-title" onClick={e => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Close"><X /></button>
         <h2 id="test-modal-title">Test a URL</h2>
@@ -411,7 +454,7 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
           />
         </div>
 
-<div className="method-row" role="group" aria-label="Test method">
+        <div className="method-row" role="group" aria-label="Test method">
           {(['HTTP', 'DNS', 'TCP'] as TestMethod[]).map(m => (
             <button
               key={m}
@@ -451,9 +494,9 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
               {result.notSupported
                 ? 'Not yet supported'
                 : result.reachable === true
-                ? <><span aria-hidden="true">✓</span> Reachable</>
+                ? <><span aria-hidden="true">✓</span><span className="sr-only">Pass:</span> Reachable</>
                 : result.reachable === false
-                ? <><span aria-hidden="true">✗</span> {statusLabel(result.errorType ?? null, false)}</>
+                ? <><span aria-hidden="true">✗</span><span className="sr-only">Fail:</span> {statusLabel(result.errorType ?? null, false)}</>
                 : null}
             </b>
             <span>
@@ -469,6 +512,78 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
             )}
           </div>
         )}
+
+        {/* ── Queue for network section ── */}
+        <div style={{ marginTop: 20, borderTop: '1px solid var(--line)', paddingTop: 16 }}>
+          <button
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: '#222', fontWeight: 600 }}
+            onClick={() => setQueueOpen(v => !v)}
+            aria-expanded={queueOpen}
+            aria-controls="queue-panel"
+          >
+            <Network size={16} aria-hidden="true" />
+            Queue for network probing
+            <ChevronDown size={14} aria-hidden="true" style={{ marginLeft: 'auto', transform: queueOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+          </button>
+          {queueOpen && (
+            <div id="queue-panel" style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <p style={{ color: '#666', fontSize: 12, margin: 0 }}>
+                Request volunteer nodes to probe this URL on-chain. Pay GLM to reward participating nodes.
+              </p>
+              <label style={{ fontSize: 13 }}>
+                <span style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  Volunteer nodes <b>{qVolunteers}</b>
+                </span>
+                <input type="range" min={1} max={20} value={qVolunteers} onChange={e => setQVolunteers(Number(e.target.value))} style={{ width: '100%', marginTop: 4 }} aria-label="Number of volunteer nodes" />
+              </label>
+              <label style={{ fontSize: 13 }}>
+                <span style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  Repeat probes <b>{qRepeat}×</b>
+                </span>
+                <input type="range" min={1} max={10} value={qRepeat} onChange={e => setQRepeat(Number(e.target.value))} style={{ width: '100%', marginTop: 4 }} aria-label="Number of repeat probes per node" />
+              </label>
+              <label style={{ fontSize: 13 }}>
+                <span style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  Probe interval <b>{qInterval}s</b>
+                </span>
+                <input type="range" min={30} max={3600} step={30} value={qInterval} onChange={e => setQInterval(Number(e.target.value))} style={{ width: '100%', marginTop: 4 }} aria-label="Interval between probes in seconds" />
+              </label>
+              <label style={{ fontSize: 13 }}>
+                <span style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  GLM reward <b>{qPayment.toFixed(3)} GLM</b>
+                </span>
+                <input type="range" min={0.001} max={10} step={0.001} value={qPayment} onChange={e => setQPayment(Number(e.target.value))} style={{ width: '100%', marginTop: 4 }} aria-label="GLM payment for participating nodes" />
+              </label>
+              <div style={{ fontSize: 12, color: '#888', background: '#f7f7f7', borderRadius: 8, padding: '8px 12px' }}>
+                {qVolunteers} node{qVolunteers !== 1 ? 's' : ''} · {qRepeat} probe{qRepeat !== 1 ? 's' : ''} each · every {qInterval}s · {qPayment.toFixed(3)} GLM total
+              </div>
+              {qSuccess ? (
+                <div className="test-result success" role="status">
+                  <b><span aria-hidden="true">✓</span><span className="sr-only">Success:</span> Job queued</b>
+                  <span>Volunteer nodes will pick this up automatically.</span>
+                </div>
+              ) : (
+                <button
+                  className="primary-button"
+                  onClick={submitQueue}
+                  disabled={qSubmitting || !urlInput.trim() || !walletAddr}
+                  aria-busy={qSubmitting}
+                  title={!walletAddr ? 'Connect your wallet first' : undefined}
+                >
+                  {qSubmitting ? (
+                    <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} aria-hidden="true" />
+                      Submitting…
+                    </span>
+                  ) : `Queue job · ${qPayment.toFixed(3)} GLM`}
+                </button>
+              )}
+              {qError && (
+                <div className="test-result error" role="alert"><b>Error</b><span>{qError}</span></div>
+              )}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>
@@ -791,21 +906,46 @@ function NetworkPage({ events, stats, loading, error, onRetry }: {
 // ─── Connect tab ───────────────────────────────────────────────────────────────
 
 const ROUTES = [
-  { label: 'Best available route', description: 'Auto-selects the fastest node' },
-  { label: 'Europe', description: 'Exit via EU volunteer node' },
-  { label: 'North America', description: 'Exit via NA volunteer node' },
-  { label: 'Asia Pacific', description: 'Exit via APAC volunteer node' },
+  { label: 'Best available route', region: 'auto', description: 'Auto-selects the fastest node' },
+  { label: 'Europe', region: 'eu', description: 'Exit via EU volunteer node' },
+  { label: 'North America', region: 'na', description: 'Exit via NA volunteer node' },
+  { label: 'Asia Pacific', region: 'apac', description: 'Exit via APAC volunteer node' },
 ]
 
-function ConnectPage({ onConnect, connected, onDisconnect, events }: { onConnect: () => void; connected: boolean; onDisconnect: () => void; events: { timestamp: number }[] }) {
+function ConnectPage({ onConnect, connected, onDisconnect, events, walletAddr, rpcUrl }: {
+  onConnect: () => void
+  connected: boolean
+  onDisconnect: () => void
+  events: { timestamp: number }[]
+  walletAddr: string
+  rpcUrl: string
+}) {
   const [routeIdx, setRouteIdx] = useState(0)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [cmdCopied, setCmdCopied] = useState(false)
+  const cmdCopyRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const route = ROUTES[routeIdx]
+
+  const proxyCommand = useMemo(() => {
+    const wallet = walletAddr || '<your-wallet-address>'
+    const rpc = rpcUrl || 'https://arkiv.network/rpc'
+    const geohash = 'u1hxr' // India default — probe-node will use real geohash
+    return `npx @resist/proxy-client \\\n  --wallet=${wallet} \\\n  --rpc-url=${rpc} \\\n  --geohash=${geohash}${route.region !== 'auto' ? ` \\\n  --region=${route.region}` : ''}`
+  }, [walletAddr, rpcUrl, route.region])
+
+  const copyCmd = useCallback(() => {
+    navigator.clipboard?.writeText(proxyCommand.replace(/\\\n\s+/g, ' '))
+    setCmdCopied(true)
+    if (cmdCopyRef.current) clearTimeout(cmdCopyRef.current)
+    cmdCopyRef.current = setTimeout(() => setCmdCopied(false), 2000)
+  }, [proxyCommand])
+  useEffect(() => () => { if (cmdCopyRef.current) clearTimeout(cmdCopyRef.current) }, [])
+
   const healthRows = useMemo<[string, string][]>(() => [
     ['Volunteer node', route.label],
     ['Approximate exit', route.description],
-    ['Latency / packet loss', '—'],
-    ['Traffic routing mode', 'Browser extension'],
+    ['Proxy address', '127.0.0.1:8080'],
+    ['Traffic routing mode', 'HTTP proxy (npx)'],
   ], [route])
 
   return (
@@ -828,10 +968,10 @@ function ConnectPage({ onConnect, connected, onDisconnect, events }: { onConnect
         <ChevronDown aria-hidden="true" />
       </button>
       {pickerOpen && (
-        <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Select exit region" onClick={() => setPickerOpen(false)}>
+        <div className="sheet-overlay" role="dialog" aria-modal="true" aria-labelledby="route-picker-title" onClick={() => setPickerOpen(false)}>
           <div className="sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-header">
-              <span>Select exit region</span>
+              <span id="route-picker-title">Select exit region</span>
               <button aria-label="Close" onClick={() => setPickerOpen(false)}><X size={18} /></button>
             </div>
             {ROUTES.map((r, i) => (
@@ -851,8 +991,38 @@ function ConnectPage({ onConnect, connected, onDisconnect, events }: { onConnect
       <button className="primary-button" onClick={connected ? onDisconnect : onConnect}>{connected ? 'Disconnect' : 'Connect'}</button>
       <div className="quick-actions">
         <button aria-label="Select exit region" onClick={() => setPickerOpen(true)}><Globe2 aria-hidden="true" /><span>Choose region</span></button>
-        <button aria-label="Auto-select best available route" onClick={() => setRouteIdx(0)}><Zap aria-hidden="true" /><span>Find best route</span></button>
+        <button aria-label="Auto-select best available route" onClick={() => setRouteIdx(0)}><Zap aria-hidden="true" /><span>Best route</span></button>
       </div>
+
+      {/* ── How to connect ── */}
+      <section className="section-block" style={{ marginTop: 8 }}>
+        <h2>How to connect</h2>
+        <p style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>
+          Run this command on the machine you want to route traffic from. It starts a local HTTP proxy on <code>127.0.0.1:8080</code>.
+        </p>
+        <div style={{
+          background: '#1a1a2e', color: '#e8f5e9', borderRadius: 10,
+          padding: '12px 14px', fontSize: 12, fontFamily: 'monospace',
+          lineHeight: 1.7, position: 'relative', overflowX: 'auto',
+        }}>
+          <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{proxyCommand}</pre>
+          <button
+            onClick={copyCmd}
+            aria-label="Copy proxy command"
+            style={{
+              position: 'absolute', top: 8, right: 8, background: cmdCopied ? '#19b955' : 'rgba(255,255,255,0.1)',
+              border: 'none', borderRadius: 6, padding: '4px 10px', color: '#fff',
+              cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            {cmdCopied ? <><Check size={12} aria-hidden="true" /> Copied!</> : <><Copy size={12} aria-hidden="true" /> Copy</>}
+          </button>
+        </div>
+        <p style={{ color: '#888', fontSize: 12, marginTop: 10 }}>
+          After starting, set your browser proxy to <b>127.0.0.1:8080</b>. Chrome: Settings → System → Proxy settings.
+        </p>
+      </section>
+
       {connected && (
         <section className="section-block">
           <h2>Route details</h2>
@@ -1156,6 +1326,7 @@ function MorePage({ onOpenWallet, onComingSoon }: { onOpenWallet: () => void; on
 export default function Page() {
   const [tab, setTab] = useState<Tab>('radar')
   const [testOpen, setTestOpen] = useState(false)
+  const [testInitialUrl, setTestInitialUrl] = useState<string | undefined>()
   const [walletOpen, setWalletOpen] = useState(false)
   const [connected, setConnected] = useState(false)
   const [comingSoon, setComingSoon] = useState('')
@@ -1164,20 +1335,17 @@ export default function Page() {
     const id = setTimeout(() => setComingSoon(''), 2500)
     return () => clearTimeout(id)
   }, [comingSoon])
-  const { authenticated } = usePrivy()
+  const { authenticated, user } = usePrivy()
+  const walletAddr = user?.wallet?.address ?? ''
+  const rpcUrl = process.env['NEXT_PUBLIC_ARKIV_RPC_URL'] ?? ''
   const scrollRef = useRef<HTMLDivElement>(null)
   const navRef = useRef<HTMLElement>(null)
-  const isMounted = useRef(false)
+  const prevTab = useRef<Tab>('radar')
 
   useEffect(() => {
-    if (!isMounted.current) {
-      isMounted.current = true
-      return
-    }
+    if (prevTab.current === tab) return
+    prevTab.current = tab
     scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' })
-    return () => {
-      isMounted.current = false
-    }
   }, [tab])
 
   const modalOpen = testOpen || walletOpen
@@ -1198,7 +1366,7 @@ export default function Page() {
   const regions = stats?.regions ?? 0
   const blocksToday = stats?.blocksToday ?? 0
 
-  const openTest = useCallback(() => setTestOpen(true), [])
+  const openTest = useCallback((url?: string) => { setTestInitialUrl(url); setTestOpen(true) }, [])
   const goConnect = useCallback(() => setTab('connect'), [])
   const goNetwork = useCallback(() => setTab('network'), [])
   const openWallet = useCallback(() => setWalletOpen(true), [])
@@ -1208,7 +1376,7 @@ export default function Page() {
 
   let content: React.ReactNode
   if (tab === 'radar') {
-    content = <Radar onTest={openTest} onConnect={goConnect} onViewNetwork={goNetwork} liveProbes={liveProbes} regions={regions} blocksToday={blocksToday} loading={loading} error={error} events={events} />
+    content = <Radar onTest={() => openTest()} onConnect={goConnect} onViewNetwork={goNetwork} liveProbes={liveProbes} regions={regions} blocksToday={blocksToday} loading={loading} error={error} events={events} />
   } else if (tab === 'network') {
     content = <NetworkPage events={events} stats={stats} loading={loading} error={error} onRetry={retry} />
   } else if (tab === 'connect') {
@@ -1217,6 +1385,8 @@ export default function Page() {
       onConnect={startConnect}
       onDisconnect={disconnect}
       events={events}
+      walletAddr={walletAddr}
+      rpcUrl={rpcUrl}
     />
   } else if (tab === 'activity') {
     content = <ActivityPage events={events} loading={loading} error={error} onRetry={retry} />
@@ -1286,7 +1456,7 @@ export default function Page() {
           ))}
         </nav>
 
-        {testOpen && <TestUrlModal onClose={() => setTestOpen(false)} />}
+        {testOpen && <TestUrlModal onClose={() => { setTestOpen(false); setTestInitialUrl(undefined) }} initialUrl={testInitialUrl} />}
         {walletOpen && <WalletSheet onClose={closeWallet} />}
         {comingSoon && (
           <div role="status" aria-live="polite" style={{

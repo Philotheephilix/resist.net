@@ -47,6 +47,30 @@ export interface SignalExchangeEntry {
   createdAt: number;        // unix ms
 }
 
+// Probe queue — custom URL probing with GLM payment reward
+export interface ProbeQueueEntry {
+  requesterWallet: string;
+  targetUrl: string;           // URL to probe
+  volunteerCount: number;      // how many nodes needed
+  repeatCount: number;         // how many times each node probes
+  intervalSeconds: number;     // seconds between each repeat
+  paymentGlm: number;          // total GLM reward split across participating nodes
+  createdAt: number;           // unix ms
+  expiresAt: number;           // unix ms — queue entry auto-expires
+}
+
+export interface ProbeQueueRow {
+  entityKey: string;
+  requesterwallet: string;
+  targeturl: string;
+  volunteercount: number;
+  repeatcount: number;
+  intervalseconds: number;
+  paymentglm: number;
+  createdat: number;
+  expiresat: number;
+}
+
 // Row types returned FROM Arkiv queries
 
 export interface ProbeResultRow {

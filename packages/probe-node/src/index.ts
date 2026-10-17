@@ -1,11 +1,13 @@
 // Probe node entry point
 // Runs HTTP + DNS + TCP checks on a schedule, signs results, writes to Arkiv
 // Falls back to local SQLite cache when offline
+// Also polls for custom probe queue jobs from Arkiv and executes them
 
 import http from "http"
 import { runProbe } from "./probe"
 import { syncToArkiv, getPendingRowCount } from "./sync"
 import { loadConfig, savePrevHash } from "./config"
+import { QueueWorker } from "./queue"
 
 const HEALTHZ_PORT = parseInt(process.env["HEALTHZ_PORT"] ?? "9090", 10)
 const PENDING_ALERT_THRESHOLD = 500
@@ -47,9 +49,23 @@ export async function main(opts: { once?: boolean } = {}) {
   let shutdownRequested = false
   let drainResolve: (() => void) | null = null
 
+  // Start probe queue worker if ARKIV_RPC_URL is available
+  let queueWorker: QueueWorker | null = null
+  if (!opts.once) {
+    const rpcUrl = process.env["ARKIV_RPC_URL"]
+    if (rpcUrl) {
+      const config = await loadConfig()
+      queueWorker = new QueueWorker(rpcUrl, config)
+      queueWorker.start()
+    } else {
+      console.warn("[queue] ARKIV_RPC_URL not set — queue worker disabled")
+    }
+  }
+
   const shutdown = () => {
     if (shutdownRequested) return
     shutdownRequested = true
+    queueWorker?.stop()
     console.log("[probe] shutdown requested — waiting for in-flight tick to complete")
     if (!running) {
       process.exit(0)

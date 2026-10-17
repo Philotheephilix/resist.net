@@ -182,6 +182,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
   // Create a single marker DOM element and bind events. Extracted so it can be called
   // for both incremental adds (new event IDs) and full re-init.
   const createMarker = useCallback((leaflet: any, event: ProbeResultRow) => {
+      if (!event.geohash) return
       const [lat, lng] = cachedGeohashToLatLng(event.geohash)
       const badgeVariant = markerColorForBlockType(event.blockType)
       const color = COLOR_MAP[badgeVariant] ?? TOKEN_SUCCESS_600

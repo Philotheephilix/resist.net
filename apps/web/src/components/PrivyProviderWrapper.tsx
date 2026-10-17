@@ -2,8 +2,7 @@
 
 import { PrivyProvider } from '@privy-io/react-auth'
 
-const appId = process.env['NEXT_PUBLIC_PRIVY_APP_ID']
-if (!appId) throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is required')
+const appId = (process.env['NEXT_PUBLIC_PRIVY_APP_ID'] ?? '') as string
 
 export default function PrivyProviderWrapper({ children }: { children: React.ReactNode }) {
   return (
@@ -17,9 +16,7 @@ export default function PrivyProviderWrapper({ children }: { children: React.Rea
           logo: '/icon.svg',
           showWalletLoginFirst: true,
         },
-        embeddedWallets: {
-          createOnLogin: 'off',
-        },
+        embeddedWallets: {},
       }}
     >
       {children}
