@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ArkivReadClient } from '@resist/arkiv-sdk/src/client.js'
 
 const rpcUrl = process.env['ARKIV_RPC_URL'] ?? ''
 
@@ -9,6 +8,7 @@ export async function GET(req: NextRequest) {
   }
   const since = req.nextUrl.searchParams.get('since')
   try {
+    const { ArkivReadClient } = await import('@resist/arkiv-sdk/src/client.js')
     const client = new ArkivReadClient(rpcUrl)
     const entries = await client.queryProbeQueue({
       limit: 50,

@@ -49,16 +49,16 @@ export async function main(opts: { once?: boolean } = {}) {
   let shutdownRequested = false
   let drainResolve: (() => void) | null = null
 
-  // Start probe queue worker if ARKIV_RPC_URL is available
+  // Start probe queue worker — accepts either ARKIV_RPC_URL or ARKIV_URL (same endpoint)
   let queueWorker: QueueWorker | null = null
   if (!opts.once) {
-    const rpcUrl = process.env["ARKIV_RPC_URL"]
+    const rpcUrl = process.env["ARKIV_RPC_URL"] ?? process.env["ARKIV_URL"]
     if (rpcUrl) {
       const config = await loadConfig()
       queueWorker = new QueueWorker(rpcUrl, config)
       queueWorker.start()
     } else {
-      console.warn("[queue] ARKIV_RPC_URL not set — queue worker disabled")
+      console.warn("[queue] ARKIV_RPC_URL / ARKIV_URL not set — queue worker disabled")
     }
   }
 

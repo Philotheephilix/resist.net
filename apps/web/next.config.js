@@ -30,7 +30,9 @@ const PRIVY_OPTIONAL_PEERS = [
 
 const nextConfig = {
   transpilePackages: ['@resist/shared', '@resist/arkiv-sdk', '@resist/map-ui'],
-  turbopack: {},
+  turbopack: {
+    resolveExtensions: ['.ts', '.tsx', '.js', '.jsx', '.json', '.css'],
+  },
   serverExternalPackages: ['better-sqlite3', 'ngeohash'],
   webpack: (config) => {
     config.resolve.symlinks = true
@@ -65,7 +67,7 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              `script-src 'self'${isDev ? " 'unsafe-inline'" : ''}`,
+              `script-src 'self'${isDev ? " 'unsafe-inline' 'unsafe-eval'" : ''}`,
               "style-src 'self' 'unsafe-inline' https://unpkg.com/leaflet@*/dist/leaflet.css",
               "img-src 'self' data: https://tiles.stadiamaps.com",
               `connect-src 'self' https://tiles.stadiamaps.com ${arkivRpcOrigin} https://auth.privy.io`,

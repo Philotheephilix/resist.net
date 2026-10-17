@@ -308,7 +308,9 @@ export async function GET(request: NextRequest) {
     events = null
   }
   const DEV_FIXTURE = getDevFixture()
-  if (!events) {
+  // Use dev fixture when the real query failed (null) OR when it returned empty and
+  // we're in dev-fixture mode (no real data on-chain yet during development).
+  if (!events || (USE_DEV_FIXTURE && events.length === 0)) {
     let fixture = DEV_FIXTURE ?? []
     // Apply filters to the dev fixture so tests that check blockType/geohash
     // filtering get the same behaviour as a real Arkiv-backed response.
@@ -391,15 +393,26 @@ export async function GET(request: NextRequest) {
   // Response shape: { events: [...], liveProbes, regions, blocksToday, volunteerCount }
   // Stats fields are null/absent when cache is cold (not yet computed).
   if (includeStats) {
-    // Serve from cache when fresh; otherwise omit stats so the client
-    // can distinguish 'not yet computed' from 'genuinely zero'.
-    const cachedStats = (statsCache && statsCache.expiresAt > Date.now())
-      ? statsCache.result as { liveProbes: number; rawActiveNodes: number; regions: number; blocksToday: number; volunteerCount?: number }
+    // Serve from cache when fresh.
+    let cachedStats = (statsCache && statsCache.expiresAt > Date.now())
+      ? statsCache.result as { liveProbes: number; regions: number; blocksToday: number; volunteerCount?: number }
       : null
+
+    // When cache is cold in dev-fixture mode, compute stats from the fixture events
+    // so the UI shows real-looking numbers without a separate stats request.
+    if (!cachedStats && USE_DEV_FIXTURE) {
+      const allEvents = getDevFixture() ?? []
+      const oneDayAgo = Date.now() - 24 * 3600 * 1000
+      const recent = allEvents.filter(e => e.timestamp > oneDayAgo)
+      const regionSet = new Set(recent.filter(e => e.geohash).map(e => e.geohash!.slice(0, 4)))
+      const walletSet = new Set(recent.map(e => e.nodeWallet))
+      cachedStats = { liveProbes: walletSet.size || 5, regions: regionSet.size || 5, blocksToday: 0, volunteerCount: 3 }
+    }
+
     const statsFields = cachedStats
-      ? { liveProbes: cachedStats.liveProbes, rawActiveNodes: cachedStats.rawActiveNodes, regions: cachedStats.regions, blocksToday: cachedStats.blocksToday, volunteerCount: cachedStats.volunteerCount ?? 0 }
+      ? { liveProbes: cachedStats.liveProbes, regions: cachedStats.regions, blocksToday: cachedStats.blocksToday, volunteerCount: cachedStats.volunteerCount ?? 0 }
       : null
-    return Response.json({ events: safeSlice, ...(statsFields ? { liveProbes: statsFields.liveProbes, regions: statsFields.regions, blocksToday: statsFields.blocksToday, volunteerCount: statsFields.volunteerCount } : {}) }, {
+    return Response.json({ events: safeSlice, ...(statsFields ?? {}) }, {
       headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
     })
   }

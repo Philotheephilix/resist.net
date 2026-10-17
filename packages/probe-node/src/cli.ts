@@ -20,7 +20,8 @@ Options:
   --help            Print this help message and exit
 
 Environment variables:
-  ARKIV_URL           URL of the Arkiv ingest endpoint (required)
+  ARKIV_URL           URL of the Arkiv ingest endpoint for writing probe results (required)
+  ARKIV_RPC_URL       Same endpoint (also accepted; enables the probe queue worker)
   WALLET_PRIVATE_KEY  Override the auto-generated wallet private key
   HEALTHZ_PORT        Port for the /healthz HTTP endpoint (default: 9090)
   GEOHASH             Fallback geohash when ip-api.com is unreachable
