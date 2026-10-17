@@ -10,16 +10,13 @@ import {
   Clock3,
   Copy,
   Globe2,
-  Grid2X2,
   Home,
   Loader2,
-  LogIn,
   LogOut,
   Menu,
   Network,
   Search,
   Shield,
-  SlidersHorizontal,
   TrendingUp,
   Wallet,
   Wifi,
@@ -38,14 +35,13 @@ const POLY_STROKE_COLOR = () => 'rgba(255,255,255,0.18)'
 const ARC_COLOR_VALUE = ['#19c35c', '#87e8a8']
 const ARC_COLOR = () => ARC_COLOR_VALUE
 
-type Tab = 'radar' | 'network' | 'connect' | 'activity' | 'more'
+type Tab = 'radar' | 'network' | 'connect' | 'activity'
 
 const navItems: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'radar', label: 'Radar', icon: Home },
   { id: 'network', label: 'Network', icon: Activity },
   { id: 'connect', label: 'Connect', icon: TrendingUp },
   { id: 'activity', label: 'Activity', icon: Clock3 },
-  { id: 'more', label: 'More', icon: Grid2X2 },
 ]
 
 const DEFAULT_ARCS = [
@@ -1381,151 +1377,6 @@ function ActivityPage({ events, loading, error, onRetry, onOpenUrlHealth }: {
 
 // ─── More tab ──────────────────────────────────────────────────────────────────
 
-const SETTINGS_ITEMS = [
-  ['Monitored services', 'Manage services', Globe2],
-  ['My volunteer node', 'Not configured', Network],
-  ['Saved regions', 'Manage regions', SlidersHorizontal],
-  ['Network diagnostics', 'Run a check', Activity],
-  ['Privacy and security', 'Your data, your control', Shield],
-] as const
-
-function MorePage({ onOpenWallet, onComingSoon }: { onOpenWallet: () => void; onComingSoon: (label: string) => void }) {
-  const { ready, authenticated, user, login, logout } = usePrivy()
-  const walletAddr = user?.wallet?.address ?? ''
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) return
-    const id = setTimeout(() => setCopied(false), 2000)
-    return () => clearTimeout(id)
-  }, [copied])
-
-  return (
-    <>
-      <div className="page-title">
-        <h1>More</h1>
-        <StatusLine>ResistNet</StatusLine>
-      </div>
-
-      {/* Profile card */}
-      <div
-        className="profile-card"
-        style={{ cursor: 'pointer' }}
-        onClick={onOpenWallet}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onOpenWallet())}
-        aria-label={authenticated ? `Wallet: ${truncAddr(walletAddr)}` : 'Sign in with Ethereum'}
-      >
-        <div
-          className="profile large"
-          style={{
-            background: authenticated && walletAddr ? addrHue(walletAddr) : '#ffe3ee',
-            color: authenticated && walletAddr ? addrFg(walletAddr) : '#e65c90',
-            fontSize: 18,
-          }}
-          aria-hidden="true"
-        >
-          {!ready ? '…' : authenticated && walletAddr ? walletInitials(walletAddr) : 'R'}
-        </div>
-        <div>
-          {authenticated && walletAddr ? (
-            <>
-              <b>Connected wallet</b>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                <span
-                  style={{
-                    fontFamily: 'monospace', fontSize: 13,
-                    color: '#555', letterSpacing: '0.03em',
-                  }}
-                >
-                  {truncAddr(walletAddr)}
-                </span>
-                <button
-                  type="button"
-                  aria-label="Copy wallet address"
-                  onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(walletAddr); setCopied(true) }}
-                  style={{
-                    background: 'none', border: 'none', padding: '2px 4px',
-                    cursor: 'pointer', color: copied ? '#19b955' : '#888', display: 'flex', alignItems: 'center',
-                  }}
-                >
-                  {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-                </button>
-              </span>
-            </>
-          ) : (
-            <>
-              <b>Not signed in</b>
-              <span style={{ color: '#19b955', fontWeight: 600 }}>Sign in with Ethereum →</span>
-            </>
-          )}
-        </div>
-        <ChevronRight aria-hidden="true" />
-      </div>
-
-      {/* Auth action */}
-      {authenticated ? (
-        <button
-          onClick={async () => { await logout() }}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-            padding: '14px 0', borderBottom: '1px solid var(--line)',
-            textAlign: 'left', color: '#e24a47',
-          }}
-          aria-label="Disconnect wallet"
-        >
-          <span className="setting-icon" style={{ color: '#e24a47' }}>
-            <LogOut size={20} aria-hidden="true" />
-          </span>
-          <span>
-            <b>Disconnect wallet</b>
-            <small style={{ color: '#e24a47', opacity: 0.7 }}>Sign out of ResistNet</small>
-          </span>
-        </button>
-      ) : (
-        <button
-          onClick={login}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-            padding: '14px 0', borderBottom: '1px solid var(--line)',
-            textAlign: 'left', color: '#19b955',
-          }}
-          aria-label="Sign in with Ethereum"
-        >
-          <span className="setting-icon" style={{ color: '#19b955' }}>
-            <LogIn size={20} aria-hidden="true" />
-          </span>
-          <span>
-            <b>Sign in with Ethereum</b>
-            <small>Connect your wallet to ResistNet</small>
-          </span>
-        </button>
-      )}
-
-      <section className="settings-list" aria-label="Settings">
-        {SETTINGS_ITEMS.map(([title, sub, Icon]) => (
-          <button key={title as string} aria-label={`${title as string} — coming soon`}
-            aria-disabled="true" tabIndex={0}
-            onClick={() => onComingSoon(title as string)}
-            title={`${title as string} — coming soon`}
-            style={{ opacity: 0.4 }}
-          >
-            <span className="setting-icon"><Icon size={20} aria-hidden="true" /></span>
-            <span>
-              <b>{title as string}</b>
-              <small>{sub as string}</small>
-            </span>
-            <ChevronRight size={18} aria-hidden="true" />
-          </button>
-        ))}
-      </section>
-      <div className="about">
-        ResistNet <span>Protocol v0.1 · Open network observability</span>
-      </div>
-    </>
-  )
-}
-
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function Page() {
@@ -1534,13 +1385,7 @@ export default function Page() {
   const [testInitialUrl, setTestInitialUrl] = useState<string | undefined>()
   const [walletOpen, setWalletOpen] = useState(false)
   const [connected, setConnected] = useState(false)
-  const [comingSoon, setComingSoon] = useState('')
   const [urlHealthTarget, setUrlHealthTarget] = useState<string | null>(null)
-  useEffect(() => {
-    if (!comingSoon) return
-    const id = setTimeout(() => setComingSoon(''), 2500)
-    return () => clearTimeout(id)
-  }, [comingSoon])
   const { authenticated, user } = usePrivy()
   const walletAddr = user?.wallet?.address ?? ''
   const rpcUrl = process.env['NEXT_PUBLIC_ARKIV_RPC_URL'] ?? ''
@@ -1599,8 +1444,6 @@ export default function Page() {
     />
   } else if (tab === 'activity') {
     content = <ActivityPage events={events} loading={loading} error={error} onRetry={retry} onOpenUrlHealth={openUrlHealth} />
-  } else {
-    content = <MorePage onOpenWallet={openWallet} onComingSoon={setComingSoon} />
   }
 
   return (
@@ -1668,16 +1511,6 @@ export default function Page() {
         {testOpen && <TestUrlModal onClose={() => { setTestOpen(false); setTestInitialUrl(undefined) }} initialUrl={testInitialUrl} />}
         {walletOpen && <WalletSheet onClose={closeWallet} />}
         {urlHealthTarget && <UrlHealthDrawer targetUrl={urlHealthTarget} onClose={closeUrlHealth} />}
-        {comingSoon && (
-          <div role="status" aria-live="polite" style={{
-            position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
-            background: 'var(--card, #1a1a2e)', color: 'var(--text, #fff)',
-            padding: '10px 20px', borderRadius: 8, fontSize: 14,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 999, pointerEvents: 'none',
-          }}>
-            {comingSoon} — coming soon
-          </div>
-        )}
       </div>
     </main>
   )
