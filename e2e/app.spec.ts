@@ -97,15 +97,14 @@ test.describe('resist.net web app', () => {
   test('API error shows error banner', async ({ page }) => {
     await page.route('**/api/probe-events**', route => route.fulfill({ status: 500, body: 'Server error' }))
     await page.goto('/')
-    // Use .first() to avoid matching Next.js route-announcer which also has role="alert"
-    const banner = page.locator('[role="alert"]').first()
+    const banner = page.locator('[role="alert"]').filter({ hasText: /Network error|Server error/i }).first()
     await expect(banner).toBeVisible({ timeout: 15000 })
   })
 
   test('network failure shows error banner', async ({ page }) => {
     await page.route('**/api/probe-events**', route => route.abort('failed'))
     await page.goto('/')
-    const banner = page.locator('[role="alert"]').first()
+    const banner = page.locator('[role="alert"]').filter({ hasText: /Network error|Server error/i }).first()
     await expect(banner).toBeVisible({ timeout: 15000 })
   })
 
@@ -615,6 +614,155 @@ test.describe('resist.net web app', () => {
     // initial call fires immediately
     await page.waitForTimeout(500)
     expect(callCount).toBeGreaterThanOrEqual(1)
+  })
+
+  // ── WalletSheet lifecycle ────────────────────────────────────────────────────
+
+  const PRIVY_APP_CONFIG = {
+    app_id: 'test-app-id',
+    name: 'ResistNet',
+    login_methods: ['wallet'],
+    appearance: { theme: 'light', accent_color: '#19b955' },
+    embedded_wallets: { create_on_login: 'off' },
+    mfa_methods: [],
+  }
+
+  const PRIVY_MOCK_USER = {
+    id: 'did:privy:test123',
+    created_at: 1700000000,
+    linked_accounts: [
+      {
+        type: 'wallet',
+        chain_type: 'ethereum',
+        address: '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12',
+        wallet_index: 0,
+        wallet_client_type: 'metamask',
+        connector_type: 'injected',
+        imported: false,
+        delegated: false,
+        verified_at: 1700000000,
+        first_verified_at: 1700000000,
+        latest_verified_at: 1700000000,
+      },
+    ],
+    mfa_methods: [],
+    has_accepted_terms: false,
+  }
+
+  function mockPrivyAppConfig(page: Parameters<typeof test>[1] extends infer T ? T extends { page: infer P } ? P : never : never) {
+    return page.route('**/auth.privy.io/api/v1/apps*', route =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(PRIVY_APP_CONFIG) })
+    )
+  }
+
+  test('header avatar click opens WalletSheet dialog', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    await expect(page.getByRole('dialog', { name: 'Wallet' })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Wallet' })).toHaveAttribute('aria-modal', 'true')
+  })
+
+  test('WalletSheet closes via X button', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    await expect(page.getByRole('dialog', { name: 'Wallet' })).toBeVisible()
+    await page.getByRole('dialog', { name: 'Wallet' }).getByRole('button', { name: 'Close' }).click()
+    await expect(page.getByRole('dialog', { name: 'Wallet' })).not.toBeVisible()
+  })
+
+  test('WalletSheet closes via backdrop click', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Wallet' })
+    await expect(dialog).toBeVisible()
+    await dialog.click({ position: { x: 10, y: 10 } })
+    await expect(dialog).not.toBeVisible()
+  })
+
+  test('WalletSheet closes via Escape key (focus trap)', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    await expect(page.getByRole('dialog', { name: 'Wallet' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: 'Wallet' })).not.toBeVisible()
+  })
+
+  test('WalletSheet unauthenticated state shows Sign in with Ethereum button', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.route('**/auth.privy.io/api/v1/sessions', route =>
+      route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: 'Unauthorized' }) })
+    )
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Wallet' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Sign in with Ethereum' })).toBeVisible({ timeout: 8000 })
+  })
+
+  test('WalletSheet authenticated state shows Disconnect wallet button and truncated address', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.addInitScript(() => {
+      window.__PRIVY_TEST_USER__ = {
+        address: '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12',
+        chainType: 'ethereum',
+      }
+    })
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Wallet' })
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'Disconnect wallet' })).toBeVisible({ timeout: 8000 })
+    await expect(dialog.locator('code').filter({ hasText: '0xAbCd' })).toBeVisible()
+  })
+
+  test('WalletSheet copy full address button calls clipboard.writeText with full address', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.addInitScript(() => {
+      window.__PRIVY_TEST_USER__ = {
+        address: '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12',
+        chainType: 'ethereum',
+      }
+      const calls: string[] = []
+      ;(window as any).__clipboardCalls = calls
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: (t: string) => { calls.push(t); return Promise.resolve() } },
+        configurable: true,
+      })
+    })
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Wallet' })
+    await expect(dialog.getByRole('button', { name: 'Disconnect wallet' })).toBeVisible({ timeout: 8000 })
+    await dialog.getByRole('button', { name: 'Copy full address' }).click()
+    const calls = await page.evaluate(() => (window as any).__clipboardCalls)
+    expect(calls).toContain('0xAbCdEf1234567890AbCdEf1234567890AbCdEf12')
+  })
+
+  test('MorePage copy wallet address calls clipboard.writeText and does not open WalletSheet', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.addInitScript(() => {
+      window.__PRIVY_TEST_USER__ = {
+        address: '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12',
+        chainType: 'ethereum',
+      }
+      const calls: string[] = []
+      ;(window as any).__clipboardCalls = calls
+      Object.defineProperty(navigator, 'clipboard', {
+        value: { writeText: (t: string) => { calls.push(t); return Promise.resolve() } },
+        configurable: true,
+      })
+    })
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'More' }).click()
+    await expect(page.getByRole('button', { name: 'Copy wallet address' })).toBeVisible({ timeout: 8000 })
+    await page.getByRole('button', { name: 'Copy wallet address' }).click()
+    const calls = await page.evaluate(() => (window as any).__clipboardCalls)
+    expect(calls).toContain('0xAbCdEf1234567890AbCdEf1234567890AbCdEf12')
+    await expect(page.getByRole('dialog', { name: 'Wallet' })).not.toBeVisible()
   })
 
 })

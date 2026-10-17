@@ -7,6 +7,7 @@ import countries from 'world-atlas/countries-110m.json'
 import {
   Activity,
   Bell,
+  Check,
   ChevronDown,
   ChevronRight,
   Clock3,
@@ -28,11 +29,11 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { usePrivy } from '@privy-io/react-auth'
+import { usePrivy } from '../hooks/usePrivyCompat'
 import { useBlockEvents } from '../hooks/useBlockEvents'
 import type { TestUrlResult } from './api/test-url/route'
 
-const Globe = dynamic(() => import('react-globe.gl'), { ssr: false, loading: () => <div style={{width:295,height:295,display:'flex',alignItems:'center',justifyContent:'center'}}><Loader2 size={32} /></div> })
+const Globe = dynamic(() => import('react-globe.gl'), { ssr: false, loading: () => <div style={{width:295,height:295,display:'flex',alignItems:'center',justifyContent:'center'}}><style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style><Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} /></div> })
 
 type Tab = 'radar' | 'network' | 'connect' | 'activity' | 'more'
 
@@ -235,9 +236,13 @@ function MiniChart() {
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
 
 function useFocusTrap(panelRef: { current: HTMLElement | null }, onClose: () => void) {
-  const triggerRef = useRef<Element | null>(typeof document !== 'undefined' ? document.activeElement : null)
+  const triggerRef = useRef<Element | null>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
   useEffect(() => {
+    triggerRef.current = document.activeElement
     const panel = panelRef.current
     if (!panel) return
     if (!panel.contains(document.activeElement)) {
@@ -246,7 +251,7 @@ function useFocusTrap(panelRef: { current: HTMLElement | null }, onClose: () => 
     }
 
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
+      if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current(); return }
       if (e.key !== 'Tab') return
       const focusable = Array.from(panel!.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => !el.closest('[inert]'))
       if (!focusable.length) { e.preventDefault(); return }
@@ -264,7 +269,7 @@ function useFocusTrap(panelRef: { current: HTMLElement | null }, onClose: () => 
       document.removeEventListener('keydown', handleKeyDown)
       ;(triggerRef.current as HTMLElement | null)?.focus()
     }
-  }, [panelRef, onClose])
+  }, [panelRef])
 }
 
 // ─── Test URL modal ────────────────────────────────────────────────────────────
@@ -425,6 +430,7 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
   const { ready, authenticated, user, login, logout } = usePrivy()
   const walletAddr = user?.wallet?.address ?? ''
   const panelRef = useRef<HTMLDivElement>(null)
+  const [copied, setCopied] = useState(false)
   useFocusTrap(panelRef, onClose)
 
   return (
@@ -469,16 +475,16 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
               <span style={{ color: '#888', fontSize: 13 }}>Full address</span>
               <button
                 style={{
-                  fontSize: 11, color: '#444', fontFamily: 'monospace',
+                  fontSize: 11, color: copied ? '#22a85a' : '#444', fontFamily: 'monospace',
                   maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   cursor: 'pointer', background: 'none', border: 'none', padding: 0,
                   textAlign: 'left',
                 }}
                 title={walletAddr}
                 aria-label="Copy full address"
-                onClick={() => navigator.clipboard?.writeText(walletAddr)}
+                onClick={() => { navigator.clipboard?.writeText(walletAddr); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
               >
-                {walletAddr}
+                {copied ? 'Copied!' : walletAddr}
               </button>
             </div>
 
@@ -571,11 +577,11 @@ function Radar({ onTest, liveProbes, regions, blocksToday, loading }: {
           <button className="more-link">View details <ChevronRight size={16} /></button>
         </div>
         <MiniChart />
-        <div className="range-row" style={{ pointerEvents: 'none', opacity: 0.4 }} aria-disabled="true">
-          <span className="selected">1H</span>
-          <span>24H</span>
-          <span>7D</span>
-          <span>30D</span>
+        <div className="range-row" style={{ opacity: 0.4 }}>
+          <button disabled aria-disabled="true" className="selected">1H</button>
+          <button disabled aria-disabled="true">24H</button>
+          <button disabled aria-disabled="true">7D</button>
+          <button disabled aria-disabled="true">30D</button>
         </div>
       </section>
 
@@ -694,11 +700,11 @@ function ConnectPage() {
         <ChevronDown aria-hidden="true" />
       </div>
       <MiniChart />
-      <div className="range-row" style={{ pointerEvents: 'none', opacity: 0.4 }} aria-disabled="true">
-        <span className="selected">1H</span>
-        <span>24H</span>
-        <span>7D</span>
-        <span>30D</span>
+      <div className="range-row" style={{ opacity: 0.4 }}>
+        <button disabled aria-disabled="true" className="selected">1H</button>
+        <button disabled aria-disabled="true">24H</button>
+        <button disabled aria-disabled="true">7D</button>
+        <button disabled aria-disabled="true">30D</button>
       </div>
       <button className="primary-button">Connect</button>
       <div className="quick-actions">
@@ -830,6 +836,7 @@ function ActivityPage({ events, loading }: {
 function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
   const { ready, authenticated, user, login, logout } = usePrivy()
   const walletAddr = user?.wallet?.address ?? ''
+  const [copied, setCopied] = useState(false)
 
   return (
     <>
@@ -875,13 +882,13 @@ function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
                 <button
                   type="button"
                   aria-label="Copy wallet address"
-                  onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(walletAddr) }}
+                  onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(walletAddr); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
                   style={{
                     background: 'none', border: 'none', padding: '2px 4px',
-                    cursor: 'pointer', color: '#888', display: 'flex', alignItems: 'center',
+                    cursor: 'pointer', color: copied ? '#19b955' : '#888', display: 'flex', alignItems: 'center',
                   }}
                 >
-                  <Copy size={13} aria-hidden="true" />
+                  {copied ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
                 </button>
               </span>
             </>
@@ -966,8 +973,13 @@ export default function Page() {
   const [testOpen, setTestOpen] = useState(false)
   const [walletOpen, setWalletOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const isMounted = useRef(false)
 
   useEffect(() => {
+    if (!isMounted.current) {
+      isMounted.current = true
+      return
+    }
     scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' })
   }, [tab])
 

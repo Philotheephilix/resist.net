@@ -24,6 +24,7 @@ export interface TestUrlResult {
 
 const ALLOWED_PROTOCOLS = new Set(['http:', 'https:'])
 const VALID_METHODS = new Set(['HTTP', 'DNS', 'TCP'])
+const MAX_REDIRECTS = 3
 
 function isPrivateIP(ip: string): boolean {
   if (net.isIPv4(ip)) {
@@ -36,7 +37,8 @@ function isPrivateIP(ip: string): boolean {
       (a === 192 && b === 168) ||
       (a === 169 && b === 254) ||
       (a === 0) ||
-      (a === 100 && b >= 64 && b <= 127)
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a >= 224)
     )
   }
   if (net.isIPv6(ip)) {
@@ -104,27 +106,39 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    const parsed = new URL(url)
-    const resolvedIP = await resolvePublicHostname(parsed.hostname)
-    const fetchUrl = new URL(url)
-    fetchUrl.hostname = net.isIPv6(resolvedIP) ? `[${resolvedIP}]` : resolvedIP
-    const res = await fetch(fetchUrl.toString(), {
-      method: 'HEAD',
-      signal: controller.signal,
-      redirect: 'follow',
-      headers: { Host: parsed.host },
-    })
-    if (res.redirected) {
-      const redirectedHost = new URL(res.url).hostname
-      await resolvePublicHostname(redirectedHost)
+    let currentUrl = url
+    let redirectCount = 0
+    let res: Response
+    while (true) {
+      const parsed = new URL(currentUrl)
+      const resolvedIP = await resolvePublicHostname(parsed.hostname)
+      const fetchUrl = new URL(currentUrl)
+      fetchUrl.hostname = net.isIPv6(resolvedIP) ? `[${resolvedIP}]` : resolvedIP
+      res = await fetch(fetchUrl.toString(), {
+        method: 'HEAD',
+        signal: controller.signal,
+        redirect: 'manual',
+        headers: { Host: parsed.host },
+      } as RequestInit)
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location')
+        if (!location) break
+        redirectCount++
+        if (redirectCount > MAX_REDIRECTS) {
+          return { url, method: 'HTTP', reachable: false, latencyMs: Date.now() - start, errorType: 'full_unreachable', errorDetail: 'Too many redirects', checkedAt: Date.now(), region }
+        }
+        currentUrl = new URL(location, currentUrl).toString()
+        continue
+      }
+      break
     }
     const latencyMs = Date.now() - start
-    const reachable = res.status < 500
+    const reachable = res!.status < 500
     let errorType: TestUrlResult['errorType'] = null
     if (!reachable) {
-      errorType = res.status === 403 || res.status === 451 ? 'http_block' : 'full_unreachable'
+      errorType = res!.status === 403 || res!.status === 451 ? 'http_block' : 'full_unreachable'
     }
-    return { url, method: 'HTTP', reachable, statusCode: res.status, latencyMs, errorType, checkedAt: Date.now(), region }
+    return { url, method: 'HTTP', reachable, statusCode: res!.status, latencyMs, errorType, checkedAt: Date.now(), region }
   } catch (err) {
     const latencyMs = Date.now() - start
     const msg = err instanceof Error ? err.message : String(err)
