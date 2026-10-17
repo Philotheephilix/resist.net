@@ -155,6 +155,10 @@ function ensureStatsInFlight() {
   statsInFlight = (async () => {
     let events = await queryArkivProbeEvents({ limit: 2_000, since: Date.now() - 24 * 3600 * 1000, includeRawWallets: true })
     const arkivFailed = events === null
+    // usingRealData=true means Arkiv returned actual rows. When Arkiv returns an empty
+    // array we still consider it "real" — no events is a valid state. Only fall back to
+    // fixture when Arkiv itself failed (null), and in that case liveProbes must be 0.
+    const usingRealData = events !== null
     const DEV_FIXTURE = getDevFixture()
     if (!events) events = DEV_FIXTURE ?? []
     const oneDayAgo = Date.now() - 24 * 3600 * 1000
@@ -187,18 +191,22 @@ function ensureStatsInFlight() {
       }
     }
     const BLOCK_QUORUM = 5
-    const blocksToday = [...blocksByUrl.values()].filter(regions => regions.size >= BLOCK_QUORUM).length
-    const regionSet = new Set(
-      recentAll
-        .filter((e) => e.geohash && e.geohash.length >= 4)
-        .map((e) => e.geohash?.slice(0, 4))
-    )
+    const blocksToday = usingRealData
+      ? [...blocksByUrl.values()].filter(regions => regions.size >= BLOCK_QUORUM).length
+      : 0
+    const regionSet = usingRealData
+      ? new Set(recentAll.filter((e) => e.geohash && e.geohash.length >= 4).map((e) => e.geohash?.slice(0, 4)))
+      : new Set<string>()
     const thirtyMinAgo = Date.now() - 30 * 60_000
     const recentThirtyMin = recentAll.filter((e) => e.timestamp > thirtyMinAgo)
-    const rawActiveNodes = new Set(recentThirtyMin.map((e) => e.nodeWallet)).size
-    const liveProbes = establishedWallets !== null
-      ? new Set(recentThirtyMin.filter((e) => establishedWallets!.has(e.nodeWallet)).map((e) => e.nodeWallet)).size
-      : rawActiveNodes
+    // All stats must be 0 when falling back to fixture — fixture data must never
+    // appear as real network activity in the dashboard.
+    const rawActiveNodes = usingRealData ? new Set(recentThirtyMin.map((e) => e.nodeWallet)).size : 0
+    const liveProbes = usingRealData
+      ? (establishedWallets !== null
+          ? new Set(recentThirtyMin.filter((e) => establishedWallets!.has(e.nodeWallet)).map((e) => e.nodeWallet)).size
+          : rawActiveNodes)
+      : 0
     let volunteerCount = 0
     const rpcUrl = process.env['ARKIV_RPC_URL']
     if (rpcUrl) {
@@ -324,9 +332,9 @@ export async function GET(request: NextRequest) {
     events = null
   }
   const DEV_FIXTURE = getDevFixture()
-  // Use dev fixture when the real query failed (null) OR when it returned empty and
-  // we're in dev-fixture mode (no real data on-chain yet during development).
-  if (!events || (USE_DEV_FIXTURE && events.length === 0)) {
+  // Only fall back to dev fixture when Arkiv itself failed (returned null).
+  // Empty array from Arkiv means no probe events exist — show nothing, not fake data.
+  if (!events) {
     let fixture = DEV_FIXTURE ?? []
     // Apply filters to the dev fixture so tests that check blockType/geohash/targetUrl
     // filtering get the same behaviour as a real Arkiv-backed response.

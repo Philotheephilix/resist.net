@@ -533,7 +533,7 @@ export class ArkivReadClient {
         eq("project", "resist.net"),
         eq("entitytype", "nodeidentity"),
       ]))
-      .limit(500)
+      .limit(200)
       .fetch()
 
     return page.entities.map((entity) => {
