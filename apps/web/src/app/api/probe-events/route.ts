@@ -91,14 +91,13 @@ async function queryArkivProbeEvents(opts: {
   }
 }
 
-// In-memory rate limiter: IP → { count, windowStart }
-// Allows 60 requests per minute per IP. Process-scoped — resets on cold starts.
-// WARNING (deployment): on Vercel/Lambda each concurrent invocation is an isolated
-// process, so this map provides no cross-instance protection. An attacker can bypass
-// the limit by triggering parallel cold starts. For production, front this route with
-// a distributed rate limiter (e.g. Vercel Edge Middleware + Upstash Redis, or
-// Cloudflare Rate Limiting) that shares state across instances. This in-process map
-// remains as a secondary defence for within-instance burst traffic.
+// Per-instance burst guard only: IP → { count, windowStart }
+// Allows 60 requests per minute per IP within a single process.
+// DOES NOT provide cross-instance rate limiting — on Vercel/Lambda each concurrent
+// request may run in an isolated worker with its own empty map, so parallel requests
+// from one IP bypass this entirely. This is intentionally kept as a within-instance
+// burst guard only. Production deployments MUST add a distributed rate limiter at the
+// edge (e.g. Vercel Edge Middleware + Upstash Redis, or Cloudflare Rate Limiting).
 const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX = 60
 const rateLimitMap = new Map<string, { count: number; windowStart: number }>()
@@ -131,23 +130,21 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
   const connIp = (request as any).ip ?? ''
-  const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
   const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
   // In development/test, fall back to loopback so direct API calls (e.g. Playwright
   // request fixture) are not rejected. In production, the missing IP is a hard error.
   const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
-  const ip = validatedRaw || validatedConn || devFallback
+  const ip = validatedConn || devFallback
   if (!ip) {
-    return new Response('Bad Request: client IP could not be determined', { status: 400 })
+    return Response.json({ error: 'Bad Request: client IP could not be determined' }, { status: 400 })
   }
   // Skip rate limiting for loopback in development — all local/Playwright requests
   // share the same 127.0.0.1 IP and would otherwise exhaust the 60/min bucket
   // during a test run. In production the loopback fallback is never used.
   const isLoopback = ip === '127.0.0.1' || ip === '::1'
   if (!isLoopback && !checkRateLimit(ip)) {
-    return new Response('Too Many Requests', {
+    return Response.json({ error: 'Too Many Requests' }, {
       status: 429,
       headers: { 'Retry-After': '60' },
     })
@@ -286,10 +283,7 @@ export async function GET(request: NextRequest) {
       if (err instanceof Error && err.message === 'ARKIV_RPC_URL not configured') {
         return Response.json({ error: 'ARKIV_RPC_URL not configured' }, { status: 503 })
       }
-      return Response.json(
-        { liveProbes: 0, rawActiveNodes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 },
-        { status: 200 },
-      )
+      return Response.json({ error: 'Stats backend unavailable' }, { status: 503 })
     }
     return Response.json(statsResult, {
       headers: { 'Cache-Control': 'public, max-age=60, stale-while-revalidate=30' },

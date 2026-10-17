@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
   const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
   const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
-  const ip = validatedRaw || validatedConn || devFallback
+  const ip = validatedConn || validatedRaw || devFallback
   if (!ip) {
     return new Response('Bad Request: client IP could not be determined', { status: 400 })
   }

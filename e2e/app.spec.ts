@@ -187,6 +187,43 @@ test.describe('resist.net web app', () => {
     await expect(result).toBeVisible({ timeout: 10000 })
   })
 
+  test('Test URL modal shows not supported message on 501 response', async ({ page }) => {
+    await page.route('**/api/test-url', route =>
+      route.fulfill({
+        status: 501, contentType: 'application/json',
+        body: JSON.stringify({
+          url: 'https://example.com', method: 'DNS', reachable: false,
+          notSupported: true, errorDetail: 'DNS method not yet implemented',
+          checkedAt: Date.now(), region: 'Auto',
+        }),
+      })
+    )
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await page.getByLabel('URL to test').fill('https://example.com')
+    const dnsBtn = page.locator('.method-row').getByRole('button', { name: 'DNS' })
+    await dnsBtn.click()
+    await page.getByRole('button', { name: 'Run test' }).click()
+    const result = page.locator('[role="status"]').filter({ hasText: /Not yet supported/ })
+    await expect(result).toBeVisible({ timeout: 10000 })
+  })
+
+  test('Test URL modal shows error alert on non-200 API response', async ({ page }) => {
+    await page.route('**/api/test-url', route =>
+      route.fulfill({
+        status: 400, contentType: 'application/json',
+        body: JSON.stringify({ error: 'url must use http or https' }),
+      })
+    )
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await page.getByLabel('URL to test').fill('https://example.com')
+    await page.getByRole('button', { name: 'Run test' }).click()
+    const alert = page.locator('[role="alert"]')
+    await expect(alert).toBeVisible({ timeout: 10000 })
+    await expect(alert).toContainText('url must use http or https')
+  })
+
   test('Test URL modal prepends https:// automatically', async ({ page }) => {
     let capturedBody: string | null = null
     await page.route('**/api/test-url', route => {
@@ -201,9 +238,12 @@ test.describe('resist.net web app', () => {
     await page.getByLabel('URL to test').fill('example.com')
     const responsePromise = page.waitForResponse('**/api/test-url')
     await page.getByRole('button', { name: 'Run test' }).click()
-    await responsePromise
+    const response = await responsePromise
     const body = JSON.parse(capturedBody ?? '{}')
     expect(body.url).toMatch(/^https:\/\//)
+    const responseBody = await response.json()
+    expect(responseBody.url).toMatch(/^https:\/\//)
+    expect(typeof responseBody.reachable).toBe('boolean')
   })
 
   test('Test URL modal Enter key submits form', async ({ page }) => {
@@ -221,6 +261,26 @@ test.describe('resist.net web app', () => {
     await page.keyboard.press('Enter')
     await page.waitForResponse('**/api/test-url')
     expect(called).toBe(true)
+    await expect(page.locator('[role="status"]')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('Test URL modal region selector sends selected region in request body', async ({ page }) => {
+    let capturedBody: string | null = null
+    await page.route('**/api/test-url', route => {
+      capturedBody = route.request().postData()
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ url: 'https://example.com', method: 'HTTP', reachable: true, checkedAt: Date.now(), region: 'Mumbai, IN' }),
+      })
+    })
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    await page.getByLabel('URL to test').fill('https://example.com')
+    await page.getByLabel('Select region').selectOption('Mumbai, IN')
+    await page.getByRole('button', { name: 'Run test' }).click()
+    await page.waitForResponse('**/api/test-url')
+    const body = JSON.parse(capturedBody ?? '{}')
+    expect(body.region).toBe('Mumbai, IN')
   })
 
   // ── API: test-url ───────────────────────────────────────────────────────────
@@ -247,6 +307,22 @@ test.describe('resist.net web app', () => {
     expect(res.status()).toBe(400)
   })
 
+  test('POST /api/test-url defaults method to HTTP when method is non-string', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'https://example.com', method: 123 },
+    })
+    expect(res.status()).toBe(200)
+    const body = await res.json()
+    expect(body.method).toBe('HTTP')
+  })
+
+  test('POST /api/test-url returns 400 on empty string url', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: '' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
   test('POST /api/test-url returns 400 on non-http url', async ({ request }) => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'ftp://example.com' },
@@ -261,6 +337,26 @@ test.describe('resist.net web app', () => {
     expect(res.status()).toBe(400)
   })
 
+  test('POST /api/test-url strips or rejects credentials in URL', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'http://user:secret@example.com' },
+    })
+    expect(res.ok() || res.status() === 400).toBeTruthy()
+    if (res.ok()) {
+      const body = await res.json()
+      expect(body.url).not.toContain('secret')
+    }
+  })
+
+  test('POST /api/test-url normalises whitespace around URL', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: '  https://example.com  ' },
+    })
+    expect(res.ok()).toBeTruthy()
+    const body = await res.json()
+    expect(body.url).toBe('https://example.com/')
+  })
+
   test('POST /api/test-url returns 400 on invalid method', async ({ request }) => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'https://example.com', method: 'INVALID' },
@@ -268,23 +364,54 @@ test.describe('resist.net web app', () => {
     expect(res.status()).toBe(400)
   })
 
+  test('POST /api/test-url returns 400 when region exceeds 128 characters', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'https://example.com', region: 'A'.repeat(129) },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/test-url rejects hostname that resolves to a private IP (DNS rebinding guard)', async ({ request }) => {
+    // "localhost" resolves to 127.0.0.1 via dns.lookup — isPrivateIP must catch it
+    // and the response must never come back as reachable: true
+    const res = await request.post('http://localhost:3001/api/test-url', {
+      data: { url: 'http://localhost/', method: 'HTTP' },
+    })
+    expect(res.ok()).toBeTruthy()
+    const body = await res.json()
+    expect(body.reachable).not.toBe(true)
+  })
+
   test('POST /api/test-url accepts DNS method', async ({ request }) => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'https://example.com', method: 'DNS' },
     })
-    // DNS returns 200 (mock mode) or 501 (not yet supported in production) — test only covers mock mode
-    expect(res.status()).toBeGreaterThanOrEqual(200)
-    expect(res.status()).toBeLessThan(400)
     const body = await res.json()
-    expect(body).toHaveProperty('url')
+    if (res.status() === 501) {
+      expect(body.notSupported).toBe(true)
+      expect(body.reachable).toBeNull()
+    } else {
+      expect(res.status()).toBe(200)
+      expect(body.method).toBe('DNS')
+      expect(body).toHaveProperty('reachable')
+      expect(body).toHaveProperty('errorType')
+    }
   })
 
   test('POST /api/test-url accepts TCP method', async ({ request }) => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'https://example.com', method: 'TCP' },
     })
-    expect(res.status()).toBeGreaterThanOrEqual(200)
-    expect(res.status()).toBeLessThan(400)
+    const body = await res.json()
+    if (res.status() === 501) {
+      expect(body.notSupported).toBe(true)
+      expect(body.reachable).toBeNull()
+    } else {
+      expect(res.status()).toBe(200)
+      expect(body.method).toBe('TCP')
+      expect(body).toHaveProperty('reachable')
+      expect(body).toHaveProperty('errorType')
+    }
   })
 
   test('POST /api/test-url accepts region parameter', async ({ request }) => {
@@ -347,6 +474,11 @@ test.describe('resist.net web app', () => {
   test('GET /api/probe-events?blockType=INVALID returns 400', async ({ request }) => {
     const res = await request.get('http://localhost:3001/api/probe-events?blockType=INVALID')
     expect(res.status()).toBe(400)
+  })
+
+  test('POST /api/probe-events returns 405 Method Not Allowed', async ({ request }) => {
+    const res = await request.post('http://localhost:3001/api/probe-events')
+    expect(res.status()).toBe(405)
   })
 
   test('GET /api/probe-events?geohash=INVALID!! returns 400', async ({ request }) => {
@@ -437,6 +569,21 @@ test.describe('resist.net web app', () => {
     await searchInput.fill('twitter')
     await expect(page.getByText('twitter.com')).toBeVisible()
     await expect(page.getByText('wikipedia.org')).not.toBeVisible()
+    await searchInput.fill('')
+    await expect(page.getByText('twitter.com')).toBeVisible()
+    await expect(page.getByText('wikipedia.org')).toBeVisible()
+  })
+
+  test('Activity tab search shows "No events match this search" for no-match query', async ({ page }) => {
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'a1', targetUrl: 'https://twitter.com' },
+    ])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
+    const searchInput = page.getByLabel('Search events')
+    await expect(searchInput).toBeVisible({ timeout: 10000 })
+    await searchInput.fill('xyzzy')
+    await expect(page.getByText('No events match this search')).toBeVisible()
   })
 
   test('Activity tab events contain clickable links', async ({ page }) => {
@@ -453,16 +600,24 @@ test.describe('resist.net web app', () => {
   })
 
   test('Activity tab sort toggles newest/oldest', async ({ page }) => {
-    await mockProbeEvents(page, [])
+    const newerTs = Date.now() - 60_000
+    const olderTs = Date.now() - 3600_000
+    await mockProbeEvents(page, [
+      { ...SAMPLE_EVENT, id: 'sort-new', targetUrl: 'https://newer.example', timestamp: newerTs },
+      { ...SAMPLE_EVENT, id: 'sort-old', targetUrl: 'https://older.example', timestamp: olderTs },
+    ])
     await page.goto('/')
     await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Activity' }).click()
     const newestBtn = page.getByRole('button', { name: /Newest first/i })
     const oldestBtn = page.getByRole('button', { name: /Oldest first/i })
     await expect(newestBtn).toBeVisible({ timeout: 10000 })
     await expect(newestBtn).toHaveAttribute('aria-pressed', 'true')
+    const firstItem = page.locator('ul[aria-label="Censorship events"] li').first()
+    await expect(firstItem).toContainText('newer.example')
     await oldestBtn.click()
     await expect(oldestBtn).toHaveAttribute('aria-pressed', 'true')
     await expect(newestBtn).toHaveAttribute('aria-pressed', 'false')
+    await expect(firstItem).toContainText('older.example')
   })
 
   test('Activity tab shows timeAgo "just now" for recent event', async ({ page }) => {
@@ -506,6 +661,22 @@ test.describe('resist.net web app', () => {
     await expect(page.getByText('twitter.com')).toBeVisible()
   })
 
+  test('Network tab shows empty state when no events', async ({ page }) => {
+    await mockProbeEvents(page, [])
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Network' }).click()
+    await expect(page.getByText('No network events recorded yet')).toBeVisible({ timeout: 10000 })
+  })
+
+  test('Network tab health row Confirmed incidents is red when blocksToday > 0', async ({ page }) => {
+    await mockProbeEvents(page, [SAMPLE_EVENT], { liveProbes: 3, regions: 2, blocksToday: 4, volunteerCount: 5 })
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Network' }).click()
+    await expect(page.getByText('Confirmed incidents')).toBeVisible({ timeout: 10000 })
+    const valueCell = page.locator('.health-row').filter({ hasText: 'Confirmed incidents' }).locator('b')
+    await expect(valueCell).toHaveClass(/red/)
+  })
+
   // ── Connect tab ──────────────────────────────────────────────────────────────
 
   test('Connect tab renders connect CTA', async ({ page }) => {
@@ -517,6 +688,21 @@ test.describe('resist.net web app', () => {
     await expect(page.locator('.scroll-content .primary-button')).toBeVisible()
   })
 
+  test('Connect tab renders quick-action buttons', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Connect' }).click()
+    await expect(page.locator('.scroll-content .quick-actions').getByText('Choose region')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('.scroll-content .quick-actions').getByText('Find best route')).toBeVisible()
+    await expect(page.locator('.scroll-content .quick-actions').getByText('More options')).toBeVisible()
+  })
+
+  test('Connect tab Connect button opens WalletSheet dialog', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'Connect' }).click()
+    await page.locator('.scroll-content .primary-button').click()
+    await expect(page.locator('[role="dialog"][aria-modal="true"]')).toBeVisible({ timeout: 10000 })
+  })
+
   // ── More tab ─────────────────────────────────────────────────────────────────
 
   test('More tab renders settings list', async ({ page }) => {
@@ -526,6 +712,22 @@ test.describe('resist.net web app', () => {
     await expect(page.getByRole('region', { name: 'Settings' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Monitored services' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Privacy and security' })).toBeVisible()
+  })
+
+  test('More tab profile card click opens WalletSheet', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'More' }).click()
+    await expect(page.getByRole('heading', { name: 'More' })).toBeVisible()
+    const profileCard = page.locator('.profile-card[role="button"]')
+    await expect(profileCard).toBeVisible()
+    await profileCard.click()
+    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 })
+  })
+
+  test('More tab unauthenticated state shows Sign in with Ethereum button', async ({ page }) => {
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'More' }).click()
+    await expect(page.getByRole('button', { name: 'Sign in with Ethereum' })).toBeVisible({ timeout: 10000 })
   })
 
   // ── Globe ────────────────────────────────────────────────────────────────────
@@ -559,6 +761,30 @@ test.describe('resist.net web app', () => {
     await page.getByRole('button', { name: /Test a URL/i }).click()
     const dialog = page.getByRole('dialog', { name: 'Test a URL' })
     await expect(dialog).toHaveAttribute('aria-modal', 'true')
+  })
+
+  test('Test URL modal focus trap keeps Tab cycling within the dialog', async ({ page }) => {
+    await page.goto('/')
+    await page.getByRole('button', { name: /Test a URL/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Test a URL' })
+    await expect(dialog).toBeVisible()
+    const dialogEl = await dialog.elementHandle()
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press('Tab')
+      const inside = await page.evaluate(
+        (d) => d!.contains(document.activeElement),
+        dialogEl,
+      )
+      expect(inside).toBe(true)
+    }
+    for (let i = 0; i < 4; i++) {
+      await page.keyboard.press('Shift+Tab')
+      const inside = await page.evaluate(
+        (d) => d!.contains(document.activeElement),
+        dialogEl,
+      )
+      expect(inside).toBe(true)
+    }
   })
 
   // ── Responsiveness ───────────────────────────────────────────────────────────
@@ -601,6 +827,33 @@ test.describe('resist.net web app', () => {
     // initial call fires immediately
     await page.waitForTimeout(500)
     expect(callCount).toBeGreaterThanOrEqual(1)
+  })
+
+  test('useBlockEvents resumes polling after tab becomes visible', { timeout: 10_000 }, async ({ page }) => {
+    let callCount = 0
+    await page.route('**/api/probe-events**', route => {
+      callCount++
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ events: [SAMPLE_EVENT], liveProbes: callCount, regions: 1, blocksToday: 0, volunteerCount: 0 }) })
+    })
+    await page.goto('/')
+    await page.waitForTimeout(300)
+    const afterInitial = callCount
+    expect(afterInitial).toBeGreaterThanOrEqual(1)
+
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(300)
+    const afterHide = callCount
+
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await page.waitForTimeout(500)
+    expect(callCount).toBeGreaterThan(afterHide)
   })
 
   // ── WalletSheet lifecycle ────────────────────────────────────────────────────
@@ -706,6 +959,26 @@ test.describe('resist.net web app', () => {
     await expect(dialog.locator('code').filter({ hasText: '0xAbCd' })).toBeVisible()
   })
 
+  test('WalletSheet Disconnect wallet closes sheet and reverts to unauthenticated state', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.addInitScript(() => {
+      window.__PRIVY_TEST_USER__ = {
+        address: '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12',
+        chainType: 'ethereum',
+      }
+    })
+    await page.goto('/')
+    await page.locator('header.topbar').getByRole('button', { name: /Sign in|Account|Wallet/i }).click()
+    const dialog = page.getByRole('dialog', { name: 'Wallet' })
+    await expect(dialog.getByRole('button', { name: 'Disconnect wallet' })).toBeVisible({ timeout: 8000 })
+    await page.addInitScript(() => {
+      delete (window as any).__PRIVY_TEST_USER__
+    })
+    await dialog.getByRole('button', { name: 'Disconnect wallet' }).click()
+    await expect(dialog).not.toBeVisible()
+    await expect(page.locator('header.topbar').getByRole('button', { name: /Sign in/i })).toBeVisible({ timeout: 8000 })
+  })
+
   test('WalletSheet copy full address button calls clipboard.writeText with full address', async ({ page }) => {
     await mockPrivyAppConfig(page)
     await page.addInitScript(() => {
@@ -752,6 +1025,21 @@ test.describe('resist.net web app', () => {
     const calls = await page.evaluate(() => (window as any).__clipboardCalls)
     expect(calls).toContain('0xAbCdEf1234567890AbCdEf1234567890AbCdEf12')
     await expect(page.getByRole('dialog', { name: 'Wallet' })).not.toBeVisible()
+  })
+
+  test('MorePage Disconnect wallet button triggers logout and reverts to unauthenticated state', async ({ page }) => {
+    await mockPrivyAppConfig(page)
+    await page.addInitScript(() => {
+      window.__PRIVY_TEST_USER__ = {
+        address: '0xAbCdEf1234567890AbCdEf1234567890AbCdEf12',
+        chainType: 'ethereum',
+      }
+    })
+    await page.goto('/')
+    await page.locator('nav[aria-label="Main navigation"]').getByRole('button', { name: 'More' }).click()
+    await expect(page.getByRole('button', { name: 'Disconnect wallet' })).toBeVisible({ timeout: 8000 })
+    await page.getByRole('button', { name: 'Disconnect wallet' }).click()
+    await expect(page.getByRole('button', { name: 'Sign in with Ethereum' })).toBeVisible({ timeout: 8000 })
   })
 
 })

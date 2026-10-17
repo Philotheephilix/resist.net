@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
   --ink: #141414;
-  --muted: #858585;
+  --muted: #767676;
   --soft: #f7f7f7;
   --line: #ededed;
   --green: #19b955;
@@ -14,6 +14,7 @@
 html, body { margin: 0; min-height: 100%; background: #f1f1f1; color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
 body.modal-open { overflow: hidden; }
 button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+button:focus-visible, a:focus-visible { outline: 2px solid #19b955; outline-offset: 2px; border-radius: 4px; }
 
 .app-shell { min-height: 100vh; display: flex; justify-content: center; background: #f1f1f1; }
 .phone { width: 100%; max-width: 590px; min-height: 100vh; background: #fff; position: relative; overflow: hidden; }
@@ -40,7 +41,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
   height: 295px; position: relative; margin: 18px auto 4px; width: 295px;
   border-radius: 50%; overflow: visible; background: transparent; box-shadow: none;
   perspective: 900px; transform-style: preserve-3d; touch-action: none;
-  cursor: grab; user-select: none; will-change: transform;
+  cursor: grab; user-select: none;
 }
 .globe-wrap:active { cursor: grabbing; box-shadow: inset -24px -15px 38px rgba(0,0,0,.16), 0 12px 30px rgba(0,0,0,.08); }
 .globe-wrap canvas { display: block; width: 100% !important; height: 100% !important; cursor: inherit; }
@@ -101,7 +102,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .divider { height: 1px; background: var(--line); margin: 35px 0 28px; }
 
 .health-row { display: flex; justify-content: space-between; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
-.health-row b { font-weight: 600; color: #777; }
+.health-row b { font-weight: 600; color: #595959; }
 
 .service-row, .profile-card { display: flex; align-items: center; gap: 13px; padding: 15px 0; border-bottom: 1px solid var(--line); }
 .service-icon, .setting-icon { width: 40px; height: 40px; border-radius: 50%; background: #f6f6f6; display: grid; place-items: center; }
@@ -176,7 +177,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 }
 .test-modal h2 { font-size: 28px; }
 .test-modal p { color: #888; margin: 7px 0 20px; }
-.close { position: absolute; right: 20px; top: 20px; color: #888; transition: transform .2s ease, color .2s ease; }
+.close { position: absolute; right: 20px; top: 20px; color: #888; transition: transform .2s ease; min-width: 44px; min-height: 44px; padding: 10px; }
 .close:hover { transform: rotate(90deg); color: #111; }
 
 @keyframes modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -209,6 +210,8 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .badge-blocked { background: #fef2f2; color: var(--red); }
 .badge-reachable { background: #eaf8ee; color: var(--green); }
 .badge-investigating { background: #fffbeb; color: var(--amber); }
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* Skeleton shimmer */
 @keyframes shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }

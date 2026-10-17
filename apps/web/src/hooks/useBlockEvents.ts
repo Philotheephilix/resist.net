@@ -18,6 +18,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const seqRef = useRef(0)
+  const fetchRef = useRef<() => void>(() => {})
   // Stable prev-events ref — only swap the array when content changes, so consumers
   // that useMemo-depend on `events` don't recompute on polls that return the same data.
   const prevEventsRef = useRef<ProbeResultRow[]>([])
@@ -103,6 +104,8 @@ export function useBlockEvents(filters: BlockEventFilters) {
       }
     }
 
+    fetchRef.current = fetchEvents
+
     // Guard the initial fetch — skip when the tab is already hidden at effect-run time.
     if (document.visibilityState !== 'hidden') {
       fetchEvents()
@@ -147,5 +150,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
     }
   }, [filters.blockType, setStableEvents])
 
-  return { events, stats, loading, error }
+  const retry = useCallback(() => { fetchRef.current() }, [])
+
+  return { events, stats, loading, error, retry }
 }

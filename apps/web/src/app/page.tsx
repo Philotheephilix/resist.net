@@ -1,9 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useState, useCallback, useRef, useEffect, useDeferredValue } from 'react'
-import { feature } from 'topojson-client'
-import countries from 'world-atlas/countries-110m.json'
+import { useMemo, useState, useCallback, useRef, useEffect, useDeferredValue, memo } from 'react'
 import {
   Activity,
   Bell,
@@ -33,7 +31,12 @@ import { usePrivy } from '../hooks/usePrivyCompat'
 import { useBlockEvents } from '../hooks/useBlockEvents'
 import type { TestUrlResult } from './api/test-url/route'
 
-const Globe = dynamic(() => import('react-globe.gl'), { ssr: false, loading: () => <div style={{width:295,height:295,display:'flex',alignItems:'center',justifyContent:'center'}}><style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style><Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} /></div> })
+const Globe = dynamic(() => import('react-globe.gl'), { ssr: false, loading: () => <div role="status" aria-label="Loading globe" style={{width:295,height:295,display:'flex',alignItems:'center',justifyContent:'center'}}><Loader2 size={32} style={{ animation: 'spin 1s linear infinite' }} /></div> })
+
+const POLY_CAP_COLOR = () => 'rgba(28, 31, 34, 0.92)'
+const POLY_SIDE_COLOR = () => 'rgba(18, 20, 22, 0.45)'
+const POLY_STROKE_COLOR = () => 'rgba(255,255,255,0.18)'
+const ARC_COLOR = () => ['#19c35c', '#87e8a8']
 
 type Tab = 'radar' | 'network' | 'connect' | 'activity' | 'more'
 
@@ -43,6 +46,12 @@ const navItems: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: 'connect', label: 'Connect', icon: TrendingUp },
   { id: 'activity', label: 'Activity', icon: Clock3 },
   { id: 'more', label: 'More', icon: Grid2X2 },
+]
+
+const DEFAULT_ARCS = [
+  { startLat: 19.07, startLng: 72.87, endLat: 51.5, endLng: -0.12 },
+  { startLat: 19.07, startLng: 72.87, endLat: 40.71, endLng: -74 },
+  { startLat: -6.2, startLng: 106.8, endLat: 19.07, endLng: 72.87 },
 ]
 
 const BLOCK_TYPE_LABELS: Record<string, string> = {
@@ -104,7 +113,7 @@ function addrFg(addr: string): string {
 
 // ─── Header ───────────────────────────────────────────────────────────────────
 
-function Header({ onAvatarClick }: { onAvatarClick: () => void }) {
+const Header = memo(function Header({ onAvatarClick }: { onAvatarClick: () => void }) {
   const { ready, authenticated, user } = usePrivy()
 
   const walletAddr = user?.wallet?.address ?? ''
@@ -127,34 +136,49 @@ function Header({ onAvatarClick }: { onAvatarClick: () => void }) {
         <span className="brand-mark" aria-hidden="true"><Network size={16} /></span>
         <span>ResistNet</span>
       </div>
-      <button className="icon-button" aria-label="Notifications"><Bell size={21} strokeWidth={1.8} /></button>
+      <button className="icon-button" aria-label="Notifications" onClick={() => alert('Notifications coming soon')}><Bell size={21} strokeWidth={1.8} /></button>
     </header>
   )
-}
+})
 
 // ─── Globe ────────────────────────────────────────────────────────────────────
+
+const DEFAULT_POINTS = [
+  { lat: 19.07, lng: 72.87, size: 0.16, color: '#18b957' },
+  { lat: -6.2, lng: 106.8, size: 0.13, color: '#f3ad24' },
+  { lat: 40.71, lng: -74, size: 0.13, color: '#18b957' },
+  { lat: 51.5, lng: -0.12, size: 0.11, color: '#18b957' },
+  { lat: -23.55, lng: -46.63, size: 0.11, color: '#f3ad24' },
+]
 
 function DottedGlobe({ compact = false, points }: {
   compact?: boolean
   points?: Array<{ lat: number; lng: number; size: number; color: string }>
 }) {
   const [autoRotate, setAutoRotate] = useState(true)
-  const countryFeatures = useMemo(
-    () => feature(countries as never, countries.objects.countries as never).features,
-    []
-  )
-  const displayPoints = points ?? [
-    { lat: 19.07, lng: 72.87, size: 0.16, color: '#18b957' },
-    { lat: -6.2, lng: 106.8, size: 0.13, color: '#f3ad24' },
-    { lat: 40.71, lng: -74, size: 0.13, color: '#18b957' },
-    { lat: 51.5, lng: -0.12, size: 0.11, color: '#18b957' },
-    { lat: -23.55, lng: -46.63, size: 0.11, color: '#f3ad24' },
-  ]
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [countryFeatures, setCountryFeatures] = useState<unknown[]>([])
+  useEffect(() => {
+    const el = wrapRef.current
+    if (el) el.style.willChange = autoRotate ? 'transform' : 'auto'
+  }, [autoRotate])
+  useEffect(() => {
+    Promise.all([
+      import('topojson-client'),
+      import('world-atlas/countries-110m.json'),
+    ]).then(([{ feature }, countries]) => {
+      setCountryFeatures((feature as (t: unknown, o: unknown) => { features: unknown[] })(countries, (countries as { objects: { countries: unknown } }).objects.countries).features)
+    })
+  }, [])
+  const displayPoints = points ?? DEFAULT_POINTS
 
   return (
     <div
+      ref={wrapRef}
       className={`globe-wrap ${compact ? 'compact' : ''}`}
       aria-label="Interactive live network globe. Drag to rotate and use touch pinch to zoom."
+      onPointerDown={() => { if (wrapRef.current) wrapRef.current.style.willChange = 'transform' }}
+      onPointerUp={() => { if (wrapRef.current && !autoRotate) wrapRef.current.style.willChange = 'auto' }}
     >
       <Globe
         width={295}
@@ -163,9 +187,9 @@ function DottedGlobe({ compact = false, points }: {
         globeImageUrl="/resistnet-world-globe.png"
         polygonsData={countryFeatures}
         polygonGeoJsonGeometry="geometry"
-        polygonCapColor={() => 'rgba(28, 31, 34, 0.92)'}
-        polygonSideColor={() => 'rgba(18, 20, 22, 0.45)'}
-        polygonStrokeColor={() => 'rgba(255,255,255,0.18)'}
+        polygonCapColor={POLY_CAP_COLOR}
+        polygonSideColor={POLY_SIDE_COLOR}
+        polygonStrokeColor={POLY_STROKE_COLOR}
         polygonAltitude={0.008}
         showAtmosphere
         atmosphereColor="#9fe8ba"
@@ -177,12 +201,8 @@ function DottedGlobe({ compact = false, points }: {
         pointAltitude={0.025}
         pointRadius="size"
         pointResolution={16}
-        arcsData={[
-          { startLat: 19.07, startLng: 72.87, endLat: 51.5, endLng: -0.12 },
-          { startLat: 19.07, startLng: 72.87, endLat: 40.71, endLng: -74 },
-          { startLat: -6.2, startLng: 106.8, endLat: 19.07, endLng: 72.87 },
-        ]}
-        arcColor={() => ['#19c35c', '#87e8a8']}
+        arcsData={DEFAULT_ARCS}
+        arcColor={ARC_COLOR}
         arcAltitude={0.18}
         arcStroke={0.45}
         arcDashLength={0.35}
@@ -221,15 +241,46 @@ function StatusLine({ children = 'Network live' }: { children?: string }) {
   )
 }
 
-function MiniChart() {
+const MiniChart = memo(function MiniChart({ events }: { events?: { timestamp: number }[] }) {
+  const path = useMemo(() => {
+    if (!events || events.length === 0) return null
+    const W = 500
+    const H = 108
+    const BUCKETS = 20
+    const now = Date.now()
+    const windowMs = 60 * 60 * 1000
+    const counts = new Array<number>(BUCKETS).fill(0)
+    for (const e of events) {
+      const age = now - e.timestamp
+      if (age < 0 || age > windowMs) continue
+      const idx = Math.min(BUCKETS - 1, Math.floor(((windowMs - age) / windowMs) * BUCKETS))
+      counts[idx]++
+    }
+    const max = Math.max(...counts, 1)
+    const pts = counts.map((c, i) => {
+      const x = (i / (BUCKETS - 1)) * W
+      const y = H - 8 - ((c / max) * (H - 16))
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    })
+    return `M${pts.join(' L')}`
+  }, [events])
+
+  const hasData = path !== null
   return (
-    <div className="mini-chart" aria-label="Network activity chart" aria-hidden="true">
+    <div
+      className="mini-chart"
+      aria-label={hasData ? 'Network activity chart (last hour)' : 'Network activity chart (no data yet)'}
+      aria-hidden="true"
+    >
       <svg viewBox="0 0 500 108" preserveAspectRatio="none">
-        <path d="M0 76 C28 69 35 88 64 75 S95 62 116 74 S145 88 168 72 S197 67 220 79 S245 83 265 65 S284 55 300 63 S312 80 325 42 S342 52 360 35 S388 52 406 31 S428 62 448 48 S470 56 500 24" />
+        {hasData
+          ? <path d={path} />
+          : <path d="M0 76 C28 69 35 88 64 75 S95 62 116 74 S145 88 168 72 S197 67 220 79 S245 83 265 65 S284 55 300 63 S312 80 325 42 S342 52 360 35 S388 52 406 31 S428 62 448 48 S470 56 500 24" opacity="0.35" />
+        }
       </svg>
     </div>
   )
-}
+})
 
 // ─── Focus trap hook ──────────────────────────────────────────────────────────
 
@@ -318,12 +369,12 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
       className="modal-backdrop"
       role="dialog"
       aria-modal="true"
-      aria-label="Test a URL"
+      aria-labelledby="test-modal-title"
       onClick={onClose}
     >
       <div ref={panelRef} className="test-modal" onClick={e => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Close"><X /></button>
-        <h2>Test a URL</h2>
+        <h2 id="test-modal-title">Test a URL</h2>
         <p>Check availability from a volunteer region.</p>
 
         <div className={`input-field ${urlInput ? 'active' : ''}`}>
@@ -336,6 +387,7 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
             onChange={e => setUrlInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') runTest() }}
             autoFocus
+            autoComplete="url"
             aria-label="URL to test"
           />
         </div>
@@ -388,37 +440,40 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
           ) : 'Run test'}
         </button>
 
-        {error && (
-          <div className="test-result error" role="alert">
-            <b>Error</b>
-            <span>{error}</span>
-          </div>
-        )}
+        <div className={error ? 'test-result error' : ''} role="alert">
+          {error && (
+            <>
+              <b>Error</b>
+              <span>{error}</span>
+            </>
+          )}
+        </div>
 
-        {result && (
-          <div className={`test-result ${result.reachable ? 'success' : 'error'}`} role="status">
-            <b>
-              {result.notSupported
-                ? 'Not yet supported'
-                : result.reachable
-                ? '✓ Reachable'
-                : `✗ ${statusLabel(result.errorType ?? null, false)}`}
-            </b>
-            <span>
-              {result.method} · {result.region}
-              {result.latencyMs != null ? ` · ${result.latencyMs}ms` : ''}
-              {result.statusCode != null ? ` · HTTP ${result.statusCode}` : ''}
-            </span>
-            {result.errorDetail && (
-              <span style={{ marginTop: 6, color: '#c0392b', fontSize: 12 }}>{result.errorDetail}</span>
-            )}
-            {result.notSupported && (
-              <span style={{ marginTop: 6 }}>{result.errorDetail}</span>
-            )}
-          </div>
-        )}
+        <div className={result ? `test-result ${result.reachable ? 'success' : 'error'}` : ''} role="status">
+          {result && (
+            <>
+              <b>
+                {result.notSupported
+                  ? 'Not yet supported'
+                  : result.reachable
+                  ? '✓ Reachable'
+                  : `✗ ${statusLabel(result.errorType ?? null, false)}`}
+              </b>
+              <span>
+                {result.method} · {result.region}
+                {result.latencyMs != null ? ` · ${result.latencyMs}ms` : ''}
+                {result.statusCode != null ? ` · HTTP ${result.statusCode}` : ''}
+              </span>
+              {result.errorDetail && (
+                <span style={{ marginTop: 6, color: '#c0392b', fontSize: 12 }}>{result.errorDetail}</span>
+              )}
+              {result.notSupported && (
+                <span style={{ marginTop: 6 }}>{result.errorDetail}</span>
+              )}
+            </>
+          )}
+        </div>
 
-        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
     </div>
   )
@@ -431,22 +486,33 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
   const walletAddr = user?.wallet?.address ?? ''
   const panelRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
+  const [privyTimedOut, setPrivyTimedOut] = useState(false)
   useEffect(() => {
     if (!copied) return
     const id = setTimeout(() => setCopied(false), 1500)
     return () => clearTimeout(id)
   }, [copied])
+  useEffect(() => {
+    if (ready) return
+    const id = setTimeout(() => setPrivyTimedOut(true), 10000)
+    return () => clearTimeout(id)
+  }, [ready])
   useFocusTrap(panelRef, onClose)
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Wallet" onClick={onClose}>
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="wallet-modal-title" onClick={onClose}>
       <div ref={panelRef} className="test-modal" onClick={e => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Close"><X /></button>
 
         {!ready ? (
           <div style={{ padding: '24px 0', textAlign: 'center', color: '#999' }}>
-            <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto' }} />
-            <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+            {privyTimedOut ? (
+              <p style={{ margin: 0, fontSize: 14 }}>Could not connect to authentication service — please try again.</p>
+            ) : (
+              <>
+                <Loader2 size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto' }} />
+                      </>
+            )}
           </div>
         ) : authenticated && walletAddr ? (
           <>
@@ -492,6 +558,19 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
                 {copied ? 'Copied!' : walletAddr}
               </button>
             </div>
+            <div style={{ marginTop: 4 }}>
+              <input
+                readOnly
+                value={walletAddr}
+                style={{
+                  width: '100%', fontSize: 10, fontFamily: 'monospace', color: '#555',
+                  background: '#f5f5f5', border: '1px solid #e0e0e0', borderRadius: 6,
+                  padding: '4px 6px', boxSizing: 'border-box',
+                }}
+                onFocus={e => e.target.select()}
+                aria-label="Full wallet address"
+              />
+            </div>
 
             {user?.wallet?.chainType && (
               <div className="health-row">
@@ -511,7 +590,7 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <>
-            <h2 style={{ marginBottom: 8 }}>Connect wallet</h2>
+            <h2 id="wallet-modal-title" style={{ marginBottom: 8 }}>Connect wallet</h2>
             <p style={{ color: '#888', marginBottom: 24 }}>Sign in with your Ethereum wallet to track your probe history and volunteer node.</p>
             <button
               className="primary-button"
@@ -533,19 +612,22 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
 
 // ─── Radar tab ─────────────────────────────────────────────────────────────────
 
-function Radar({ onTest, liveProbes, regions, blocksToday, loading }: {
+function Radar({ onTest, onConnect, onViewNetwork, liveProbes, regions, blocksToday, loading, events }: {
   onTest: () => void
+  onConnect: () => void
+  onViewNetwork: () => void
   liveProbes: number
   regions: number
   blocksToday: number
   loading: boolean
+  events: { timestamp: number }[]
 }) {
   return (
     <>
       <section className="hero-block">
         <h1>Network Radar</h1>
         <StatusLine />
-        <div className="globe-button" role="img" aria-label="Open live network map">
+        <div className="globe-button">
           <DottedGlobe />
         </div>
         <div className="stats-row">
@@ -579,14 +661,14 @@ function Radar({ onTest, liveProbes, regions, blocksToday, loading }: {
       <section className="section-block">
         <div className="section-heading">
           <h2>Network activity</h2>
-          <button className="more-link">View details <ChevronRight size={16} /></button>
+          <button className="more-link" onClick={onViewNetwork} aria-label="View network activity details">View details <ChevronRight size={16} /></button>
         </div>
-        <MiniChart />
+        <MiniChart events={events} />
         <div className="range-row" style={{ opacity: 0.4 }}>
-          <button disabled aria-disabled="true" className="selected">1H</button>
-          <button disabled aria-disabled="true">24H</button>
-          <button disabled aria-disabled="true">7D</button>
-          <button disabled aria-disabled="true">30D</button>
+          <button disabled aria-disabled="true" className="selected" title="Historical view coming soon">1H</button>
+          <button disabled aria-disabled="true" title="Historical view coming soon">24H</button>
+          <button disabled aria-disabled="true" title="Historical view coming soon">7D</button>
+          <button disabled aria-disabled="true" title="Historical view coming soon">30D</button>
         </div>
       </section>
 
@@ -599,7 +681,7 @@ function Radar({ onTest, liveProbes, regions, blocksToday, loading }: {
           </span>
           <ChevronRight aria-hidden="true" />
         </button>
-        <button className="action-card" aria-label="Connect to network (coming soon)">
+        <button className="action-card" onClick={onConnect} aria-label="Connect to network">
           <span className="action-icon connected"><Wifi size={22} aria-hidden="true" /></span>
           <span>
             <b>Connect to network</b>
@@ -614,10 +696,12 @@ function Radar({ onTest, liveProbes, regions, blocksToday, loading }: {
 
 // ─── Network tab ───────────────────────────────────────────────────────────────
 
-function NetworkPage({ events, stats, loading }: {
+function NetworkPage({ events, stats, loading, error, onRetry }: {
   events: ReturnType<typeof useBlockEvents>['events']
   stats: ReturnType<typeof useBlockEvents>['stats']
   loading: boolean
+  error: string | null
+  onRetry: () => void
 }) {
   const affectedDomains = useMemo(() => {
     const hostCount = new Map<string, number>()
@@ -632,6 +716,13 @@ function NetworkPage({ events, stats, loading }: {
     return [...hostCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
   }, [events])
 
+  const healthStats = useMemo(() => [
+    ['Active nodes', stats?.liveProbes?.toLocaleString() ?? '—', 'green'],
+    ['Regions monitored', stats?.regions?.toLocaleString() ?? '—', ''],
+    ['Confirmed incidents', stats?.blocksToday?.toLocaleString() ?? '—', stats?.blocksToday ? 'red' : ''],
+    ['Volunteer proxies', stats?.volunteerCount?.toLocaleString() ?? '—', ''],
+  ], [stats])
+
   return (
     <>
       <div className="page-title">
@@ -645,40 +736,46 @@ function NetworkPage({ events, stats, loading }: {
             ? <span className="skeleton" style={{ height: 35, width: 80, display: 'inline-block', borderRadius: 6 }} />
             : (stats?.liveProbes ?? 0).toLocaleString()}
         </strong>
-        <span>Online volunteer nodes</span>
-        <small>Across {(stats?.regions ?? 0).toLocaleString()} regions worldwide</small>
+        {loading
+          ? <span className="skeleton" style={{ height: 16, width: 140, display: 'inline-block', borderRadius: 4 }} />
+          : <span>Online volunteer nodes</span>}
+        {loading
+          ? <small><span className="skeleton" style={{ height: 14, width: 160, display: 'inline-block', borderRadius: 4 }} /></small>
+          : <small>Across {(stats?.regions ?? 0).toLocaleString()} regions worldwide</small>}
       </div>
       <div className="divider" />
       <section className="section-block">
         <h2>Network health</h2>
-        {[
-          ['Active nodes', stats?.liveProbes?.toLocaleString() ?? '—', 'green'],
-          ['Regions monitored', stats?.regions?.toLocaleString() ?? '—', ''],
-          ['Confirmed incidents', stats?.blocksToday?.toLocaleString() ?? '—', stats?.blocksToday ? 'red' : ''],
-          ['Volunteer proxies', stats?.volunteerCount?.toLocaleString() ?? '—', ''],
-        ].map(([label, value, color]) => (
+        {healthStats.map(([label, value, color]) => (
           <div className="health-row" key={label}>
             <span>{label}</span>
             <b className={color}>{value}</b>
           </div>
         ))}
       </section>
-      {affectedDomains.length > 0 && (
-        <section className="section-block">
-          <h2>Most affected services</h2>
-          {affectedDomains.map(([domain, count]) => (
-            <div className="service-row" key={domain}>
-              <span className="service-icon"><Globe2 size={19} aria-hidden="true" /></span>
-              <div>
-                <b>{domain}</b>
-                <small>{count} report{count !== 1 ? 's' : ''} of interference</small>
-              </div>
-              <ChevronRight size={17} aria-hidden="true" />
+      <section className="section-block">
+        <h2>Most affected services</h2>
+        {affectedDomains.length > 0 ? affectedDomains.map(([domain, count]) => (
+          <div className="service-row" key={domain}>
+            <span className="service-icon"><Globe2 size={19} aria-hidden="true" /></span>
+            <div>
+              <b>{domain}</b>
+              <small>{count} report{count !== 1 ? 's' : ''} of interference</small>
             </div>
-          ))}
-        </section>
-      )}
-      {!loading && events.length === 0 && (
+            <ChevronRight size={17} aria-hidden="true" />
+          </div>
+        )) : (
+          <p style={{ color: '#999', margin: '12px 0' }}>No interference detected in the last 48 hours</p>
+        )}
+      </section>
+      {!loading && error ? (
+        <div style={{ color: '#999', textAlign: 'center', padding: '40px 0' }}>
+          Could not load events —{' '}
+          <button onClick={onRetry} style={{ color: 'inherit', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit' }}>
+            tap to retry
+          </button>
+        </div>
+      ) : !loading && events.length === 0 && (
         <div style={{ color: '#999', textAlign: 'center', padding: '40px 0' }}>
           No network events recorded yet
         </div>
@@ -689,38 +786,52 @@ function NetworkPage({ events, stats, loading }: {
 
 // ─── Connect tab ───────────────────────────────────────────────────────────────
 
-function ConnectPage({ onConnect }: { onConnect: () => void }) {
+const ROUTES = [
+  { label: 'Best available route', description: 'Auto-selects the fastest node' },
+  { label: 'Europe', description: 'Exit via EU volunteer node' },
+  { label: 'North America', description: 'Exit via NA volunteer node' },
+  { label: 'Asia Pacific', description: 'Exit via APAC volunteer node' },
+]
+
+function ConnectPage({ onConnect, connected, onDisconnect }: { onConnect: () => void; connected: boolean; onDisconnect: () => void }) {
+  const [routeIdx, setRouteIdx] = useState(0)
+  const route = ROUTES[routeIdx]
+
+  function cycleRoute() {
+    setRouteIdx((i) => (i + 1) % ROUTES.length)
+  }
+
   return (
     <>
       <div className="page-title">
         <h1>Connect</h1>
-        <StatusLine>Ready to connect</StatusLine>
+        <StatusLine>{connected ? `Connected via ${route.label}` : 'Ready to connect'}</StatusLine>
       </div>
-      <div className="connect-card">
+      <div className={`connect-card${connected ? ' connected' : ''}`}>
         <div className="shield"><Shield size={42} strokeWidth={1.5} aria-hidden="true" /></div>
-        <strong>Disconnected</strong>
-        <span>Choose a route to protect your traffic</span>
+        <strong>{connected ? 'Connected' : 'Disconnected'}</strong>
+        <span>{connected ? route.label : 'Choose a route to protect your traffic'}</span>
       </div>
-      <div className="route-select">
+      <button className="route-select" aria-label={`Select route: ${route.label}`} onClick={cycleRoute}>
         <div>
           <small>Exit region</small>
-          <b>Best available route</b>
-          <span>Auto-selects the fastest node</span>
+          <b>{route.label}</b>
+          <span>{route.description}</span>
         </div>
         <ChevronDown aria-hidden="true" />
-      </div>
+      </button>
       <MiniChart />
       <div className="range-row" style={{ opacity: 0.4 }}>
-        <button disabled aria-disabled="true" className="selected">1H</button>
-        <button disabled aria-disabled="true">24H</button>
-        <button disabled aria-disabled="true">7D</button>
-        <button disabled aria-disabled="true">30D</button>
+        <button disabled aria-disabled="true" className="selected" title="Historical view coming soon">1H</button>
+        <button disabled aria-disabled="true" title="Historical view coming soon">24H</button>
+        <button disabled aria-disabled="true" title="Historical view coming soon">7D</button>
+        <button disabled aria-disabled="true" title="Historical view coming soon">30D</button>
       </div>
-      <button className="primary-button" onClick={onConnect}>Connect</button>
+      <button className="primary-button" onClick={connected ? onDisconnect : onConnect}>{connected ? 'Disconnect' : 'Connect'}</button>
       <div className="quick-actions">
-        <button><Globe2 aria-hidden="true" /><span>Choose region</span></button>
-        <button><Zap aria-hidden="true" /><span>Find best route</span></button>
-        <button><Menu aria-hidden="true" /><span>More options</span></button>
+        <button onClick={cycleRoute}><Globe2 aria-hidden="true" /><span>Choose region</span></button>
+        <button onClick={() => setRouteIdx(0)}><Zap aria-hidden="true" /><span>Find best route</span></button>
+        <button onClick={onConnect}><Menu aria-hidden="true" /><span>More options</span></button>
       </div>
       <section className="section-block">
         <h2>Route details</h2>
@@ -742,13 +853,16 @@ function ConnectPage({ onConnect }: { onConnect: () => void }) {
 
 // ─── Activity tab ──────────────────────────────────────────────────────────────
 
-function ActivityPage({ events, loading }: {
+function ActivityPage({ events, loading, error, onRetry }: {
   events: ReturnType<typeof useBlockEvents>['events']
   loading: boolean
+  error: string | null
+  onRetry: () => void
 }) {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDeferredValue(search)
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest')
+  const [visibleCount, setVisibleCount] = useState(50)
 
   const filtered = useMemo(() => {
     const q = debouncedSearch.trim().toLowerCase()
@@ -758,8 +872,18 @@ function ActivityPage({ events, loading }: {
           catch { return false }
         })
       : events
-    return [...list].sort((a, b) => sort === 'newest' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp).slice(0, 50)
+    return [...list]
+      .sort((a, b) => sort === 'newest' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp)
+      .map(e => {
+        let hostname = e.targetUrl
+        try { hostname = new URL(e.targetUrl).hostname } catch { /* ok */ }
+        return { ...e, hostname }
+      })
   }, [events, debouncedSearch, sort])
+
+  useEffect(() => { setVisibleCount(50) }, [debouncedSearch, sort])
+
+  const visible = filtered.slice(0, visibleCount)
 
   return (
     <>
@@ -793,6 +917,10 @@ function ActivityPage({ events, loading }: {
         </button>
       </div>
 
+      <div aria-live="polite" aria-atomic="true" style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+        {!loading && debouncedSearch === search ? (filtered.length === 0 ? (search ? 'No events match this search' : '') : `${filtered.length} result${filtered.length === 1 ? '' : 's'} found`) : ''}
+      </div>
+
       {loading && filtered.length === 0 ? (
         <div aria-busy="true" aria-label="Loading events">
           {[0, 1, 2, 3].map(i => (
@@ -807,35 +935,55 @@ function ActivityPage({ events, loading }: {
         </div>
       ) : filtered.length === 0 ? (
         <div style={{ color: '#999', textAlign: 'center', padding: '40px 0' }}>
-          {search ? 'No events match this search' : 'No events yet'}
+          {error && !search ? (
+            <>Could not load events —{' '}
+              <button onClick={onRetry} style={{ color: 'inherit', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer', padding: 0, font: 'inherit' }}>
+                tap to retry
+              </button>
+            </>
+          ) : search ? 'No events match this search' : 'No events yet'}
         </div>
       ) : (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, opacity: search !== debouncedSearch ? 0.5 : 1, transition: 'opacity 0.15s' }} aria-label="Censorship events" aria-busy={search !== debouncedSearch}>
-          {filtered.map(event => {
-            const color = statusColor(event.blockType, event.reachable)
-            const label = statusLabel(event.blockType, event.reachable)
-            let hostname = event.targetUrl
-            try { hostname = new URL(event.targetUrl).hostname } catch { /* ok */ }
-            return (
-              <li key={event.id} className="activity-row">
-                <span className={`event-icon ${color === 'green' ? 'reachable' : color === 'amber' ? 'warning' : 'blocked'}`}>
-                  {event.reachable ? <Shield size={19} aria-hidden="true" /> : <Zap size={19} aria-hidden="true" />}
-                </span>
-                <div>
-                  <b>{label} detected</b>
-                  <span>
-                    <a href={/^https?:\/\//i.test(event.targetUrl) ? event.targetUrl : '#'} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
-                      {hostname}
-                    </a>
-                    {event.geohash ? ` · ${event.geohash.slice(0, 4)}` : ''}
+        <>
+          {visibleCount < filtered.length && (
+            <div style={{ color: '#999', fontSize: 12, textAlign: 'center', marginBottom: 8 }}>
+              Showing {visibleCount} of {filtered.length} events
+            </div>
+          )}
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, opacity: search !== debouncedSearch ? 0.5 : 1, transition: 'opacity 0.15s' }} aria-label="Censorship events" aria-busy={search !== debouncedSearch}>
+            {visible.map(event => {
+              const color = statusColor(event.blockType, event.reachable)
+              const label = statusLabel(event.blockType, event.reachable)
+              return (
+                <li key={event.id} className="activity-row">
+                  <span className={`event-icon ${color === 'green' ? 'reachable' : color === 'amber' ? 'warning' : 'blocked'}`}>
+                    {event.reachable ? <Shield size={19} aria-hidden="true" /> : <Zap size={19} aria-hidden="true" />}
                   </span>
-                  <small>{timeAgo(event.timestamp)}</small>
-                </div>
-                <strong className={color}>{label}</strong>
-              </li>
-            )
-          })}
-        </ul>
+                  <div>
+                    <b>{label} detected</b>
+                    <span>
+                      <a href={/^https?:\/\//i.test(event.targetUrl) ? event.targetUrl : '#'} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
+                        {hostname}
+                      </a>
+                      {event.geohash ? ` · ${event.geohash.slice(0, 4)}` : ''}
+                    </span>
+                    <small>{timeAgo(event.timestamp)}</small>
+                  </div>
+                  <strong className={color}>{label}</strong>
+                </li>
+              )
+            })}
+          </ul>
+          {visibleCount < filtered.length && (
+            <button
+              className="filter"
+              style={{ width: '100%', marginTop: 8, justifyContent: 'center' }}
+              onClick={() => setVisibleCount(c => c + 50)}
+            >
+              Load more ({filtered.length - visibleCount} remaining)
+            </button>
+          )}
+        </>
       )}
     </>
   )
@@ -847,11 +995,17 @@ function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
   const { ready, authenticated, user, login, logout } = usePrivy()
   const walletAddr = user?.wallet?.address ?? ''
   const [copied, setCopied] = useState(false)
+  const [comingSoon, setComingSoon] = useState('')
   useEffect(() => {
     if (!copied) return
     const id = setTimeout(() => setCopied(false), 2000)
     return () => clearTimeout(id)
   }, [copied])
+  useEffect(() => {
+    if (!comingSoon) return
+    const id = setTimeout(() => setComingSoon(''), 2500)
+    return () => clearTimeout(id)
+  }, [comingSoon])
 
   return (
     <>
@@ -956,15 +1110,27 @@ function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
         </button>
       )}
 
+      {comingSoon && (
+        <div role="status" aria-live="polite" style={{
+          position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+          background: 'var(--card, #1a1a2e)', color: 'var(--text, #fff)',
+          padding: '10px 20px', borderRadius: 8, fontSize: 14,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.4)', zIndex: 999, pointerEvents: 'none',
+        }}>
+          {comingSoon} — coming soon
+        </div>
+      )}
       <section className="settings-list" aria-label="Settings">
         {[
-          ['Monitored services', '3 services saved', Globe2],
+          ['Monitored services', 'Manage services', Globe2],
           ['My volunteer node', 'Not configured', Network],
           ['Saved regions', 'Manage regions', SlidersHorizontal],
           ['Network diagnostics', 'Run a check', Activity],
           ['Privacy and security', 'Your data, your control', Shield],
         ].map(([title, sub, Icon]) => (
-          <button key={title as string} aria-label={title as string}>
+          <button key={title as string} aria-label={title as string}
+            onClick={() => setComingSoon(title as string)}
+          >
             <span className="setting-icon"><Icon size={20} aria-hidden="true" /></span>
             <span>
               <b>{title as string}</b>
@@ -987,7 +1153,11 @@ export default function Page() {
   const [tab, setTab] = useState<Tab>('radar')
   const [testOpen, setTestOpen] = useState(false)
   const [walletOpen, setWalletOpen] = useState(false)
+  const [connected, setConnected] = useState(false)
+  const connectingRef = useRef(false)
+  const { authenticated } = usePrivy()
   const scrollRef = useRef<HTMLDivElement>(null)
+  const navRef = useRef<HTMLElement>(null)
   const isMounted = useRef(false)
 
   useEffect(() => {
@@ -1001,32 +1171,49 @@ export default function Page() {
   const modalOpen = testOpen || walletOpen
   useEffect(() => {
     document.body.classList.toggle('modal-open', modalOpen)
-    return () => { document.body.classList.remove('modal-open') }
+    if (scrollRef.current) scrollRef.current.inert = modalOpen
+    if (navRef.current) navRef.current.inert = modalOpen
+    return () => {
+      document.body.classList.remove('modal-open')
+      if (scrollRef.current) scrollRef.current.inert = false
+      if (navRef.current) navRef.current.inert = false
+    }
   }, [modalOpen])
 
-  const { events, stats, loading, error } = useBlockEvents({})
+  const { events, stats, loading, error, retry } = useBlockEvents({})
 
   const liveProbes = stats?.liveProbes ?? 0
   const regions = stats?.regions ?? 0
   const blocksToday = stats?.blocksToday ?? 0
 
+  const openTest = useCallback(() => setTestOpen(true), [])
+  const goConnect = useCallback(() => setTab('connect'), [])
+  const goNetwork = useCallback(() => setTab('network'), [])
+  const openWallet = useCallback(() => setWalletOpen(true), [])
+  const startConnect = useCallback(() => { connectingRef.current = true; setWalletOpen(true) }, [])
+  const disconnect = useCallback(() => setConnected(false), [])
+
   let content: React.ReactNode
   if (tab === 'radar') {
-    content = <Radar onTest={() => setTestOpen(true)} liveProbes={liveProbes} regions={regions} blocksToday={blocksToday} loading={loading} />
+    content = <Radar onTest={openTest} onConnect={goConnect} onViewNetwork={goNetwork} liveProbes={liveProbes} regions={regions} blocksToday={blocksToday} loading={loading} events={events} />
   } else if (tab === 'network') {
-    content = <NetworkPage events={events} stats={stats} loading={loading} />
+    content = <NetworkPage events={events} stats={stats} loading={loading} error={error} onRetry={retry} />
   } else if (tab === 'connect') {
-    content = <ConnectPage onConnect={() => setWalletOpen(true)} />
+    content = <ConnectPage
+      connected={connected}
+      onConnect={startConnect}
+      onDisconnect={disconnect}
+    />
   } else if (tab === 'activity') {
-    content = <ActivityPage events={events} loading={loading} />
+    content = <ActivityPage events={events} loading={loading} error={error} onRetry={retry} />
   } else {
-    content = <MorePage onOpenWallet={() => setWalletOpen(true)} />
+    content = <MorePage onOpenWallet={openWallet} />
   }
 
   return (
     <main className="app-shell">
       <div className="phone">
-        <Header onAvatarClick={() => setWalletOpen(true)} />
+        <Header onAvatarClick={openWallet} />
 
         {error && (
           <div
@@ -1039,9 +1226,29 @@ export default function Page() {
               borderRadius: 12,
               fontSize: 13,
               color: '#856404',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
             }}
           >
-            ⚠ Network error: {error}
+            <span>⚠ Network error: {error}</span>
+            <button
+              onClick={retry}
+              style={{
+                background: 'none',
+                border: '1px solid #856404',
+                borderRadius: 6,
+                color: '#856404',
+                cursor: 'pointer',
+                fontSize: 12,
+                padding: '2px 8px',
+                flexShrink: 0,
+              }}
+              aria-label="Retry loading events"
+            >
+              Retry
+            </button>
           </div>
         )}
 
@@ -1049,7 +1256,7 @@ export default function Page() {
           {content}
         </div>
 
-        <nav className="bottom-nav" aria-label="Main navigation">
+        <nav ref={navRef} className="bottom-nav" aria-label="Main navigation">
           {navItems.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -1065,7 +1272,7 @@ export default function Page() {
         </nav>
 
         {testOpen && <TestUrlModal onClose={() => setTestOpen(false)} />}
-        {walletOpen && <WalletSheet onClose={() => setWalletOpen(false)} />}
+        {walletOpen && <WalletSheet onClose={() => { setWalletOpen(false); if (connectingRef.current) { connectingRef.current = false; if (authenticated) setConnected(true) } }} />}
       </div>
     </main>
   )
