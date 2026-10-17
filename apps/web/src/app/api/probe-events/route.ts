@@ -153,7 +153,7 @@ function checkRateLimit(ip: string): boolean {
 function ensureStatsInFlight() {
   if (statsInFlight) return
   statsInFlight = (async () => {
-    let events = await queryArkivProbeEvents({ limit: 2_000, since: Date.now() - 24 * 3600 * 1000, includeRawWallets: true })
+    let events = await queryArkivProbeEvents({ limit: 200, since: Date.now() - 24 * 3600 * 1000, includeRawWallets: true })
     const arkivFailed = events === null
     // usingRealData=true means Arkiv returned actual rows. When Arkiv returns an empty
     // array we still consider it "real" — no events is a valid state. Only fall back to
