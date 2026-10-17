@@ -118,7 +118,8 @@ export async function main(opts: { once?: boolean } = {}) {
     consecutiveFailures++
   } finally {
     running = false
-    if (drainResolve) { drainResolve(); return }
+    const dr = drainResolve as (() => void) | null
+    if (dr) { dr(); return }
   }
   if (opts.once) return
   if (shutdownRequested) { process.exit(0); return }

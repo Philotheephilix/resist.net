@@ -50,7 +50,7 @@ async function detectLocation(): Promise<{ geohash: string; isp: string }> {
     // (U+202A–U+202E, U+2066–U+2069), paragraph/line separators (U+2028–U+2029),
     // and LTR/RTL marks (U+200E–U+200F) that could cause log-viewer spoofing or
     // misattribution of probe results if embedded in stored ISP metadata.
-    const isp = rawIsp.slice(0, 128).replace(/[\u0000-\u001F‎‏  ‪-‮⁦-⁩﻿]/g, "") || "unknown"
+    const isp = rawIsp.slice(0, 128).replace(/[\u0001-\u001f\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069\ufeff]|\u0000/g, "") || "unknown"
     return { geohash, isp }
   } catch {
     // Fallback: use env vars or defaults
