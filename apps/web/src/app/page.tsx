@@ -835,22 +835,28 @@ function UrlHealthDrawer({ targetUrl, onClose }: { targetUrl: string; onClose: (
 
   useEffect(() => {
     let cancelled = false
-    setLoading(true)
-    setError(null)
-    fetch(`/api/probe-events?targetUrl=${encodeURIComponent(targetUrl)}&includeStats=false`)
-      .then(r => r.ok ? r.json() : Promise.reject(r.status))
-      .then(data => {
-        if (cancelled) return
-        const arr = Array.isArray(data) ? data : []
-        setUrlEvents(arr.sort((a: { timestamp: number }, b: { timestamp: number }) => b.timestamp - a.timestamp))
-        setLoading(false)
-      })
-      .catch(() => {
-        if (cancelled) return
-        setError('Failed to load history')
-        setLoading(false)
-      })
-    return () => { cancelled = true }
+    let timer: ReturnType<typeof setInterval> | null = null
+
+    function poll(initial: boolean) {
+      if (initial) { setLoading(true); setError(null) }
+      fetch(`/api/probe-events?targetUrl=${encodeURIComponent(targetUrl)}&includeStats=false`)
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(data => {
+          if (cancelled) return
+          const arr = Array.isArray(data) ? data : []
+          setUrlEvents(arr.sort((a: { timestamp: number }, b: { timestamp: number }) => b.timestamp - a.timestamp))
+          setLoading(false)
+        })
+        .catch(() => {
+          if (cancelled) return
+          if (initial) setError('Failed to load history')
+          setLoading(false)
+        })
+    }
+
+    poll(true)
+    timer = setInterval(() => poll(false), 30_000)
+    return () => { cancelled = true; if (timer) clearInterval(timer) }
   }, [targetUrl])
 
   const upPct = useMemo(() => {
@@ -958,6 +964,17 @@ function UrlHealthDrawer({ targetUrl, onClose }: { targetUrl: string; onClose: (
 
 // ─── Network tab ───────────────────────────────────────────────────────────────
 
+function useMonitoredTargets() {
+  const [targets, setTargets] = useState<string[]>([])
+  useEffect(() => {
+    fetch('/api/targets')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.targets) setTargets(d.targets) })
+      .catch(() => {})
+  }, [])
+  return targets
+}
+
 function NetworkPage({ events, stats, loading, error, onRetry, onOpenUrlHealth }: {
   events: ReturnType<typeof useBlockEvents>['events']
   stats: ReturnType<typeof useBlockEvents>['stats']
@@ -966,6 +983,8 @@ function NetworkPage({ events, stats, loading, error, onRetry, onOpenUrlHealth }
   onRetry: () => void
   onOpenUrlHealth: (url: string) => void
 }) {
+  const monitoredTargets = useMonitoredTargets()
+
   const affectedDomains = useMemo(() => {
     const hostMap = new Map<string, { count: number; url: string }>()
     for (const e of events) {
@@ -1040,6 +1059,40 @@ function NetworkPage({ events, stats, loading, error, onRetry, onOpenUrlHealth }
           <p style={{ color: '#666', margin: '12px 0' }}>No interference detected in the last 48 hours</p>
         )}
       </section>
+      {monitoredTargets.length > 0 && (
+        <section className="section-block">
+          <h2>Monitored sites</h2>
+          {monitoredTargets.map(url => {
+            let hostname = url
+            try { hostname = new URL(url).hostname } catch { /* ok */ }
+            const eventCount = events.filter(e => e.targetUrl === url || (() => { try { return new URL(e.targetUrl).hostname === hostname } catch { return false } })()).length
+            const reachableCount = events.filter(e => {
+              let match = false
+              try { match = new URL(e.targetUrl).hostname === hostname } catch { /* ok */ }
+              return match && e.reachable
+            }).length
+            const upPct = eventCount > 0 ? Math.round(reachableCount / eventCount * 100) : null
+            return (
+              <button
+                key={url}
+                className="service-row"
+                onClick={() => onOpenUrlHealth(url)}
+                aria-label={`View availability history for ${hostname}`}
+                style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+              >
+                <span className="service-icon"><Globe2 size={19} aria-hidden="true" /></span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <b>{hostname}</b>
+                  <small style={{ color: upPct === null ? '#555' : upPct >= 80 ? '#19b955' : upPct >= 50 ? '#f3ad24' : '#e83341' }}>
+                    {upPct === null ? 'No data yet' : `${upPct}% reachable`}
+                  </small>
+                </div>
+                <ChevronRight size={16} style={{ color: '#555', flexShrink: 0 }} aria-hidden="true" />
+              </button>
+            )
+          })}
+        </section>
+      )}
       {!loading && error ? (
         <div style={{ color: '#666', textAlign: 'center', padding: '40px 0' }}>
           Could not load events —{' '}
