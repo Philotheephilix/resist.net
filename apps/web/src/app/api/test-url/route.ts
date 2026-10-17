@@ -47,19 +47,25 @@ function isPrivateIP(ip: string): boolean {
       normalized.startsWith('fd') ||
       normalized.startsWith('fe80') ||
       normalized === '::' ||
-      normalized.startsWith('::ffff:')
+      normalized.startsWith('::ffff:') ||
+      normalized.startsWith('64:ff9b:') ||
+      normalized.startsWith('0064:ff9b:') ||
+      normalized.startsWith('100:') ||
+      normalized.startsWith('2001:db8:') ||
+      normalized.startsWith('2002:')
     )
   }
   return true
 }
 
-async function assertPublicHostname(hostname: string): Promise<void> {
+async function resolvePublicHostname(hostname: string): Promise<string> {
   if (net.isIP(hostname)) {
     if (isPrivateIP(hostname)) throw new Error('Private/reserved IP address not allowed')
-    return
+    return hostname
   }
   const { address } = await dns.lookup(hostname)
   if (isPrivateIP(address)) throw new Error('Hostname resolves to a private/reserved IP address')
+  return address
 }
 
 // Dev fixture — returns a deterministic simulated result without making real
@@ -98,12 +104,20 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10_000)
   try {
-    await assertPublicHostname(new URL(url).hostname)
-    const res = await fetch(url, {
+    const parsed = new URL(url)
+    const resolvedIP = await resolvePublicHostname(parsed.hostname)
+    const fetchUrl = new URL(url)
+    fetchUrl.hostname = net.isIPv6(resolvedIP) ? `[${resolvedIP}]` : resolvedIP
+    const res = await fetch(fetchUrl.toString(), {
       method: 'HEAD',
       signal: controller.signal,
-      redirect: 'error',
+      redirect: 'follow',
+      headers: { Host: parsed.host },
     })
+    if (res.redirected) {
+      const redirectedHost = new URL(res.url).hostname
+      await resolvePublicHostname(redirectedHost)
+    }
     const latencyMs = Date.now() - start
     const reachable = res.status < 500
     let errorType: TestUrlResult['errorType'] = null
@@ -114,10 +128,13 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
   } catch (err) {
     const latencyMs = Date.now() - start
     const msg = err instanceof Error ? err.message : String(err)
+    const code = (err as NodeJS.ErrnoException).code
     let errorType: TestUrlResult['errorType'] = 'full_unreachable'
-    if (msg.toLowerCase().includes('dns') || msg.toLowerCase().includes('enotfound')) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      errorType = 'full_unreachable'
+    } else if (code === 'ENOTFOUND' || code === 'EAI_NONAME') {
       errorType = 'dns_poisoning'
-    } else if (msg.toLowerCase().includes('reset') || msg.toLowerCase().includes('econnreset')) {
+    } else if (code === 'ECONNRESET' || code === 'ECONNREFUSED') {
       errorType = 'tcp_rst'
     }
     return { url, method: 'HTTP', reachable: false, latencyMs, errorType, errorDetail: msg, checkedAt: Date.now(), region }
@@ -164,7 +181,7 @@ export async function POST(request: NextRequest) {
   if (regionStr.length > 128) return Response.json({ error: 'region too long' }, { status: 400 })
 
   // Mock mode: return fixture without making real outbound requests
-  if (process.env['USE_MOCK_DATA'] === 'true') {
+  if (process.env['USE_MOCK_DATA'] === 'true' && process.env['NODE_ENV'] !== 'production') {
     const result = devFixtureResult(parsed.href, methodStr, regionStr)
     return Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
   }

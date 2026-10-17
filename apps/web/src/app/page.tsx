@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { useMemo, useState, useCallback, useRef, useEffect, useDeferredValue } from 'react'
 import { feature } from 'topojson-client'
 import countries from 'world-atlas/countries-110m.json'
 import {
@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronRight,
   Clock3,
+  Copy,
   Globe2,
   Grid2X2,
   Home,
@@ -31,7 +32,7 @@ import { usePrivy } from '@privy-io/react-auth'
 import { useBlockEvents } from '../hooks/useBlockEvents'
 import type { TestUrlResult } from './api/test-url/route'
 
-const Globe = dynamic(() => import('react-globe.gl'), { ssr: false })
+const Globe = dynamic(() => import('react-globe.gl'), { ssr: false, loading: () => <div style={{width:295,height:295,display:'flex',alignItems:'center',justifyContent:'center'}}><Loader2 size={32} /></div> })
 
 type Tab = 'radar' | 'network' | 'connect' | 'activity' | 'more'
 
@@ -116,7 +117,7 @@ function Header({ onAvatarClick }: { onAvatarClick: () => void }) {
         className="profile"
         style={{ background: bg, color: fg, border: 'none', cursor: 'pointer' }}
         onClick={onAvatarClick}
-        aria-label={authenticated ? `Wallet: ${truncAddr(walletAddr)}` : 'Sign in'}
+        aria-label={authenticated && walletAddr && ready ? `Wallet: ${truncAddr(walletAddr)}` : authenticated ? 'Account' : 'Sign in'}
         title={authenticated ? walletAddr : 'Sign in with Ethereum'}
       >
         {!ready ? '…' : initials}
@@ -221,12 +222,49 @@ function StatusLine({ children = 'Network live' }: { children?: string }) {
 
 function MiniChart() {
   return (
-    <div className="mini-chart" aria-label="Network activity chart">
+    <div className="mini-chart" aria-label="Network activity chart" aria-hidden="true">
       <svg viewBox="0 0 500 108" preserveAspectRatio="none">
         <path d="M0 76 C28 69 35 88 64 75 S95 62 116 74 S145 88 168 72 S197 67 220 79 S245 83 265 65 S284 55 300 63 S312 80 325 42 S342 52 360 35 S388 52 406 31 S428 62 448 48 S470 56 500 24" />
       </svg>
     </div>
   )
+}
+
+// ─── Focus trap hook ──────────────────────────────────────────────────────────
+
+const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])'
+
+function useFocusTrap(panelRef: { current: HTMLElement | null }, onClose: () => void) {
+  const triggerRef = useRef<Element | null>(typeof document !== 'undefined' ? document.activeElement : null)
+
+  useEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    if (!panel.contains(document.activeElement)) {
+      const first = panel.querySelector<HTMLElement>(FOCUSABLE)
+      first?.focus()
+    }
+
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
+      if (e.key !== 'Tab') return
+      const focusable = Array.from(panel!.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(el => !el.closest('[inert]'))
+      if (!focusable.length) { e.preventDefault(); return }
+      const firstEl = focusable[0]
+      const lastEl = focusable[focusable.length - 1]
+      if (e.shiftKey) {
+        if (document.activeElement === firstEl) { e.preventDefault(); lastEl.focus() }
+      } else {
+        if (document.activeElement === lastEl) { e.preventDefault(); firstEl.focus() }
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      ;(triggerRef.current as HTMLElement | null)?.focus()
+    }
+  }, [panelRef, onClose])
 }
 
 // ─── Test URL modal ────────────────────────────────────────────────────────────
@@ -241,6 +279,8 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
   const [result, setResult] = useState<TestUrlResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(panelRef, onClose)
 
   const runTest = useCallback(async () => {
     const raw = urlInput.trim()
@@ -276,7 +316,7 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
       aria-label="Test a URL"
       onClick={onClose}
     >
-      <div className="test-modal" onClick={e => e.stopPropagation()}>
+      <div ref={panelRef} className="test-modal" onClick={e => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Close"><X /></button>
         <h2>Test a URL</h2>
         <p>Check availability from a volunteer region.</p>
@@ -384,10 +424,12 @@ function TestUrlModal({ onClose }: { onClose: () => void }) {
 function WalletSheet({ onClose }: { onClose: () => void }) {
   const { ready, authenticated, user, login, logout } = usePrivy()
   const walletAddr = user?.wallet?.address ?? ''
+  const panelRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(panelRef, onClose)
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Wallet" onClick={onClose}>
-      <div className="test-modal" onClick={e => e.stopPropagation()}>
+      <div ref={panelRef} className="test-modal" onClick={e => e.stopPropagation()}>
         <button className="close" onClick={onClose} aria-label="Close"><X /></button>
 
         {!ready ? (
@@ -425,17 +467,19 @@ function WalletSheet({ onClose }: { onClose: () => void }) {
 
             <div className="health-row" style={{ marginBottom: 0 }}>
               <span style={{ color: '#888', fontSize: 13 }}>Full address</span>
-              <code
+              <button
                 style={{
                   fontSize: 11, color: '#444', fontFamily: 'monospace',
                   maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  cursor: 'pointer',
+                  cursor: 'pointer', background: 'none', border: 'none', padding: 0,
+                  textAlign: 'left',
                 }}
                 title={walletAddr}
+                aria-label="Copy full address"
                 onClick={() => navigator.clipboard?.writeText(walletAddr)}
               >
                 {walletAddr}
-              </code>
+              </button>
             </div>
 
             {user?.wallet?.chainType && (
@@ -527,7 +571,7 @@ function Radar({ onTest, liveProbes, regions, blocksToday, loading }: {
           <button className="more-link">View details <ChevronRight size={16} /></button>
         </div>
         <MiniChart />
-        <div className="range-row">
+        <div className="range-row" style={{ pointerEvents: 'none', opacity: 0.4 }} aria-disabled="true">
           <span className="selected">1H</span>
           <span>24H</span>
           <span>7D</span>
@@ -650,7 +694,7 @@ function ConnectPage() {
         <ChevronDown aria-hidden="true" />
       </div>
       <MiniChart />
-      <div className="range-row">
+      <div className="range-row" style={{ pointerEvents: 'none', opacity: 0.4 }} aria-disabled="true">
         <span className="selected">1H</span>
         <span>24H</span>
         <span>7D</span>
@@ -687,10 +731,11 @@ function ActivityPage({ events, loading }: {
   loading: boolean
 }) {
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDeferredValue(search)
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest')
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
+    const q = debouncedSearch.trim().toLowerCase()
     let list = q
       ? events.filter(e => {
           try { return new URL(e.targetUrl).hostname.includes(q) || e.geohash?.startsWith(q) }
@@ -698,7 +743,7 @@ function ActivityPage({ events, loading }: {
         })
       : events
     return [...list].sort((a, b) => sort === 'newest' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp).slice(0, 50)
-  }, [events, search, sort])
+  }, [events, debouncedSearch, sort])
 
   return (
     <>
@@ -763,7 +808,7 @@ function ActivityPage({ events, loading }: {
                 <div>
                   <b>{label} detected</b>
                   <span>
-                    <a href={event.targetUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
+                    <a href={/^https?:\/\//i.test(event.targetUrl) ? event.targetUrl : '#'} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }}>
                       {hostname}
                     </a>
                     {event.geohash ? ` · ${event.geohash.slice(0, 4)}` : ''}
@@ -818,13 +863,26 @@ function MorePage({ onOpenWallet }: { onOpenWallet: () => void }) {
           {authenticated && walletAddr ? (
             <>
               <b>Connected wallet</b>
-              <span
-                style={{
-                  fontFamily: 'monospace', fontSize: 13, marginTop: 4,
-                  color: '#555', letterSpacing: '0.03em',
-                }}
-              >
-                {truncAddr(walletAddr)}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <span
+                  style={{
+                    fontFamily: 'monospace', fontSize: 13,
+                    color: '#555', letterSpacing: '0.03em',
+                  }}
+                >
+                  {truncAddr(walletAddr)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Copy wallet address"
+                  onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(walletAddr) }}
+                  style={{
+                    background: 'none', border: 'none', padding: '2px 4px',
+                    cursor: 'pointer', color: '#888', display: 'flex', alignItems: 'center',
+                  }}
+                >
+                  <Copy size={13} aria-hidden="true" />
+                </button>
               </span>
             </>
           ) : (
@@ -913,6 +971,12 @@ export default function Page() {
     scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' })
   }, [tab])
 
+  const modalOpen = testOpen || walletOpen
+  useEffect(() => {
+    document.body.classList.toggle('modal-open', modalOpen)
+    return () => { document.body.classList.remove('modal-open') }
+  }, [modalOpen])
+
   const { events, stats, loading, error } = useBlockEvents({})
 
   const liveProbes = stats?.liveProbes ?? 0
@@ -967,7 +1031,7 @@ export default function Page() {
               aria-current={tab === id ? 'page' : undefined}
               aria-label={label}
             >
-              <Icon size={23} strokeWidth={tab === id ? 2.5 : 1.8} aria-hidden="true" />
+              <Icon size={23} aria-hidden="true" />
               <span>{label}</span>
             </button>
           ))}

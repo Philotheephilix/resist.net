@@ -19,7 +19,7 @@ export default defineConfig({
     env: {
       NODE_ENV: 'development',
       USE_MOCK_DATA: 'true',
-      NEXT_PUBLIC_PRIVY_APP_ID: 'cmvbxryi5000x0ekuvsmxk2s5',
+      NEXT_PUBLIC_PRIVY_APP_ID: process.env['NEXT_PUBLIC_PRIVY_APP_ID'] ?? '',
     },
   },
   projects: [
