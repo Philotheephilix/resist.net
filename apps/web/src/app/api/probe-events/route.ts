@@ -150,6 +150,78 @@ function checkRateLimit(ip: string): boolean {
   return true
 }
 
+function ensureStatsInFlight() {
+  if (statsInFlight) return
+  statsInFlight = (async () => {
+    let events = await queryArkivProbeEvents({ limit: 2_000, since: Date.now() - 24 * 3600 * 1000, includeRawWallets: true })
+    const arkivFailed = events === null
+    const DEV_FIXTURE = getDevFixture()
+    if (!events) events = DEV_FIXTURE ?? []
+    const oneDayAgo = Date.now() - 24 * 3600 * 1000
+    const recentAll = events.filter((e) => e.timestamp > oneDayAgo)
+    let establishedWallets: Set<string> | null = null
+    const rpcUrlForIdentity = process.env['ARKIV_RPC_URL']
+    if (rpcUrlForIdentity) {
+      try {
+        const { ArkivReadClient: ArkivReadClientInner } = await import('@resist/arkiv-sdk/src/client.js')
+        const identityClient = new ArkivReadClientInner(rpcUrlForIdentity)
+        const identities = await identityClient.queryNodeIdentities()
+        const oneHourAgo = Date.now() - 3600_000
+        establishedWallets = new Set(
+          identities
+            .filter((id) => id.lastseenms > 0 && id.lastseenms > oneHourAgo)
+            .map((id) => id.wallet)
+        )
+      } catch {
+        // best-effort — if identity query fails, fall back to no wallet filter
+      }
+    }
+    const blocksByUrl = new Map<string, Set<string>>()
+    for (const e of recentAll) {
+      if (e.blockType !== null && e.geohash && e.geohash.length >= 4) {
+        if (establishedWallets !== null && !establishedWallets.has(e.nodeWallet)) continue
+        const region = e.geohash.slice(0, 4)
+        let regions = blocksByUrl.get(e.targetUrl)
+        if (!regions) { regions = new Set(); blocksByUrl.set(e.targetUrl, regions) }
+        regions.add(region)
+      }
+    }
+    const BLOCK_QUORUM = 5
+    const blocksToday = [...blocksByUrl.values()].filter(regions => regions.size >= BLOCK_QUORUM).length
+    const regionSet = new Set(
+      recentAll
+        .filter((e) => e.geohash && e.geohash.length >= 4)
+        .map((e) => e.geohash?.slice(0, 4))
+    )
+    const thirtyMinAgo = Date.now() - 30 * 60_000
+    const recentThirtyMin = recentAll.filter((e) => e.timestamp > thirtyMinAgo)
+    const rawActiveNodes = new Set(recentThirtyMin.map((e) => e.nodeWallet)).size
+    const liveProbes = establishedWallets !== null
+      ? new Set(recentThirtyMin.filter((e) => establishedWallets!.has(e.nodeWallet)).map((e) => e.nodeWallet)).size
+      : rawActiveNodes
+    let volunteerCount = 0
+    const rpcUrl = process.env['ARKIV_RPC_URL']
+    if (rpcUrl) {
+      try {
+        const { ArkivReadClient } = await import('@resist/arkiv-sdk/src/client.js')
+        const client = new ArkivReadClient(rpcUrl)
+        const volunteers = await client.queryVolunteers()
+        volunteerCount = volunteers.length
+      } catch {
+        // best-effort — leave volunteerCount at 0
+      }
+    } else if (USE_DEV_FIXTURE) {
+      volunteerCount = 3
+    }
+    const statsResult = { liveProbes, regions: regionSet.size, blocksToday, volunteerCount }
+    if (!arkivFailed) {
+      statsCache = { result: statsResult, expiresAt: Date.now() + 60_000 }
+    }
+    return statsResult
+  })().finally(() => { statsInFlight = null })
+  statsInFlight.catch(() => { /* rejection handled by each awaiter */ })
+}
+
 export async function GET(request: NextRequest) {
   const connIp = (request as any).ip ?? ''
   const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
@@ -219,98 +291,8 @@ export async function GET(request: NextRequest) {
   }
 
   if (statsMode) {
-    // Singleflight: if a stats query is already in-flight, join it rather than
-    // issuing a second 2000-row Arkiv query. Prevents thundering-herd stampede
-    // on cold-start where N concurrent requests all race past the empty cache.
-    if (!statsInFlight) {
-      statsInFlight = (async () => {
-        let events = await queryArkivProbeEvents({ limit: 2_000, since: Date.now() - 24 * 3600 * 1000, includeRawWallets: true })
-        const arkivFailed = events === null
-        const DEV_FIXTURE = getDevFixture()
-        if (!events) events = DEV_FIXTURE ?? []
-        const oneDayAgo = Date.now() - 24 * 3600 * 1000
-        const recentAll = events.filter((e) => e.timestamp > oneDayAgo)
-        // Quorum check: only count a URL as blocked when 3+ distinct geographic regions
-        // (first 4 chars of geohash ≈ 45km cell) independently report it blocked.
-        // Single-node reports are not counted — they may be fabricated by a malicious operator.
-        // Require quorum-contributing wallets to have an active NodeIdentity heartbeat
-        // that has been seen for at least 1 hour. This makes Sybil wallet creation
-        // expensive: adversaries must run N legitimate nodes for ≥1h before fabricated
-        // block reports from those wallets are counted toward blocksToday.
-        let establishedWallets: Set<string> | null = null
-        const rpcUrlForIdentity = process.env['ARKIV_RPC_URL']
-        if (rpcUrlForIdentity) {
-          try {
-            const { ArkivReadClient: ArkivReadClientInner } = await import('@resist/arkiv-sdk/src/client.js')
-            const identityClient = new ArkivReadClientInner(rpcUrlForIdentity)
-            const identities = await identityClient.queryNodeIdentities()
-            const oneHourAgo = Date.now() - 3600_000
-            establishedWallets = new Set(
-              identities
-                .filter((id) => id.lastseenms > 0 && id.lastseenms > oneHourAgo)
-                .map((id) => id.wallet)
-            )
-          } catch {
-            // best-effort — if identity query fails, fall back to no wallet filter
-          }
-        }
-        const blocksByUrl = new Map<string, Set<string>>()
-        for (const e of recentAll) {
-          if (e.blockType !== null && e.geohash && e.geohash.length >= 4) {
-            if (establishedWallets !== null && !establishedWallets.has(e.nodeWallet)) continue
-            const region = e.geohash.slice(0, 4)
-            let regions = blocksByUrl.get(e.targetUrl)
-            if (!regions) { regions = new Set(); blocksByUrl.set(e.targetUrl, regions) }
-            regions.add(region)
-          }
-        }
-        const BLOCK_QUORUM = 5
-        const blocksToday = [...blocksByUrl.values()].filter(regions => regions.size >= BLOCK_QUORUM).length
-        const regionSet = new Set(
-          recentAll
-            .filter((e) => e.geohash && e.geohash.length >= 4)
-            .map((e) => e.geohash?.slice(0, 4))
-        )
-        // liveProbes uses raw wallets (includeRawWallets=true) so distinct-node
-        // counting is exact — truncated wallets cause prefix/suffix collisions.
-        // Apply the same establishedWallets filter used by blocksToday so the counter
-        // is Sybil-resistant. rawActiveNodes exposes the unfiltered 24h count separately.
-        const thirtyMinAgo = Date.now() - 30 * 60_000
-        const recentThirtyMin = recentAll.filter((e) => e.timestamp > thirtyMinAgo)
-        const rawActiveNodes = new Set(recentThirtyMin.map((e) => e.nodeWallet)).size
-        const liveProbes = establishedWallets !== null
-          ? new Set(recentThirtyMin.filter((e) => establishedWallets!.has(e.nodeWallet)).map((e) => e.nodeWallet)).size
-          : rawActiveNodes
-        // Fetch volunteer count alongside probe stats so VolunteerCount can share
-        // this polling interval instead of running its own independent 120s loop.
-        let volunteerCount = 0
-        const rpcUrl = process.env['ARKIV_RPC_URL']
-        if (rpcUrl) {
-          try {
-            const { ArkivReadClient } = await import('@resist/arkiv-sdk/src/client.js')
-            const client = new ArkivReadClient(rpcUrl)
-            const volunteers = await client.queryVolunteers()
-            volunteerCount = volunteers.length
-          } catch {
-            // best-effort — leave volunteerCount at 0
-          }
-        } else if (USE_DEV_FIXTURE) {
-          volunteerCount = 3
-        }
-
-        const statsResult = { liveProbes, regions: regionSet.size, blocksToday, volunteerCount }
-        // Only cache from a real Arkiv response — zeros from a failed Arkiv would
-        // mask recovery for up to 60 seconds.
-        if (!arkivFailed) {
-          statsCache = { result: statsResult, expiresAt: Date.now() + 60_000 }
-        }
-        return statsResult
-      })().finally(() => { statsInFlight = null })
-      // Attach a no-op rejection handler so Node doesn't emit an
-      // UnhandledPromiseRejectionWarning if the caller abandons statsInFlight
-      // (e.g. the request is aborted) before the promise settles.
-      statsInFlight.catch(() => { /* rejection handled by each awaiter below */ })
-    }
+    // Singleflight: ensureStatsInFlight() launches or joins the in-flight query.
+    ensureStatsInFlight()
     let statsResult
     try {
       statsResult = await statsInFlight
@@ -433,15 +415,20 @@ export async function GET(request: NextRequest) {
   // Response shape: { events: [...], liveProbes, regions, blocksToday, volunteerCount }
   // Stats fields are null/absent when cache is cold (not yet computed).
   if (includeStats) {
-    // Serve from cache when fresh.
+    // Serve from cache when fresh; otherwise trigger the real Arkiv stats query
+    // (same singleflight as ?stats=true) and await it. The old dev-fixture zero
+    // path was too aggressive — it masked a real probe node when statsCache was cold.
     let cachedStats = (statsCache && statsCache.expiresAt > Date.now())
       ? statsCache.result as { liveProbes: number; regions: number; blocksToday: number; volunteerCount?: number }
       : null
 
-    // When cache is cold in dev-fixture mode, return zero real stats — fixture
-    // wallets are synthetic and should not inflate the "Online nodes" counter.
-    if (!cachedStats && USE_DEV_FIXTURE) {
-      cachedStats = { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
+    if (!cachedStats) {
+      ensureStatsInFlight()
+      try {
+        cachedStats = await statsInFlight
+      } catch {
+        cachedStats = { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
+      }
     }
 
     const statsFields = cachedStats
