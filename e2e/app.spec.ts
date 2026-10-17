@@ -149,13 +149,11 @@ test.describe('resist.net web app', () => {
 
   test('sidebar shows event count badge with numeric value', async ({ page }) => {
     await page.goto('/')
-    // Wait briefly for data fetch to complete
-    await page.waitForTimeout(2000)
 
     // The event count badge must exist and show a non-negative integer (0 is valid when no live data)
     // aria-hidden="true" — count is announced via the coordinated liveRef region, not inline role=status
     const countBadge = page.locator('aside div[aria-hidden="true"].rounded-full').first()
-    await expect(countBadge).toBeVisible({ timeout: 10000 })
+    await expect(countBadge).toBeVisible({ timeout: 15000 })
     const text = await countBadge.textContent().catch(() => '0')
     const count = parseInt(text ?? '0', 10)
     expect(count).toBeGreaterThanOrEqual(0)
@@ -172,8 +170,6 @@ test.describe('resist.net web app', () => {
     await page.goto('/')
     // Click the visible label pill; native input is sr-only
     await page.locator('label:has(input[name="filter"][value="dns_poisoning"])').click()
-    // Wait for re-render
-    await page.waitForTimeout(500)
     // DNS Poisoning should be checked, All should not
     const dnsInput = page.locator('input[name="filter"][value="dns_poisoning"]')
     const allInput = page.locator('input[name="filter"][value="all"]')
@@ -201,9 +197,7 @@ test.describe('resist.net web app', () => {
   test('filter — returning to All after selecting specific type', async ({ page }) => {
     await page.goto('/')
     await page.locator('label:has(input[name="filter"][value="dns_poisoning"])').click()
-    await page.waitForTimeout(300)
     await page.locator('label:has(input[name="filter"][value="all"])').click()
-    await page.waitForTimeout(300)
     await expect(page.locator('input[name="filter"][value="all"]')).toBeChecked()
   })
 
@@ -298,7 +292,6 @@ test.describe('resist.net web app', () => {
       route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
     )
     await page.goto('/')
-    await page.waitForTimeout(1000)
     // Use first() to handle duplicate No events yet in sidebar + mobile sheet
     await expect(page.getByText('No events yet').first()).toBeVisible({ timeout: 10000 })
   })
@@ -318,7 +311,7 @@ test.describe('resist.net web app', () => {
     })
     await page.goto('/')
     await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('.leaflet-marker-pane, .leaflet-overlay-pane').locator('path, circle').first()
+    const marker = page.locator('[aria-label*="example.com"]').first()
     await marker.waitFor({ state: 'visible', timeout: 10000 })
     await marker.click()
     const popup = page.locator('[data-popup-content]')
@@ -373,7 +366,7 @@ test.describe('resist.net web app', () => {
     })
     await page.goto('/')
     await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('.leaflet-overlay-pane').locator('path, circle').first()
+    const marker = page.locator('[aria-label*="escape-test.com"]').first()
     await marker.waitFor({ state: 'visible', timeout: 10000 })
     await marker.click()
     await expect(page.locator('[data-popup-content]')).toBeVisible({ timeout: 5000 })
@@ -509,9 +502,10 @@ test.describe('resist.net web app', () => {
         ]) })
     })
     await page.goto('/')
-    const badge = page.locator('text=blocked').first()
+    const badge = page.locator('[data-testid="event-count-badge"]')
     await expect(badge).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('text=reachable').first()).toBeVisible()
+    await expect(badge).toContainText('blocked')
+    await expect(badge).toContainText('reachable')
   })
 
   test('toggle button aria-expanded reflects sidebar open state', async ({ page }) => {
@@ -608,7 +602,6 @@ test.describe('resist.net web app', () => {
     await page.goto('/')
     await expect(page.getByText(/recent events/i).first()).toBeVisible({ timeout: 15000 })
     await page.locator('label:has(input[name="filter"][value="full_unreachable"])').click()
-    await page.waitForTimeout(500)
     await expect(page.getByText('No events for this filter')).toBeVisible({ timeout: 5000 })
   })
 
@@ -631,7 +624,7 @@ test.describe('resist.net web app', () => {
     })
     await page.goto('/')
 
-    const statsPill = page.locator('[role="status"]').filter({ hasNotText: 'Loading' })
+    const statsPill = page.locator('[role="status"][aria-label*="live probes"]')
     await expect(statsPill).toBeVisible({ timeout: 10000 })
 
     await expect(statsPill).toContainText('1,234')
@@ -716,7 +709,7 @@ test.describe('resist.net web app', () => {
     })
     await page.goto('/')
     await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('.leaflet-overlay-pane').locator('path, circle').first()
+    const marker = page.locator('[aria-label*="label-test.example"]').first()
     await marker.waitFor({ state: 'visible', timeout: 10000 })
     await marker.click()
     const popup = page.locator('[data-popup-content]')
@@ -740,7 +733,7 @@ test.describe('resist.net web app', () => {
     })
     await page.goto('/')
     await page.waitForSelector('.leaflet-container', { timeout: 15000 })
-    const marker = page.locator('.leaflet-overlay-pane').locator('path, circle').first()
+    const marker = page.locator('[aria-label*="rst-test.example"]').first()
     await marker.waitFor({ state: 'visible', timeout: 10000 })
     await marker.click()
     const popup = page.locator('[data-popup-content]')

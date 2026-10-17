@@ -2,8 +2,10 @@
 import { parseArgs } from "node:util"
 import { main } from "./index"
 import { loadConfig, savePrevHash } from "./config"
-import { probeTarget } from "./probe"
+import { probeTarget, TARGETS } from "./probe"
 import { syncToArkiv } from "./sync"
+
+const PRIVATE_IP_RE = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.|::1$|fc|fd)/i
 
 const USAGE = `Usage: resist-probe [options]
 
@@ -47,6 +49,15 @@ async function run() {
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") {
       console.error(`[probe] --target must be an http: or https: URL`)
+      process.exit(1)
+    }
+    const allowedHostnames = TARGETS.map(t => new URL(t).hostname)
+    if (!allowedHostnames.includes(url.hostname)) {
+      console.error(`[probe] --target hostname '${url.hostname}' is not in the built-in target list`)
+      process.exit(1)
+    }
+    if (PRIVATE_IP_RE.test(url.hostname)) {
+      console.error(`[probe] --target hostname '${url.hostname}' resolves to a private/loopback address`)
       process.exit(1)
     }
     const config = await loadConfig()

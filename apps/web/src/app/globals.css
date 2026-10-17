@@ -8,9 +8,9 @@
 }
 
 body {
-  background-color: #0a0a0a;
-  background-image: radial-gradient(ellipse at 20% 0%, rgba(30,20,50,0.9) 0%, #090910 55%, #07070a 100%);
-  color: #ffffff;
+  background-color: var(--wld-surface-dark);
+  background-image: radial-gradient(ellipse at 20% 0%, rgba(30,20,50,0.9) 0%, var(--wld-surface-dark-deep) 55%, var(--wld-surface-dark-deeper) 100%);
+  color: var(--wld-gray-0);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
@@ -19,16 +19,16 @@ body {
 /* The label's has-[:focus-visible]:ring-* handles modern browsers;
    this sibling rule covers the hidden radio input → span path for older Firefox. */
 .filter-option input.sr-only:focus-visible + span {
-  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline: 2px solid var(--wld-inset-ring);
   outline-offset: 2px;
   border-radius: 9999px;
 }
 
 .filter-option:hover {
-  background: rgba(255,255,255,0.08) !important;
-  border-color: rgba(255,255,255,0.12) !important;
+  background: var(--wld-glass-bg-muted) !important;
+  border-color: var(--wld-glass-bg-active) !important;
   transform: scale(1.02);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  box-shadow: 0 2px 8px var(--wld-dark-overlay-light);
 }
 
 .filter-option:active {
@@ -62,9 +62,9 @@ body {
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    rgba(255,255,255,0.04) 25%,
-    rgba(255,255,255,0.10) 50%,
-    rgba(255,255,255,0.04) 75%
+    var(--wld-glass-border-subtle) 25%,
+    var(--wld-glass-bg) 50%,
+    var(--wld-glass-border-subtle) 75%
   );
   background-size: 400px 100%;
   animation: shimmer 1.4s ease-in-out infinite;
@@ -105,23 +105,23 @@ body {
 
 /* ── Leaflet dark premium theme ── */
 .leaflet-container {
-  background: #0a0a0a !important;
+  background: var(--wld-surface-dark) !important;
 }
 
 .leaflet-popup-content-wrapper {
-  background: rgba(16, 16, 20, 0.97) !important;
-  color: #ffffff !important;
+  background: var(--wld-surface-dark-popup) !important;
+  color: var(--wld-gray-0) !important;
   border-radius: 16px !important;
-  box-shadow: 0 24px 64px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.10) !important;
-  border: 1px solid rgba(255,255,255,0.10) !important;
+  box-shadow: 0 24px 64px var(--wld-dark-overlay-heavy), 0 0 0 1px var(--wld-glass-bg) !important;
+  border: 1px solid var(--wld-glass-bg) !important;
 }
 
 .leaflet-popup-tip {
-  background: rgba(16, 16, 20, 0.96) !important;
+  background: var(--wld-surface-dark-popup-tip) !important;
 }
 
 .leaflet-popup-close-button {
-  color: rgba(255,255,255,0.55) !important;
+  color: var(--wld-glass-text-muted) !important;
   font-size: 18px !important;
 }
 
@@ -134,11 +134,11 @@ body {
   width: 32px !important;
   height: 32px !important;
   line-height: 32px !important;
-  background: rgba(255,255,255,0.08) !important;
+  background: var(--wld-glass-bg-muted) !important;
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
-  color: rgba(255,255,255,0.8) !important;
-  border: 1px solid rgba(255,255,255,0.10) !important;
+  color: var(--wld-glass-text-strong) !important;
+  border: 1px solid var(--wld-glass-bg) !important;
   font-size: 16px !important;
 }
 
@@ -151,20 +151,20 @@ body {
 }
 
 .leaflet-control-zoom a:hover {
-  background: rgba(255,255,255,0.14) !important;
+  background: var(--wld-glass-bg-hover) !important;
 }
 
 .leaflet-control-attribution {
-  background: rgba(0,0,0,0.5) !important;
+  background: var(--wld-dark-overlay) !important;
   backdrop-filter: blur(8px) !important;
-  color: rgba(255,255,255,0.65) !important;
+  color: var(--wld-glass-text-tertiary) !important;
   border-radius: 8px 0 0 0 !important;
   font-size: 10px !important;
   padding: 2px 6px !important;
 }
 
 .leaflet-control-attribution a {
-  color: rgba(255,255,255,0.75) !important;
+  color: var(--wld-glass-text-body) !important;
 }
 
 .popup-close-btn {
@@ -172,11 +172,34 @@ body {
 }
 
 .popup-close-btn:hover {
-  background: rgba(255,255,255,0.10) !important;
-  border-color: rgba(255,255,255,0.25) !important;
+  background: var(--wld-glass-bg) !important;
+  border-color: var(--wld-glass-border-emphasis) !important;
 }
 
 .popup-close-btn:focus-visible {
-  outline: 2px solid rgba(255,255,255,0.35);
+  outline: 2px solid var(--wld-glass-border-accent);
   outline-offset: 2px;
+}
+
+/* ── Dark glass scrollbar ── */
+.dark-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--wld-glass-bg-active) transparent;
+}
+
+.dark-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--wld-glass-bg-active);
+  border-radius: 9999px;
+}
+
+.dark-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--wld-glass-divider);
 }

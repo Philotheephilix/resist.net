@@ -16,11 +16,11 @@ const CensorshipMap = dynamic(() => import('../components/CensorshipMap'), {
       role="status"
       aria-label="Loading map"
       className="flex h-full w-full items-center justify-center"
-      style={{ backgroundColor: '#0a0a0a' }}
+      style={{ backgroundColor: 'var(--wld-surface-dark)' }}
     >
       <div className="flex items-center gap-3 rounded-full px-5 py-2.5 text-sm"
-        style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.5)' }}>
-        <span className="live-dot inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: '#00c230' }} />
+        style={{ background: 'var(--wld-glass-border-strong)', border: '1px solid var(--wld-glass-bg)', color: 'var(--wld-glass-text-dim)' }}>
+        <span className="live-dot inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: 'var(--wld-green-primary)' }} />
         Loading map…
       </div>
     </div>
@@ -104,12 +104,12 @@ export default function HomePage() {
   return (
     <div
       className="flex h-screen w-full flex-col overflow-hidden"
-      style={{ background: 'radial-gradient(ellipse at 20% 0%, rgba(30,20,50,0.9) 0%, #090910 55%, #07070a 100%)', color: '#ffffff' }}
+      style={{ background: 'radial-gradient(ellipse at 20% 0%, rgba(30,20,50,0.9) 0%, var(--wld-surface-dark-deep) 55%, var(--wld-surface-dark-deeper) 100%)', color: 'var(--wld-gray-0)' }}
     >
       <a
         href="#map-region"
         className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold"
-        style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
+        style={{ backgroundColor: 'var(--wld-surface-dark-skip)', color: 'var(--wld-glass-text-near-white)', backdropFilter: 'blur(12px)', border: '1px solid var(--wld-glass-highlight)' }}
       >
         Skip to map
       </a>
@@ -117,7 +117,7 @@ export default function HomePage() {
         <a
           href={isDesktop && sidebarOpen ? '#events-panel' : '#mobile-events-panel'}
           className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-8 focus:z-50 focus:rounded focus:px-3 focus:py-1.5 focus:text-sm focus:font-semibold"
-          style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
+          style={{ backgroundColor: 'var(--wld-surface-dark-skip)', color: 'var(--wld-glass-text-near-white)', backdropFilter: 'blur(12px)', border: '1px solid var(--wld-glass-highlight)' }}
         >
           Skip to events list
         </a>
@@ -126,10 +126,10 @@ export default function HomePage() {
       <header
         className="z-20 flex flex-shrink-0 items-center justify-between gap-4 px-5 py-3"
         style={{
-          background: 'rgba(17, 17, 19, 0.85)',
+          background: 'var(--wld-surface-dark-header)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid var(--wld-glass-border-strong)',
         }}
       >
         {/* Brand */}
@@ -138,8 +138,8 @@ export default function HomePage() {
             className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
             style={{
               background: 'linear-gradient(135deg, #f2280d 0%, #ff6b35 100%)',
-              color: '#ffffff',
-              boxShadow: '0 2px 12px rgba(242,40,13,0.45)',
+              color: 'var(--wld-gray-0)',
+              boxShadow: '0 2px 12px var(--wld-error-glow)',
             }}
             aria-hidden
           >
@@ -148,13 +148,13 @@ export default function HomePage() {
           <div className="flex items-baseline gap-2">
             <h1
               className="text-sm font-semibold tracking-tight"
-              style={{ color: '#ffffff', margin: 0, letterSpacing: '-0.01em' }}
+              style={{ color: 'var(--wld-gray-0)', margin: 0, letterSpacing: '-0.01em' }}
             >
               resist.net
             </h1>
             <span
               className="hidden text-xs sm:inline"
-              style={{ color: 'rgba(255,255,255,0.60)' }}
+              style={{ color: 'var(--wld-glass-text-secondary)' }}
             >
               Community Censorship Monitor
             </span>
@@ -168,7 +168,7 @@ export default function HomePage() {
           <a
             href="/contribute"
             className="hidden rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 sm:inline-flex items-center"
-            style={{ background: 'transparent', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.20)' }}
+            style={{ background: 'transparent', color: 'var(--wld-glass-text-body)', border: '1px solid var(--wld-glass-divider)' }}
           >
             Run a probe
           </a>
@@ -177,8 +177,8 @@ export default function HomePage() {
             onClick={() => setSidebarOpen((v) => !v)}
             className="rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] min-w-[44px]"
             style={sidebarOpen
-              ? { background: 'rgba(255,255,255,0.12)', color: '#ffffff', border: '1px solid rgba(255,255,255,0.16)' }
-              : { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.55)', border: '1px solid rgba(255,255,255,0.08)' }
+              ? { background: 'var(--wld-glass-bg-active)', color: 'var(--wld-gray-0)', border: '1px solid var(--wld-glass-border-mid)' }
+              : { background: 'var(--wld-glass-bg-faint)', color: 'var(--wld-glass-text-muted)', border: '1px solid var(--wld-glass-bg-muted)' }
             }
             aria-label={sidebarOpen ? 'Hide events panel' : 'Show events panel'}
             aria-expanded={sidebarOpen}
@@ -195,11 +195,11 @@ export default function HomePage() {
         aria-label="Event type filter"
         className="z-10 flex-shrink-0 px-5 py-2.5"
         style={{
-          background: 'rgba(15, 13, 22, 0.75)',
+          background: 'var(--wld-surface-dark-filter)',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+          borderBottom: '1px solid var(--wld-glass-border-strong)',
+          boxShadow: 'inset 0 1px 0 var(--wld-glass-border-faint)',
         }}
       >
         <FilterBar active={activeFilter} onChange={setActiveFilter} />
@@ -208,7 +208,7 @@ export default function HomePage() {
       {/* ─── Main content ── */}
       <main id="map-region" className="relative flex min-h-0 flex-1">
         {/* Map */}
-        <div className="relative flex-1">
+        <div className="relative flex-1" style={{ boxShadow: 'inset 0 0 0 1px var(--wld-glass-border)', borderTop: '1px solid var(--wld-glass-border-faint)' }}>
           <CensorshipMap events={events} sidebarOpen={sidebarOpen} />
 
           {/* Error banner — always in DOM for AT live region */}
@@ -222,10 +222,10 @@ export default function HomePage() {
               role={error ? 'alert' : undefined}
               className={`flex items-center gap-2 rounded-2xl px-4 py-2.5 text-xs font-medium${error ? ' error-banner-visible' : ''}`}
               style={{
-                background: 'rgba(242,40,13,0.15)',
+                background: 'var(--wld-error-bg-tint)',
                 ...(error ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {}),
-                border: '1px solid rgba(242,40,13,0.35)',
-                color: '#ff6b55',
+                border: '1px solid var(--wld-error-border-tint)',
+                color: 'var(--wld-error-text)',
                 opacity: error ? 1 : 0,
                 transition: 'opacity 0.2s ease',
               }}
@@ -246,7 +246,7 @@ export default function HomePage() {
             <div
               className="absolute inset-0 flex items-center justify-center"
               style={{
-                backgroundColor: 'rgba(10,10,10,0.75)',
+                backgroundColor: 'var(--wld-surface-dark-overlay)',
                 backdropFilter: 'blur(4px)',
                 zIndex: 5,
               }}
@@ -256,13 +256,13 @@ export default function HomePage() {
               <div
                 className="flex items-center gap-2.5 rounded-full px-5 py-2.5 text-sm"
                 style={{
-                  background: 'rgba(255,255,255,0.08)',
+                  background: 'var(--wld-glass-bg-muted)',
                   backdropFilter: 'blur(20px)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  color: 'rgba(255,255,255,0.7)',
+                  border: '1px solid var(--wld-glass-bg-active)',
+                  color: 'var(--wld-glass-text-secondary-alt)',
                 }}
               >
-                <span className="inline-block h-1.5 w-1.5 rounded-full live-dot" style={{ backgroundColor: '#00c230' }} />
+                <span className="inline-block h-1.5 w-1.5 rounded-full live-dot" style={{ backgroundColor: 'var(--wld-green-primary)' }} />
                 Loading probe events…
               </div>
             </div>
@@ -270,18 +270,19 @@ export default function HomePage() {
 
           {/* Event count badge */}
           <div
+            data-testid="event-count-badge"
             className={!loading && events.length > 0
               ? 'absolute bottom-5 left-5 rounded-full px-4 py-2 text-xs font-semibold'
               : undefined}
             style={!loading && events.length > 0 ? {
-              background: 'rgba(255,255,255,0.09)',
+              background: 'var(--wld-glass-bg-soft)',
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255,255,255,0.13)',
-              color: 'rgba(255,255,255,0.8)',
+              border: '1px solid var(--wld-glass-bg-accent)',
+              color: 'var(--wld-glass-text-strong)',
               zIndex: 5,
               pointerEvents: 'none',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              boxShadow: '0 4px 20px var(--wld-dark-overlay-mid)',
             } : {
               position: 'absolute',
               width: '1px', height: '1px',
@@ -293,7 +294,7 @@ export default function HomePage() {
             }}
           >
             {!loading && events.length > 0
-              ? <>{blockedCount} blocked<span aria-hidden="true" style={{ color: 'rgba(255,255,255,0.25)' }}> · </span>{reachableCount} reachable</>
+              ? <>{blockedCount} blocked<span aria-hidden="true" style={{ color: 'var(--wld-glass-text-faint)' }}> · </span>{reachableCount} reachable</>
               : ''}
           </div>
         </div>
@@ -307,10 +308,10 @@ export default function HomePage() {
           className="flex w-80 flex-shrink-0 flex-col overflow-hidden focus-visible:outline-none"
           style={{
             display: sidebarOpen ? undefined : 'none',
-            background: 'rgba(12, 12, 16, 0.92)',
+            background: 'var(--wld-surface-dark-glass)',
             backdropFilter: 'blur(8px)',
             WebkitBackdropFilter: 'blur(8px)',
-            borderLeft: '1px solid rgba(255,255,255,0.07)',
+            borderLeft: '1px solid var(--wld-glass-border-strong)',
           }}
         >
           {mounted && isDesktop && <BlockEventList events={events} loading={loading} sortedEvents={sortedEvents} isFiltered={activeFilter !== 'all'} />}
@@ -320,7 +321,7 @@ export default function HomePage() {
       {/* ─── Mobile bottom sheet ── */}
       <div
         className="flex-shrink-0 sm:hidden"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
+        style={{ borderTop: '1px solid var(--wld-glass-border-strong)' }}
       >
         {/* Toggle button — always visible on mobile so keyboard/pointer users can open/close */}
         <button
@@ -329,7 +330,7 @@ export default function HomePage() {
           aria-expanded={mobileSheetOpen}
           aria-controls="mobile-events-panel"
           className="flex w-full items-center justify-between px-4 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] hover:bg-white/5 transition-colors duration-100"
-          style={{ background: 'rgba(12, 12, 16, 0.96)', color: 'rgba(255,255,255,0.7)' }}
+          style={{ background: 'var(--wld-surface-dark-glass-solid)', color: 'var(--wld-glass-text-secondary-alt)' }}
         >
           <span>Block events feed</span>
           <span aria-hidden="true">{mobileSheetOpen ? '▾' : '▴'}</span>
@@ -342,19 +343,19 @@ export default function HomePage() {
             aria-modal="true"
             aria-label="Block events feed"
             tabIndex={-1}
-            className="max-h-56 overflow-y-auto focus-visible:outline-none"
+            className="max-h-56 overflow-y-auto focus-visible:outline-none dark-scrollbar"
             style={{
-              background: 'rgba(12, 12, 16, 0.96)',
+              background: 'var(--wld-surface-dark-glass-solid)',
               backdropFilter: 'blur(20px)',
               WebkitBackdropFilter: 'blur(20px)',
             }}
           >
             <div className="flex items-center justify-between px-4 pt-2 pb-1">
-              <div className="h-1 w-10 rounded-full" style={{ background: 'rgba(255,255,255,0.15)' }} />
+              <div className="h-1 w-10 rounded-full" style={{ background: 'var(--wld-glass-highlight)' }} />
               <button
                 onClick={() => setMobileSheetOpen(false)}
                 className="rounded p-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 min-h-[44px] min-w-[44px] flex items-center justify-center"
-                style={{ color: 'rgba(255,255,255,0.55)' }}
+                style={{ color: 'var(--wld-glass-text-muted)' }}
                 aria-label="Close events feed"
               >
                 ✕

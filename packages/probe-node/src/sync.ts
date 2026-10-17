@@ -9,14 +9,24 @@ import { ProbeResult } from "@resist/shared/src/types"
 import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
 import { TARGETS_HASH } from "./probe.js"
 
+// Honour RESIST_DB_PATH or RESIST_DATA_DIR env vars so the process can run as a
+// system user or in a read-only container where the home directory is inaccessible.
 // os.homedir() correctly handles missing HOME env var (Docker, systemd PrivateUsers)
 // unlike `process.env.HOME || '~'` which leaves a literal '~' in the path.
-const DB_PATH = path.join(os.homedir(), ".resist-net", "offline-cache.db")
+const DB_PATH =
+  process.env["RESIST_DB_PATH"] ??
+  (process.env["RESIST_DATA_DIR"]
+    ? path.join(process.env["RESIST_DATA_DIR"], "offline-cache.db")
+    : path.join(os.homedir(), ".resist-net", "offline-cache.db"))
 
 function getArkivRpcUrl(configRpcUrl?: string): string {
+  const envUrl = process.env["ARKIV_URL"]
+  if (!configRpcUrl && !envUrl) {
+    console.warn('[sync] ARKIV_URL is not set — falling back to testnet endpoint. Set ARKIV_URL to point to your Arkiv ingest endpoint.')
+  }
   return (
     configRpcUrl ??
-    process.env["ARKIV_RPC_URL"] ??
+    envUrl ??
     "https://rpc.tiramisu.db-chain.testnet.arkiv.network"
   )
 }
@@ -46,8 +56,14 @@ let stmtRateLimitUpsert: Database.Statement | null = null
 
 function getDb(): Database.Database {
   if (_db) return _db
-  fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
-  _db = new Database(DB_PATH)
+  try {
+    fs.mkdirSync(path.dirname(DB_PATH), { recursive: true })
+    _db = new Database(DB_PATH)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`[sync] fatal: cannot open DB at ${DB_PATH}: ${msg}`)
+    throw err
+  }
   // WAL mode: readers don't block writers and vice-versa; safe for concurrent probe loops.
   // busy_timeout: retry for up to 5s instead of throwing SQLITE_BUSY immediately.
   _db.pragma("journal_mode = WAL")
@@ -80,16 +96,19 @@ function getDb(): Database.Database {
 }
 
 function checkWalletWriteRate(wallet: string): boolean {
-  getDb()  // ensure statements are initialized
-  const now = Date.now()
-  const row = stmtRateLimitGet!.get(wallet) as { count: number; window_start: number } | undefined
-  if (!row || now - row.window_start > 3_600_000) {
-    stmtRateLimitUpsert!.run(wallet, 1, now)
+  const db = getDb()
+  const txn = db.transaction((w: string) => {
+    const now = Date.now()
+    const row = stmtRateLimitGet!.get(w) as { count: number; window_start: number } | undefined
+    if (!row || now - row.window_start > 3_600_000) {
+      stmtRateLimitUpsert!.run(w, 1, now)
+      return true
+    }
+    if (row.count >= MAX_WRITES_PER_WALLET_PER_HOUR) return false
+    stmtRateLimitUpsert!.run(w, row.count + 1, row.window_start)
     return true
-  }
-  if (row.count >= MAX_WRITES_PER_WALLET_PER_HOUR) return false
-  stmtRateLimitUpsert!.run(wallet, row.count + 1, row.window_start)
-  return true
+  })
+  return txn.immediate(wallet) as boolean
 }
 
 /**

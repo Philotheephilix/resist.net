@@ -44,10 +44,31 @@ export async function main(opts: { once?: boolean } = {}) {
   let running = true
   let consecutiveFailures = 0
   let currentInterval = INTERVAL_MS
+  let shutdownRequested = false
+  let drainResolve: (() => void) | null = null
+
+  const shutdown = () => {
+    if (shutdownRequested) return
+    shutdownRequested = true
+    console.log("[probe] shutdown requested — waiting for in-flight tick to complete")
+    if (!running) {
+      process.exit(0)
+    }
+    // running=true means a tick is in progress; drainResolve is called in the finally block below
+    new Promise<void>((resolve) => { drainResolve = resolve })
+      .then(() => process.exit(0))
+  }
+
+  process.on("SIGINT", shutdown)
+  process.on("SIGTERM", shutdown)
 
   function scheduleNext() {
     setTimeout(() => {
       if (running) {
+        return
+      }
+      if (shutdownRequested) {
+        process.exit(0)
         return
       }
       running = true
@@ -65,6 +86,7 @@ export async function main(opts: { once?: boolean } = {}) {
         })
         .finally(() => {
           running = false
+          if (drainResolve) { drainResolve(); return }
           scheduleNext()
         })
     }, currentInterval)
@@ -80,7 +102,9 @@ export async function main(opts: { once?: boolean } = {}) {
     consecutiveFailures++
   } finally {
     running = false
+    if (drainResolve) { drainResolve(); return }
   }
   if (opts.once) return
+  if (shutdownRequested) { process.exit(0); return }
   scheduleNext()
 }

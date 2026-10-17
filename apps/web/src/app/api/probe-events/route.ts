@@ -243,7 +243,12 @@ export async function GET(request: NextRequest) {
         )
         // liveProbes uses raw wallets (includeRawWallets=true) so distinct-node
         // counting is exact — truncated wallets cause prefix/suffix collisions.
-        const liveProbes = new Set(recentAll.map((e) => e.nodeWallet)).size
+        // Apply the same establishedWallets filter used by blocksToday so the counter
+        // is Sybil-resistant. rawActiveNodes exposes the unfiltered 24h count separately.
+        const rawActiveNodes = new Set(recentAll.map((e) => e.nodeWallet)).size
+        const liveProbes = establishedWallets !== null
+          ? new Set(recentAll.filter((e) => establishedWallets!.has(e.nodeWallet)).map((e) => e.nodeWallet)).size
+          : rawActiveNodes
         // Fetch volunteer count alongside probe stats so VolunteerCount can share
         // this polling interval instead of running its own independent 120s loop.
         let volunteerCount = 0
@@ -261,7 +266,7 @@ export async function GET(request: NextRequest) {
           volunteerCount = 3
         }
 
-        const statsResult = { liveProbes, regions: regionSet.size, blocksToday, volunteerCount }
+        const statsResult = { liveProbes, rawActiveNodes, regions: regionSet.size, blocksToday, volunteerCount }
         // Only cache from a real Arkiv response — zeros from a failed Arkiv would
         // mask recovery for up to 60 seconds.
         if (!arkivFailed) {
@@ -282,7 +287,7 @@ export async function GET(request: NextRequest) {
         return Response.json({ error: 'ARKIV_RPC_URL not configured' }, { status: 503 })
       }
       return Response.json(
-        { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 },
+        { liveProbes: 0, rawActiveNodes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 },
         { status: 200 },
       )
     }
@@ -363,11 +368,11 @@ export async function GET(request: NextRequest) {
     // Serve from cache when fresh; otherwise omit stats so the client
     // can distinguish 'not yet computed' from 'genuinely zero'.
     const cachedStats = (statsCache && statsCache.expiresAt > Date.now())
-      ? statsCache.result as { liveProbes: number; regions: number; blocksToday: number; volunteerCount?: number }
+      ? statsCache.result as { liveProbes: number; rawActiveNodes: number; regions: number; blocksToday: number; volunteerCount?: number }
       : null
     const statsFields = cachedStats
-      ? { liveProbes: cachedStats.liveProbes, regions: cachedStats.regions, blocksToday: cachedStats.blocksToday, volunteerCount: cachedStats.volunteerCount ?? 0 }
-      : { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
+      ? { liveProbes: cachedStats.liveProbes, rawActiveNodes: cachedStats.rawActiveNodes, regions: cachedStats.regions, blocksToday: cachedStats.blocksToday, volunteerCount: cachedStats.volunteerCount ?? 0 }
+      : { liveProbes: 0, rawActiveNodes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
     return Response.json({ events: safeSlice, ...statsFields }, {
       headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
     })

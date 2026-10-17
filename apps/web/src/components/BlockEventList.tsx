@@ -177,19 +177,19 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
       {/* Header */}
       <div
         className="flex items-center justify-between px-4 py-3"
-        style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        style={{ borderBottom: '1px solid var(--wld-glass-border)' }}
       >
         <h2
           id="events-list-heading"
           className="text-[11px] font-semibold uppercase tracking-widest"
-          style={{ color: 'rgba(255,255,255,0.65)', margin: 0 }}
+          style={{ color: 'var(--wld-glass-text-tertiary)', margin: 0 }}
         >
           Recent Events
           <span className="sr-only">{sorted.length} events</span>
         </h2>
         <div
           className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
-          style={{ background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.55)' }}
+          style={{ background: 'var(--wld-glass-border-strong)', color: 'var(--wld-glass-text-muted)' }}
           aria-hidden="true"
         >
           {sorted.length}
@@ -197,7 +197,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto dark-scrollbar">
         {loading && sorted.length === 0 ? (
           <div role="status" aria-label="Loading events" aria-busy="true" className="space-y-2 p-4">
             {SKELETON_ITEMS.map((_, i) => (
@@ -211,7 +211,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
         ) : sorted.length === 0 ? (
           <div
             className="flex h-32 items-center justify-center text-sm"
-            style={{ color: 'rgba(255,255,255,0.25)' }}
+            style={{ color: 'var(--wld-glass-text-faint)' }}
           >
             {isFiltered ? 'No events match this filter' : 'No events yet'}
           </div>
@@ -223,7 +223,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
                 className="event-item rounded-2xl px-3 py-3 transition-[background-color] duration-100 hover:bg-white/5"
                 style={{
                   ['--animation-delay' as string]: `${Math.min(i * 30, 300)}ms`,
-                  borderBottom: i < sorted.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                  borderBottom: i < sorted.length - 1 ? '1px solid var(--wld-glass-border-subtle)' : 'none',
                 }}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -234,7 +234,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
                       {event.blockType !== null && event.verified === false && (
                         <span
                           className="rounded px-1 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
-                          style={{ background: 'rgba(255,180,0,0.15)', color: 'rgba(255,200,60,0.85)' }}
+                          style={{ background: 'var(--wld-warning-bg-tint)', color: 'var(--wld-warning-text-dim)' }}
                           title="Reported by a single node — not yet corroborated by 3+ independent regions"
                           aria-label="unverified — single node report"
                         >
@@ -244,7 +244,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
                     </div>
                     <p
                       className="truncate text-[13px] font-medium leading-snug"
-                      style={{ color: 'rgba(255,255,255,0.88)' }}
+                      style={{ color: 'var(--wld-glass-text-primary)' }}
                       title={event.targetUrl}
                     >
                       <a
@@ -260,7 +260,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
                     </p>
                     <p
                       className="mt-0.5 font-mono text-[11px]"
-                      style={{ color: 'rgba(255,255,255,0.55)' }}
+                      style={{ color: 'var(--wld-glass-text-muted)' }}
                       title={event.nodeWallet}
                     >
                       <span aria-hidden="true">{truncateWallet(event.nodeWallet)}</span>
@@ -274,7 +274,7 @@ export default memo(function BlockEventList({ events, loading, sortedEvents, isF
                     title={cachedTsLocale(event.timestamp)}
                     aria-label={cachedTsLocale(event.timestamp)}
                     className="flex-shrink-0 pt-0.5 text-[11px]"
-                    style={{ color: 'rgba(255,255,255,0.55)' }}
+                    style={{ color: 'var(--wld-glass-text-muted)' }}
                   >
                     {timeAgo(event.timestamp, renderNow)}
                   </time>

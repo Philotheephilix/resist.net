@@ -8,7 +8,7 @@ import { ProbeResult, BlockType } from "@resist/shared/src/types";
 // we try each in order and use the first that responds so we don't return a
 // false-negative {poisoned:false} just because 8.8.8.8 is unreachable.
 const BASELINE_DNS_SERVERS = ["8.8.8.8", "1.1.1.1", "9.9.9.9"];
-const TARGETS = [
+export const TARGETS = [
   "https://twitter.com",
   "https://instagram.com",
   "https://youtube.com",
