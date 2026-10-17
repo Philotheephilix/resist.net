@@ -12,6 +12,7 @@ import fs from "fs"
 import path from "path"
 import { isPrivateIp } from "@resist/shared/src/ip.js"
 import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
+import { buildIceConfig } from "./ice.js"
 
 const { RTCPeerConnection } = wrtc
 
@@ -417,14 +418,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
    * gather ICE, and return { peer, sdpOfferJson, entityKey }.
    */
   async function createOffer(): Promise<{ peer: RTCPeerConnection; sdpOfferJson: string; entityKey: string }> {
-    const peer = new RTCPeerConnection({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" },
-        { urls: "stun:stun.cloudflare.com:3478" },
-        { urls: "stun:stun.stunprotocol.org:3478" },
-      ],
-    }) as RTCPeerConnection
+    const peer = new RTCPeerConnection(buildIceConfig()) as RTCPeerConnection
 
     // Control channel triggers ICE gathering
     peer.createDataChannel("control")

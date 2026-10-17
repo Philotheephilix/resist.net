@@ -12,6 +12,7 @@ import fs from "fs"
 import path from "path"
 import { isPrivateIp } from "@resist/shared/src/ip.js"
 import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
+import { buildIceConfig } from "./ice.js"
 
 const { RTCPeerConnection } = wrtc
 
@@ -307,14 +308,7 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   console.log(`[user] Connecting to volunteer: ${chosen.wallet} (${chosen.geohash})`)
 
   // 3. Create WebRTC peer connection
-  const peer = new RTCPeerConnection({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-      { urls: "stun:stun.cloudflare.com:3478" },
-      { urls: "stun:stun.stunprotocol.org:3478" },
-    ],
-  }) as RTCPeerConnection
+  const peer = new RTCPeerConnection(buildIceConfig()) as RTCPeerConnection
 
   // 4. Validate volunteer's SDP offer before setting as remote description
   if (chosen.sdpoffer.length > 131072) {
@@ -504,8 +498,10 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
       return line.replace(/ raddr \S+ rport \d+/g, ` raddr ${raddrFill}`)
     })
     .join("\n")
+  const iceConf = buildIceConfig()
+  const isRelayOnly = iceConf.iceTransportPolicy === "relay"
   const publicCandidateCount = safeAnswerSdp.split("\n").filter(l => l.startsWith("a=candidate:")).length
-  if (publicCandidateCount === 0) {
+  if (publicCandidateCount === 0 && !isRelayOnly) {
     peer.close()
     throw new Error("No public ICE candidates gathered — STUN unreachable or symmetric NAT detected")
   }
