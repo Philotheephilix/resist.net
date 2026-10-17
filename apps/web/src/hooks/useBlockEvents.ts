@@ -14,6 +14,7 @@ export interface ProbeStats {
 
 export function useBlockEvents(filters: BlockEventFilters) {
   const [events, setEvents] = useState<ProbeResultRow[]>([])
+  const [stats, setStats] = useState<ProbeStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const seqRef = useRef(0)
@@ -56,15 +57,35 @@ export function useBlockEvents(filters: BlockEventFilters) {
       try {
         const params = new URLSearchParams()
         if (filters.blockType) params.set('blockType', filters.blockType)
+        params.set('includeStats', 'true')
 
         const res = await window.fetch(`/api/probe-events?${params}`, { signal })
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         const data = await res.json()
 
-        if (!Array.isArray(data)) throw new Error('Unexpected response shape')
+        let eventsArray: ProbeResultRow[]
+        let parsedStats: ProbeStats | null = null
+        if (Array.isArray(data)) {
+          eventsArray = data
+        } else if (data && typeof data === 'object') {
+          // Flat shape: { events?: [...], liveProbes, regions, blocksToday, volunteerCount }
+          // Nested shape (legacy): { events: [...], stats: { liveProbes, ... } }
+          eventsArray = Array.isArray(data.events) ? data.events : []
+          // Prefer flat top-level stats fields; fall back to nested data.stats
+          const statsSource = (typeof data.liveProbes === 'number') ? data : (data.stats ?? null)
+          if (statsSource !== null && statsSource !== undefined) {
+            const { liveProbes, regions, blocksToday, volunteerCount } = statsSource
+            if (typeof liveProbes === 'number' && typeof regions === 'number' && typeof blocksToday === 'number') {
+              parsedStats = { liveProbes, regions, blocksToday, volunteerCount }
+            }
+          }
+        } else {
+          throw new Error('Unexpected response shape')
+        }
 
         if (!cancelled && seq === seqRef.current) {
-          setStableEvents(data)
+          setStableEvents(eventsArray)
+          setStats(parsedStats)
           setError(null)
         }
       } catch (err) {
@@ -126,5 +147,5 @@ export function useBlockEvents(filters: BlockEventFilters) {
     }
   }, [filters.blockType, setStableEvents])
 
-  return { events, loading, error }
+  return { events, stats, loading, error }
 }

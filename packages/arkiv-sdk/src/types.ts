@@ -20,6 +20,7 @@ export interface ProbeResult {
   isp: string;
   networkType: "wifi" | "mobile" | "unknown";
   prevResultHash: string;
+  targetsHash: string;
 }
 
 export interface VolunteerProxyEntry {

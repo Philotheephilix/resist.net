@@ -48,7 +48,6 @@ export async function main(opts: { once?: boolean } = {}) {
   function scheduleNext() {
     setTimeout(() => {
       if (running) {
-        scheduleNext()
         return
       }
       running = true

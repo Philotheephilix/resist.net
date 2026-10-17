@@ -611,4 +611,181 @@ test.describe('resist.net web app', () => {
     await page.waitForTimeout(500)
     await expect(page.getByText('No events for this filter')).toBeVisible({ timeout: 5000 })
   })
+
+  test('NodeCount renders numeric stats with toLocaleString formatting after load', async ({ page }) => {
+    await page.route('**/api/probe-events**', (route) => {
+      const url = route.request().url()
+      if (url.includes('includeStats=true')) {
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ events: [], stats: { liveProbes: 1234, regions: 5, blocksToday: 678, volunteerCount: 0 } }),
+        })
+      }
+      if (url.includes('stats=true')) {
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ liveProbes: 1234, regions: 5, blocksToday: 678 }),
+        })
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    })
+    await page.goto('/')
+
+    const statsPill = page.locator('[role="status"]').filter({ hasNotText: 'Loading' })
+    await expect(statsPill).toBeVisible({ timeout: 10000 })
+
+    await expect(statsPill).toContainText('1,234')
+    await expect(statsPill).toContainText('5')
+    await expect(statsPill).toContainText('678')
+
+    const label = await statsPill.getAttribute('aria-label')
+    expect(label).toMatch(/1[,.]?234.*live probes/i)
+  })
+
+  test('page background is a dark gradient — not flat black', async ({ page }) => {
+    await page.goto('/')
+    const bgImage = await page.evaluate(() => {
+      const candidates = [document.body, document.documentElement,
+        document.querySelector('main'), document.querySelector('#__next')]
+      for (const el of candidates) {
+        if (!el) continue
+        const bg = getComputedStyle(el).backgroundImage
+        if (bg && bg !== 'none') return bg
+      }
+      return 'none'
+    })
+    expect(bgImage).not.toBe('none')
+    expect(bgImage.toLowerCase()).toContain('gradient')
+  })
+
+  test('VolunteerCount renders resolved count with correct aria-label', async ({ page }) => {
+    await page.route('**/api/probe-events**', (route) => {
+      const url = route.request().url()
+      if (url.includes('includeStats=true')) {
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ events: [], stats: { liveProbes: 3, regions: 2, blocksToday: 5, volunteerCount: 42 } }) })
+      }
+      if (url.includes('stats=true')) {
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ liveProbes: 3, regions: 2, blocksToday: 5, volunteerCount: 42 }) })
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    })
+    await page.goto('/')
+
+    const loadingSkeleton = page.locator('[role="img"][aria-label="Loading volunteer count"]')
+    await expect(loadingSkeleton).not.toBeVisible({ timeout: 10000 })
+
+    const volunteerPill = page.locator('[role="img"][aria-label*="volunteer"]').filter({ hasNotText: 'Loading' })
+    await expect(volunteerPill).toBeVisible()
+    const label = await volunteerPill.getAttribute('aria-label')
+    expect(label).toMatch(/42 volunteer nodes active/i)
+
+    await expect(volunteerPill).toContainText('42')
+    await expect(volunteerPill).toContainText('volunteers')
+  })
+
+  test('VolunteerCount shows loading skeleton before data arrives', async ({ page }) => {
+    let resolveStats: (v: string) => void
+    const statsHeld = new Promise<string>(r => { resolveStats = r })
+    await page.route('**/api/probe-events**', async (route) => {
+      if (route.request().url().includes('stats=true')) {
+        await statsHeld
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1, volunteerCount: 7 }) })
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    })
+    await page.goto('/')
+    await expect(page.locator('[role="img"][aria-label="Loading volunteer count"]')).toBeVisible({ timeout: 5000 })
+    resolveStats!('')
+  })
+
+  test('map marker popup humanises block type label — dns_poisoning -> DNS Poisoning', async ({ page }) => {
+    await page.route('**/api/probe-events**', (route) => {
+      if (route.request().url().includes('stats=true')) {
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify([{
+          id: 'popup-label-1', targetUrl: 'https://label-test.example',
+          blockType: 'dns_poisoning', geohash: 'u4pruydqqvj', timestamp: Date.now(),
+          nodeWallet: '0xLabel1234ABCD', reachable: false,
+        }]) })
+    })
+    await page.goto('/')
+    await page.waitForSelector('.leaflet-container', { timeout: 15000 })
+    const marker = page.locator('.leaflet-overlay-pane').locator('path, circle').first()
+    await marker.waitFor({ state: 'visible', timeout: 10000 })
+    await marker.click()
+    const popup = page.locator('[data-popup-content]')
+    await expect(popup).toBeVisible({ timeout: 5000 })
+    await expect(popup).not.toContainText('dns_poisoning')
+    await expect(popup).toContainText('DNS Poisoning')
+  })
+
+  test('map marker popup humanises tcp_rst block type label', async ({ page }) => {
+    await page.route('**/api/probe-events**', (route) => {
+      if (route.request().url().includes('stats=true')) {
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify([{
+          id: 'popup-label-2', targetUrl: 'https://rst-test.example',
+          blockType: 'tcp_rst', geohash: 'u4pruydqqvj', timestamp: Date.now(),
+          nodeWallet: '0xRst1234ABCD', reachable: false,
+        }]) })
+    })
+    await page.goto('/')
+    await page.waitForSelector('.leaflet-container', { timeout: 15000 })
+    const marker = page.locator('.leaflet-overlay-pane').locator('path, circle').first()
+    await marker.waitFor({ state: 'visible', timeout: 10000 })
+    await marker.click()
+    const popup = page.locator('[data-popup-content]')
+    await expect(popup).toBeVisible({ timeout: 5000 })
+    await expect(popup).not.toContainText('tcp_rst')
+    await expect(popup).toContainText('TCP Reset')
+  })
+
+  test('BlockEventList shows "just now" for a very recent event', async ({ page }) => {
+    const recentTs = Date.now() - 10_000 // 10 seconds ago
+    await page.route('**/api/probe-events**', (route) => {
+      if (route.request().url().includes('stats=true')) {
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify([{
+          id: 'time-1', targetUrl: 'https://freshsite.example',
+          blockType: 'dns_poisoning', geohash: 'u4pruydqqvj',
+          timestamp: recentTs, nodeWallet: '0xFresh1234', reachable: false,
+        }]) })
+    })
+    await page.goto('/')
+    const timeEl = page.locator('ul[aria-labelledby="events-list-heading"] time').first()
+    await expect(timeEl).toBeVisible({ timeout: 10000 })
+    await expect(timeEl).toHaveText('just now')
+  })
+
+  test('BlockEventList shows "X min ago" for an event 5 minutes old', async ({ page }) => {
+    const fiveMinsAgo = Date.now() - 5 * 60_000 - 5_000 // 5 min 5 s ago
+    await page.route('**/api/probe-events**', (route) => {
+      if (route.request().url().includes('stats=true')) {
+        return route.fulfill({ status: 200, contentType: 'application/json',
+          body: JSON.stringify({ liveProbes: 1, regions: 1, blocksToday: 1 }) })
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify([{
+          id: 'time-2', targetUrl: 'https://oldsite.example',
+          blockType: 'tcp_rst', geohash: 'u4pruydqqvj',
+          timestamp: fiveMinsAgo, nodeWallet: '0xOld1234', reachable: false,
+        }]) })
+    })
+    await page.goto('/')
+    const timeEl = page.locator('ul[aria-labelledby="events-list-heading"] time').first()
+    await expect(timeEl).toBeVisible({ timeout: 10000 })
+    await expect(timeEl).toHaveText(/^5 min ago$/)
+  })
 })

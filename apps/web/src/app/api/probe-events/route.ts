@@ -194,7 +194,7 @@ export async function GET(request: NextRequest) {
     // on cold-start where N concurrent requests all race past the empty cache.
     if (!statsInFlight) {
       statsInFlight = (async () => {
-        let events = await queryArkivProbeEvents({ limit: 2_000, includeRawWallets: true })
+        let events = await queryArkivProbeEvents({ limit: 2_000, since: Date.now() - 24 * 3600 * 1000, includeRawWallets: true })
         const arkivFailed = events === null
         const DEV_FIXTURE = getDevFixture()
         if (!events) events = DEV_FIXTURE ?? []
@@ -217,7 +217,7 @@ export async function GET(request: NextRequest) {
             const oneHourAgo = Date.now() - 3600_000
             establishedWallets = new Set(
               identities
-                .filter((id) => id.lastseenms > 0 && id.lastseenms <= oneHourAgo)
+                .filter((id) => id.lastseenms > 0 && id.lastseenms > oneHourAgo)
                 .map((id) => id.wallet)
             )
           } catch {
@@ -357,15 +357,18 @@ export async function GET(request: NextRequest) {
 
   // includeStats=true: piggyback cached stats onto the events response so the
   // client gets both in one request, eliminating the separate NodeCount poll.
-  // Stats fields are merged at the top level so callers can access them directly
-  // alongside the events array (e.g. body.liveProbes, body.events).
+  // Response shape: { events: [...], liveProbes, regions, blocksToday, volunteerCount }
+  // Stats fields are null/absent when cache is cold (not yet computed).
   if (includeStats) {
-    // Serve from cache when fresh; otherwise return zero stats so the client
-    // gets a valid numeric shape rather than null.
+    // Serve from cache when fresh; otherwise omit stats so the client
+    // can distinguish 'not yet computed' from 'genuinely zero'.
     const cachedStats = (statsCache && statsCache.expiresAt > Date.now())
       ? statsCache.result as { liveProbes: number; regions: number; blocksToday: number; volunteerCount?: number }
+      : null
+    const statsFields = cachedStats
+      ? { liveProbes: cachedStats.liveProbes, regions: cachedStats.regions, blocksToday: cachedStats.blocksToday, volunteerCount: cachedStats.volunteerCount ?? 0 }
       : { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
-    return Response.json({ events: safeSlice, ...cachedStats }, {
+    return Response.json({ events: safeSlice, ...statsFields }, {
       headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
     })
   }

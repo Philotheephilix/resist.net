@@ -37,11 +37,13 @@ import type {
 export interface ArkivClientConfig {
   rpcUrl: string;
   privateKey: `0x${string}`;
+  canonicalTargetsHash: string;
 }
 
 export class ArkivClient {
   private readonly walletClient: ReturnType<typeof createWalletClient>
   private readonly publicClient: ReturnType<typeof createPublicClient>
+  private readonly canonicalTargetsHash: string
 
   constructor(config: ArkivClientConfig) {
     const account = privateKeyToAccount(config.privateKey)
@@ -57,6 +59,8 @@ export class ArkivClient {
       chain: tiramisu,
       transport,
     })
+
+    this.canonicalTargetsHash = config.canonicalTargetsHash
   }
 
   /**
@@ -64,6 +68,9 @@ export class ArkivClient {
    * Returns the entity key (hex string).
    */
   async writeProbeResult(result: ProbeResult): Promise<string> {
+    if (result.targetsHash !== this.canonicalTargetsHash) {
+      throw new Error(`writeProbeResult: non-canonical targetsHash rejected (got ${result.targetsHash}, expected ${this.canonicalTargetsHash})`)
+    }
     // Build base attributes — all MUST be lowercase
     const baseAttrs = {
       project: "resist.net",
@@ -354,7 +361,7 @@ export class ArkivClient {
 /**
  * Create an ArkivClient from environment variables (requires signing key).
  */
-export function createArkivClientFromEnv(): ArkivClient {
+export function createArkivClientFromEnv(canonicalTargetsHash: string): ArkivClient {
   const rpcUrl = process.env["ARKIV_RPC_URL"]
   const privateKey = process.env["DEV_PRIVATE_KEY"]
 
@@ -364,6 +371,7 @@ export function createArkivClientFromEnv(): ArkivClient {
   return new ArkivClient({
     rpcUrl,
     privateKey: privateKey as `0x${string}`,
+    canonicalTargetsHash,
   })
 }
 

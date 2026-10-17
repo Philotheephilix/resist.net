@@ -103,7 +103,7 @@ function timeAgo(ts: number, now: number): string {
   let s: string
   if (mins < 1) s = 'just now'
   else if (mins < 60) s = `${mins} min ago`
-  else { const hrs = Math.floor(mins / 60); s = hrs < 24 ? `${hrs} hr ago` : `${Math.floor(hrs / 24)} days ago` }
+  else { const hrs = Math.floor(mins / 60); if (hrs < 24) { s = `${hrs} hr ago` } else { const days = Math.floor(hrs / 24); s = days === 1 ? '1 day ago' : days < 8 ? `${days} days ago` : new Date(ts).toLocaleDateString() } }
   if (timeAgoCache.size >= URL_CACHE_MAX && !timeAgoCache.has(ts)) timeAgoCache.delete(timeAgoCache.keys().next().value!)
   timeAgoCache.set(ts, { bucket, value: s })
   return s

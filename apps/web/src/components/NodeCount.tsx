@@ -144,10 +144,13 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
           : `${stats.liveProbes.toLocaleString()} live probes across ${stats.regions.toLocaleString()} regions, ${stats.blocksToday.toLocaleString()} blocks today${stale ? ' (data may be outdated)' : ''}`}
       >
         {loading ? (
-          <span
-            aria-hidden="true"
-            className="inline-block h-1.5 w-20 rounded-full skeleton-shimmer"
-          />
+          <>
+            <span className="sr-only">Loading…</span>
+            <span
+              aria-hidden="true"
+              className="inline-block h-1.5 w-20 rounded-full skeleton-shimmer"
+            />
+          </>
         ) : (
           <>
             <span
@@ -156,17 +159,17 @@ export default function NodeCount({ externalStats }: NodeCountProps = {}) {
               aria-hidden
             />
             <span aria-hidden>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.liveProbes.toLocaleString()}</strong>
+              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stale && prevLiveProbesRef.current === null ? '—' : stats.liveProbes.toLocaleString()}</strong>
               <span style={{ color: 'rgba(255,255,255,0.60)' }}> probes</span>
             </span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }} aria-hidden>·</span>
             <span aria-hidden>
-              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stats.regions.toLocaleString()}</strong>
+              <strong style={{ color: '#ffffff', fontWeight: 600 }}>{stale && prevLiveProbesRef.current === null ? '—' : stats.regions.toLocaleString()}</strong>
               <span style={{ color: 'rgba(255,255,255,0.60)' }}> regions</span>
             </span>
             <span style={{ color: 'rgba(255,255,255,0.15)' }} aria-hidden>·</span>
             <span aria-hidden>
-              <strong style={{ color: '#ff6b55', fontWeight: 600 }}>{stats.blocksToday.toLocaleString()}</strong>
+              <strong style={{ color: '#ff6b55', fontWeight: 600 }}>{stale && prevLiveProbesRef.current === null ? '—' : stats.blocksToday.toLocaleString()}</strong>
               <span style={{ color: 'rgba(255,255,255,0.60)' }}> blocks</span>
             </span>
             {stale && (

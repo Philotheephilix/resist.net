@@ -9,6 +9,7 @@
 
 body {
   background-color: #0a0a0a;
+  background-image: radial-gradient(ellipse at 20% 0%, rgba(30,20,50,0.9) 0%, #090910 55%, #07070a 100%);
   color: #ffffff;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;

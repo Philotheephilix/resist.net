@@ -7,6 +7,7 @@ import path from "path"
 import fs from "fs"
 import { ProbeResult } from "@resist/shared/src/types"
 import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
+import { TARGETS_HASH } from "./probe.js"
 
 // os.homedir() correctly handles missing HOME env var (Docker, systemd PrivateUsers)
 // unlike `process.env.HOME || '~'` which leaves a literal '~' in the path.
@@ -101,6 +102,7 @@ function buildClient(config: { privateKey?: string; rpcUrl?: string }): ArkivCli
     return new ArkivClient({
       rpcUrl: getArkivRpcUrl(config.rpcUrl),
       privateKey: config.privateKey as `0x${string}`,
+      canonicalTargetsHash: TARGETS_HASH,
     })
   } catch {
     return null

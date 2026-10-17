@@ -80,7 +80,7 @@ export default function HomePage() {
     }
   }, [mobileSheetOpen])
 
-  const { events, loading, error } = useBlockEvents({
+  const { events, stats, loading, error } = useBlockEvents({
     blockType: activeFilter === 'all' ? undefined : activeFilter,
   })
 
@@ -163,8 +163,8 @@ export default function HomePage() {
 
         {/* Stats + sidebar toggle */}
         <div className="flex items-center gap-2.5">
-          <VolunteerCount />
-          <NodeCount />
+          <VolunteerCount externalVolunteerCount={stats?.volunteerCount ?? null} />
+          <NodeCount externalStats={stats} />
           <a
             href="/contribute"
             className="hidden rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20 sm:inline-flex items-center"
@@ -263,7 +263,7 @@ export default function HomePage() {
                 }}
               >
                 <span className="inline-block h-1.5 w-1.5 rounded-full live-dot" style={{ backgroundColor: '#00c230' }} />
-                Fetching probe events…
+                Loading probe events…
               </div>
             </div>
           )}

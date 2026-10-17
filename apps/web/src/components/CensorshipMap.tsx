@@ -620,7 +620,7 @@ export default memo(function CensorshipMap({ events, sidebarOpen = true }: Censo
           style={{ backgroundColor: 'rgba(20,20,28,0.92)', color: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)' }}
           data-map-escape-target
         >
-          Skip to events list
+          Go to events panel
         </a>
       ) : (
         <button
