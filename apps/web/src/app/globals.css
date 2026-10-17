@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
   --ink: #141414;
-  --muted: #767676;
+  --muted: #666666;
   --soft: #f7f7f7;
   --line: #ededed;
   --green: #19b955;
@@ -40,7 +40,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .globe-wrap {
   height: 295px; position: relative; margin: 18px auto 4px; width: 295px;
   border-radius: 50%; overflow: visible; background: transparent; box-shadow: none;
-  perspective: 900px; transform-style: preserve-3d; touch-action: none;
+  touch-action: none;
   cursor: grab; user-select: none;
 }
 .globe-wrap:active { cursor: grabbing; box-shadow: inset -24px -15px 38px rgba(0,0,0,.16), 0 12px 30px rgba(0,0,0,.08); }
@@ -63,15 +63,15 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .mini-chart { height: 92px; margin: 21px 0 0; }
 .mini-chart svg { width: 100%; height: 100%; overflow: visible; }
 .mini-chart path { fill: none; stroke: #1c1c1c; stroke-width: 3; stroke-linecap: round; }
-.range-row { display: flex; justify-content: space-around; align-items: center; color: #999; font-size: 14px; margin: 3px 0 23px; }
+.range-row { display: flex; justify-content: space-around; align-items: center; color: #666; font-size: 14px; margin: 3px 0 23px; }
 .range-row span { padding: 12px 15px; }
 .range-row .selected { color: #111; background: #f6f6f6; border-radius: 50%; }
 
 .action-stack { display: grid; gap: 10px; margin: 12px 0 34px; }
 .action-card { display: flex; align-items: center; gap: 13px; padding: 15px 16px; background: #f7f7f7; border-radius: 24px; text-align: left; }
-.action-card > svg { margin-left: auto; color: #aaa; }
+.action-card > svg { margin-left: auto; color: #666; }
 .action-card b, .action-card small { display: block; }
-.action-card small { color: #999; margin-top: 4px; font-size: 13px; }
+.action-card small { color: #666; margin-top: 4px; font-size: 13px; }
 .action-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: #111; color: #fff; }
 .action-icon.connected { background: #eaf8ee; color: var(--green); }
 .pill { margin-left: auto; color: var(--muted); font-size: 13px; }
@@ -81,7 +81,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .incident-copy, .incident-meta { display: flex; flex-direction: column; gap: 5px; }
 .incident-copy { flex: 1; }
 .incident-copy b { font-size: 15px; }
-.incident-copy span, .incident-meta span { color: #999; font-size: 13px; }
+.incident-copy span, .incident-meta span { color: #666; font-size: 13px; }
 .incident-meta { align-items: flex-end; font-size: 12px; }
 
 .green { color: var(--green) !important; }
@@ -97,7 +97,7 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .big-stat strong, .big-stat span, .big-stat small { display: block; }
 .big-stat strong { font-size: 35px; letter-spacing: -1.5px; }
 .big-stat span { font-size: 19px; margin-top: 5px; }
-.big-stat small { color: #999; margin-top: 6px; }
+.big-stat small { color: #666; margin-top: 6px; }
 
 .divider { height: 1px; background: var(--line); margin: 35px 0 28px; }
 
@@ -108,16 +108,16 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .service-icon, .setting-icon { width: 40px; height: 40px; border-radius: 50%; background: #f6f6f6; display: grid; place-items: center; }
 .service-row div, .profile-card div:not(.profile) { flex: 1; }
 .service-row b, .service-row small, .profile-card b, .profile-card span { display: block; }
-.service-row small, .profile-card span { color: #999; margin-top: 4px; font-size: 13px; }
+.service-row small, .profile-card span { color: #666; margin-top: 4px; font-size: 13px; }
 
 .connect-card { text-align: center; background: #f8f8f8; border-radius: 28px; padding: 28px 15px; margin: 28px 0 18px; }
-.shield { width: 76px; height: 76px; border-radius: 50%; background: #fff; display: grid; place-items: center; margin: 0 auto 16px; color: #aaa; }
+.shield { width: 76px; height: 76px; border-radius: 50%; background: #fff; display: grid; place-items: center; margin: 0 auto 16px; color: #666; }
 .connect-card strong, .connect-card span { display: block; }
 .connect-card strong { font-size: 25px; }
-.connect-card span { color: #999; margin-top: 7px; font-size: 14px; }
+.connect-card span { color: #666; margin-top: 7px; font-size: 14px; }
 .route-select { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--line); border-radius: 18px; padding: 15px 17px; margin: 12px 0 20px; }
 .route-select div { display: flex; flex-direction: column; gap: 4px; }
-.route-select small, .route-select span { color: #999; font-size: 12px; }
+.route-select small, .route-select span { color: #666; font-size: 12px; }
 .route-select b { font-size: 15px; }
 .primary-button { width: 100%; background: #1f1f1f; color: #fff; border-radius: 28px; padding: 16px; font-size: 20px; margin: 8px 0 20px; }
 .primary-button:disabled { opacity: 0.6; cursor: default; }
@@ -125,10 +125,10 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .quick-actions button { background: #f7f7f7; border-radius: 20px; padding: 13px 4px; display: grid; place-items: center; gap: 7px; font-size: 12px; }
 .quick-actions svg { width: 22px; }
 
-.search-box, .input-field { height: 56px; background: #f7f7f7; border-radius: 16px; display: flex; align-items: center; gap: 12px; padding: 0 17px; color: #999; margin: 28px 0 14px; }
+.search-box, .input-field { height: 56px; background: #f7f7f7; border-radius: 16px; display: flex; align-items: center; gap: 12px; padding: 0 17px; color: #666; margin: 28px 0 14px; }
 .input-field.active, .input-field:focus-within { background: #fff; border: 1.5px solid #111; color: #111; }
 .input-field input { background: none; border: none; outline: none; color: #111; font: inherit; font-size: 15px; flex: 1; }
-.input-field input::placeholder { color: #999; }
+.input-field input::placeholder { color: #666; }
 
 .filter-row { display: flex; gap: 8px; overflow: hidden; margin-bottom: 30px; }
 .filter { background: #f7f7f7; border-radius: 24px; padding: 14px 16px; white-space: nowrap; display: flex; align-items: center; gap: 9px; font-size: 14px; }
@@ -142,14 +142,14 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 .event-icon.blocked { color: var(--red); }
 .event-icon.reachable { color: var(--green); }
 .activity-row div { flex: 1; display: flex; flex-direction: column; gap: 5px; }
-.activity-row div span, .activity-row div small { color: #999; font-size: 13px; }
+.activity-row div span, .activity-row div small { color: #666; font-size: 13px; }
 .activity-row strong { font-size: 12px; }
 
 .settings-list { margin-top: 24px; }
 .settings-list button { width: 100%; display: flex; align-items: center; gap: 13px; padding: 16px 0; border-bottom: 1px solid var(--line); text-align: left; }
 .settings-list button > span:nth-child(2) { flex: 1; }
 .settings-list b, .settings-list small { display: block; }
-.settings-list small { color: #999; margin-top: 4px; font-size: 13px; }
+.settings-list small { color: #666; margin-top: 4px; font-size: 13px; }
 .about { color: #888; text-align: center; font-size: 14px; padding: 35px 0; }
 .about span { display: block; font-size: 12px; margin-top: 7px; }
 
@@ -157,8 +157,9 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
   position: absolute; bottom: 0; left: 0; right: 0; height: 87px;
   background: rgba(255,255,255,.96); border-top: 1px solid var(--line);
   display: grid; grid-template-columns: repeat(5, 1fr); padding: 10px 23px 17px; z-index: 5;
+  will-change: transform;
 }
-.bottom-nav button { display: grid; place-items: center; gap: 4px; color: #999; font-size: 11px; }
+.bottom-nav button { display: grid; place-items: center; gap: 4px; color: #666; font-size: 11px; }
 .bottom-nav button svg { stroke-width: 1.8; }
 .bottom-nav button.active { color: #111; }
 .bottom-nav button.active svg { stroke-width: 2.5; }
@@ -189,6 +190,10 @@ h2 { margin: 0; font-size: 24px; letter-spacing: -.7px; font-weight: 650; }
 @media (prefers-reduced-motion: reduce) {
   .modal-backdrop, .test-modal { animation: none; }
   .close { transition: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .spin-loader { animation: spin 1s linear infinite; }
 }
 
 .compact-select { margin: 12px 0; }

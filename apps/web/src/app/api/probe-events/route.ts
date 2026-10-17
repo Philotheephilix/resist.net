@@ -231,7 +231,7 @@ export async function GET(request: NextRequest) {
             regions.add(region)
           }
         }
-        const BLOCK_QUORUM = 3
+        const BLOCK_QUORUM = 5
         const blocksToday = [...blocksByUrl.values()].filter(regions => regions.size >= BLOCK_QUORUM).length
         const regionSet = new Set(
           recentAll
@@ -397,7 +397,7 @@ export async function GET(request: NextRequest) {
       : null
     const statsFields = cachedStats
       ? { liveProbes: cachedStats.liveProbes, rawActiveNodes: cachedStats.rawActiveNodes, regions: cachedStats.regions, blocksToday: cachedStats.blocksToday, volunteerCount: cachedStats.volunteerCount ?? 0 }
-      : { liveProbes: 0, rawActiveNodes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
+      : null
     return Response.json({ events: safeSlice, ...statsFields }, {
       headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
     })

@@ -76,7 +76,8 @@ export function useBlockEvents(filters: BlockEventFilters) {
           const statsSource = (typeof data.liveProbes === 'number') ? data : (data.stats ?? null)
           if (statsSource !== null && statsSource !== undefined) {
             const { liveProbes, regions, blocksToday, volunteerCount } = statsSource
-            if (typeof liveProbes === 'number' && typeof regions === 'number' && typeof blocksToday === 'number') {
+            if (typeof liveProbes === 'number' && typeof regions === 'number' && typeof blocksToday === 'number'
+                && (liveProbes !== 0 || regions !== 0 || blocksToday !== 0 || (volunteerCount ?? 0) !== 0)) {
               parsedStats = { liveProbes, regions, blocksToday, volunteerCount }
             }
           }

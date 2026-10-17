@@ -42,11 +42,12 @@ export async function GET(request: NextRequest) {
   const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
   const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
   const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
-  const ip = validatedConn || validatedRaw || devFallback
+  const ip = validatedRaw || validatedConn || devFallback
   if (!ip) {
     return new Response('Bad Request: client IP could not be determined', { status: 400 })
   }
-  if (!checkRateLimit(ip)) {
+  const isLoopback = ip === '127.0.0.1' || ip === '::1'
+  if (!isLoopback && !checkRateLimit(ip)) {
     return new Response('Too Many Requests', {
       status: 429,
       headers: { 'Retry-After': '60' },
@@ -56,6 +57,9 @@ export async function GET(request: NextRequest) {
   const rpcUrl = process.env['ARKIV_RPC_URL']
 
   if (!rpcUrl) {
+    if (process.env['NODE_ENV'] !== 'development') {
+      return Response.json({ error: 'ARKIV_RPC_URL not configured' }, { status: 503 })
+    }
     return Response.json([])
   }
 

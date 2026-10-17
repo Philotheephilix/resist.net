@@ -3,12 +3,11 @@ import dns from 'dns/promises'
 import net from 'net'
 import { Agent } from 'undici'
 
-const USE_DEV_FIXTURE = process.env['USE_MOCK_DATA'] === 'true' && process.env['NODE_ENV'] !== 'production'
+const USE_DEV_FIXTURE = process.env['USE_MOCK_DATA'] === 'true' && process.env['NODE_ENV'] === 'development'
 
 export interface TestUrlRequest {
   url: string
   method: 'HTTP' | 'DNS' | 'TCP'
-  region?: string
 }
 
 export interface TestUrlResult {
@@ -165,13 +164,17 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
           },
         },
       })
-      res = await fetch(currentUrl, {
-        method: 'HEAD',
-        signal: controller.signal,
-        redirect: 'manual',
-        // @ts-expect-error undici dispatcher not in standard fetch types
-        dispatcher,
-      } as RequestInit)
+      try {
+        res = await fetch(currentUrl, {
+          method: 'HEAD',
+          signal: controller.signal,
+          redirect: 'manual',
+          // @ts-expect-error undici dispatcher not in standard fetch types
+          dispatcher,
+        } as RequestInit)
+      } finally {
+        await dispatcher.destroy()
+      }
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location')
         if (!location) break
@@ -188,11 +191,10 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
       break
     }
     const latencyMs = Date.now() - start
-    const reachable = res!.status < 500
+    const reachable = res!.status < 400 || (res!.status >= 400 && res!.status < 500 && res!.status !== 403 && res!.status !== 451)
     let errorType: TestUrlResult['errorType'] = null
-    if (!reachable) {
-      errorType = res!.status === 403 || res!.status === 451 ? 'http_block' : 'full_unreachable'
-    }
+    if (res!.status === 403 || res!.status === 451) errorType = 'http_block'
+    else if (!reachable) errorType = 'full_unreachable'
     return { url, method: 'HTTP', reachable, statusCode: res!.status, latencyMs, errorType, checkedAt: Date.now(), region }
   } catch (err) {
     const latencyMs = Date.now() - start
@@ -220,12 +222,10 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
 }
 
 export async function POST(request: NextRequest) {
-  const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
-  const connIp = (request as any).ip ?? ''
-  const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
-  const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
+  const connIp = (request as any).ip ?? request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? ''
+  const validatedConn = /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
   const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
-  const ip = validatedRaw || validatedConn || devFallback
+  const ip = validatedConn || devFallback
   if (!ip) {
     return new Response('Bad Request: client IP could not be determined', { status: 400 })
   }
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Body must be a JSON object' }, { status: 400 })
   }
 
-  const { url, method = 'HTTP', region = 'Auto' } = body as Record<string, unknown>
+  const { url, method = 'HTTP' } = body as Record<string, unknown>
 
   if (typeof url !== 'string' || !url.trim()) {
     return Response.json({ error: 'url is required' }, { status: 400 })
@@ -267,8 +267,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'method must be HTTP, DNS, or TCP' }, { status: 400 })
   }
 
-  const regionStr = typeof region === 'string' && region.trim() ? region.trim() : 'Auto'
-  if (regionStr.length > 128) return Response.json({ error: 'region too long' }, { status: 400 })
+  const regionStr = 'Server'
 
   // Mock mode: return fixture without making real outbound requests
   if (USE_DEV_FIXTURE) {
