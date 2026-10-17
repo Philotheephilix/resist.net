@@ -12,7 +12,7 @@ import fs from "fs"
 import path from "path"
 import { isPrivateIp } from "@resist/shared/src/ip.js"
 import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
-import { buildIceConfig } from "./ice.js"
+import { fetchIceConfig, buildIceConfig } from "./ice.js"
 
 const { RTCPeerConnection } = wrtc
 
@@ -24,6 +24,7 @@ export interface UserConfig {
   privateKey: string
   myGeohash: string
   rpcUrl?: string
+  backendUrl?: string
 }
 
 export interface ProxyConnection {
@@ -221,6 +222,12 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   if (!rpcUrl) throw new Error("rpcUrl / ARKIV_RPC_URL required")
   if (!privateKey) throw new Error("privateKey / DEV_PRIVATE_KEY required")
 
+  const backendUrl = config.backendUrl ?? process.env["RESIST_BACKEND_URL"]
+  const iceConfig = backendUrl
+    ? await fetchIceConfig(backendUrl)
+    : buildIceConfig()
+  console.log(`[user] ICE policy: ${iceConfig.iceTransportPolicy ?? 'default (STUN)'}`)
+
   const arkiv = new ArkivClient({
     rpcUrl,
     privateKey: privateKey as `0x${string}`,
@@ -308,7 +315,7 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   console.log(`[user] Connecting to volunteer: ${chosen.wallet} (${chosen.geohash})`)
 
   // 3. Create WebRTC peer connection
-  const peer = new RTCPeerConnection(buildIceConfig()) as RTCPeerConnection
+  const peer = new RTCPeerConnection(iceConfig) as RTCPeerConnection
 
   // 4. Validate volunteer's SDP offer before setting as remote description
   if (chosen.sdpoffer.length > 131072) {
@@ -498,8 +505,7 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
       return line.replace(/ raddr \S+ rport \d+/g, ` raddr ${raddrFill}`)
     })
     .join("\n")
-  const iceConf = buildIceConfig()
-  const isRelayOnly = iceConf.iceTransportPolicy === "relay"
+  const isRelayOnly = iceConfig.iceTransportPolicy === "relay"
   const publicCandidateCount = safeAnswerSdp.split("\n").filter(l => l.startsWith("a=candidate:")).length
   if (publicCandidateCount === 0 && !isRelayOnly) {
     peer.close()

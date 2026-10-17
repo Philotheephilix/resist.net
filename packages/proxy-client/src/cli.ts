@@ -114,6 +114,7 @@ async function main(): Promise<void> {
   const privateKey = process.env["DEV_PRIVATE_KEY"] ?? saved.privateKey
   const geohash = flags["geohash"] ?? process.env["GEOHASH"] ?? saved.geohash
   const rpcUrl = flags["rpcUrl"] ?? process.env["ARKIV_RPC_URL"]
+  const backendUrl = flags["backendUrl"] ?? process.env["RESIST_BACKEND_URL"] ?? "https://resist.net"
 
   if (mode === "volunteer") {
     await startVolunteer({
@@ -122,6 +123,7 @@ async function main(): Promise<void> {
       geohash,
       rpcUrl,
       capacitySlots: flags["slots"] ? parseInt(flags["slots"], 10) : 5,
+      backendUrl,
     })
   } else {
     const conn = await findAndConnect({
@@ -129,6 +131,7 @@ async function main(): Promise<void> {
       privateKey,
       myGeohash: geohash,
       rpcUrl,
+      backendUrl,
     })
     console.log(
       `Proxy ready on 127.0.0.1:${conn.proxyPort} via volunteer ${conn.volunteerWallet}`

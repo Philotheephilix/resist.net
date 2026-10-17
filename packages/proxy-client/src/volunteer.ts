@@ -12,7 +12,7 @@ import fs from "fs"
 import path from "path"
 import { isPrivateIp } from "@resist/shared/src/ip.js"
 import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
-import { buildIceConfig } from "./ice.js"
+import { fetchIceConfig, buildIceConfig } from "./ice.js"
 
 const { RTCPeerConnection } = wrtc
 
@@ -47,6 +47,7 @@ export interface VolunteerConfig {
   geohash: string
   rpcUrl?: string
   capacitySlots?: number
+  backendUrl?: string
 }
 
 interface BootstrapEntry {
@@ -396,6 +397,12 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
   if (!rpcUrl) throw new Error("rpcUrl / ARKIV_RPC_URL required")
   if (!privateKey) throw new Error("privateKey / DEV_PRIVATE_KEY required")
 
+  const backendUrl = config.backendUrl ?? process.env["RESIST_BACKEND_URL"]
+  const iceConfig = backendUrl
+    ? await fetchIceConfig(backendUrl)
+    : buildIceConfig()
+  console.log(`[volunteer] ICE policy: ${iceConfig.iceTransportPolicy ?? 'default (STUN)'}`)
+
   const arkiv = new ArkivClient({
     rpcUrl,
     privateKey: privateKey as `0x${string}`,
@@ -418,7 +425,7 @@ export async function startVolunteer(config: VolunteerConfig): Promise<void> {
    * gather ICE, and return { peer, sdpOfferJson, entityKey }.
    */
   async function createOffer(): Promise<{ peer: RTCPeerConnection; sdpOfferJson: string; entityKey: string }> {
-    const peer = new RTCPeerConnection(buildIceConfig()) as RTCPeerConnection
+    const peer = new RTCPeerConnection(iceConfig) as RTCPeerConnection
 
     // Control channel triggers ICE gathering
     peer.createDataChannel("control")
