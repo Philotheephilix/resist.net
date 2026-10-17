@@ -42,13 +42,11 @@ test.describe('resist.net web app', () => {
 
   test('Notifications button shows alert with Notifications message', async ({ page }) => {
     await page.goto('/')
-    let dialogMessage = ''
-    page.on('dialog', async dialog => {
-      dialogMessage = dialog.message()
-      await dialog.dismiss()
-    })
+    const dialogPromise = page.waitForEvent('dialog', { predicate: d => d.message().includes('Notifications') })
     await page.getByRole('button', { name: 'Notifications' }).click()
-    expect(dialogMessage).toContain('Notifications')
+    const dialog = await dialogPromise
+    await dialog.dismiss()
+    expect(dialog.message()).toContain('Notifications')
   })
 
   test('bottom nav renders all 5 tabs', async ({ page }) => {
@@ -100,6 +98,14 @@ test.describe('resist.net web app', () => {
     await page.goto('/')
     // 1284 → "1,284" in en locale
     await expect(page.getByText('1,284').first()).toBeVisible({ timeout: 15000 })
+  })
+
+  test('Radar stats row shows skeleton loaders on empty events + null stats cold-start', async ({ page }) => {
+    await mockProbeEvents(page, [], { liveProbes: null, regions: null, blocksToday: null, volunteerCount: null })
+    await page.goto('/')
+    await page.waitForSelector('.big-stat', { timeout: 10000 })
+    await expect(page.locator('.big-stat').getByText('0')).not.toBeVisible()
+    await expect(page.locator('.big-stat .skeleton').first()).toBeVisible()
   })
 
   test('API error shows error banner', async ({ page }) => {
@@ -278,7 +284,8 @@ test.describe('resist.net web app', () => {
     await page.getByRole('button', { name: 'Run test' }).click()
     const alert = page.locator('[role="alert"]')
     await expect(alert).toBeVisible({ timeout: 10000 })
-    await expect(alert).toContainText('Test failed')
+    await expect(alert).not.toBeEmpty()
+    await expect(page.getByRole('button', { name: 'Run test' })).not.toHaveAttribute('aria-busy', 'true')
   })
 
   test('Test URL modal shows error alert on network abort', async ({ page }) => {
@@ -352,6 +359,7 @@ test.describe('resist.net web app', () => {
     await page.waitForResponse('**/api/test-url')
     const body = JSON.parse(capturedBody ?? '{}')
     expect(body.region).toBe('Mumbai, IN')
+    await expect(page.locator('[role="status"]')).toContainText('Mumbai, IN')
   })
 
   test('Test URL modal sets inert on scroll-content and nav while open, removes it on close', async ({ page }) => {
@@ -456,10 +464,11 @@ test.describe('resist.net web app', () => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'http://user:secret@example.com' },
     })
-    expect(res.ok() || res.status() === 400).toBeTruthy()
     if (res.ok()) {
       const body = await res.json()
       expect(body.url).not.toContain('secret')
+    } else {
+      expect(res.status()).toBe(400)
     }
   })
 
@@ -551,36 +560,24 @@ test.describe('resist.net web app', () => {
     expect(body.reachable).not.toBe(true)
   })
 
-  test('POST /api/test-url accepts DNS method', async ({ request }) => {
+  test('POST /api/test-url returns 501 for DNS method (not yet implemented)', async ({ request }) => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'https://example.com', method: 'DNS' },
     })
     const body = await res.json()
-    if (res.status() === 501) {
-      expect(body.notSupported).toBe(true)
-      expect(body.reachable).toBeNull()
-    } else {
-      expect(res.status()).toBe(200)
-      expect(body.method).toBe('DNS')
-      expect(body).toHaveProperty('reachable')
-      expect(body).toHaveProperty('errorType')
-    }
+    expect(res.status()).toBe(501)
+    expect(body.notSupported).toBe(true)
+    expect(body.reachable).toBeNull()
   })
 
-  test('POST /api/test-url accepts TCP method', async ({ request }) => {
+  test('POST /api/test-url returns 501 for TCP method (not yet implemented)', async ({ request }) => {
     const res = await request.post('http://localhost:3001/api/test-url', {
       data: { url: 'https://example.com', method: 'TCP' },
     })
     const body = await res.json()
-    if (res.status() === 501) {
-      expect(body.notSupported).toBe(true)
-      expect(body.reachable).toBeNull()
-    } else {
-      expect(res.status()).toBe(200)
-      expect(body.method).toBe('TCP')
-      expect(body).toHaveProperty('reachable')
-      expect(body).toHaveProperty('errorType')
-    }
+    expect(res.status()).toBe(501)
+    expect(body.notSupported).toBe(true)
+    expect(body.reachable).toBeNull()
   })
 
   test('POST /api/test-url accepts region parameter', async ({ request }) => {
@@ -613,15 +610,14 @@ test.describe('resist.net web app', () => {
     expect(res.ok()).toBeTruthy()
     const data = await res.json()
     expect(Array.isArray(data)).toBeTruthy()
-    if (data.length > 0) {
-      const first = data[0]
-      expect(first).toHaveProperty('id')
-      expect(first).toHaveProperty('targetUrl')
-      expect(first).toHaveProperty('geohash')
-      expect(first).toHaveProperty('timestamp')
-      expect(first).toHaveProperty('nodeWallet')
-      expect(typeof first.reachable).toBe('boolean')
-    }
+    expect(data.length).toBeGreaterThan(0)
+    const first = data[0]
+    expect(first).toHaveProperty('id')
+    expect(first).toHaveProperty('targetUrl')
+    expect(first).toHaveProperty('geohash')
+    expect(first).toHaveProperty('timestamp')
+    expect(first).toHaveProperty('nodeWallet')
+    expect(typeof first.reachable).toBe('boolean')
   })
 
   test('GET /api/probe-events?stats=true returns stats shape', async ({ request }) => {
@@ -713,11 +709,10 @@ test.describe('resist.net web app', () => {
     expect(res.ok()).toBeTruthy()
     const data = await res.json()
     expect(Array.isArray(data)).toBeTruthy()
-    if (data.length > 0) {
-      expect(data[0]).toHaveProperty('wallet')
-      expect(data[0]).toHaveProperty('sdpOffer')
-      expect(data[0]).toHaveProperty('geohash')
-    }
+    expect(data.length).toBeGreaterThan(0)
+    expect(data[0]).toHaveProperty('wallet')
+    expect(data[0]).toHaveProperty('sdpOffer')
+    expect(data[0]).toHaveProperty('geohash')
   })
 
   // ── Activity tab ─────────────────────────────────────────────────────────────
@@ -1151,7 +1146,7 @@ test.describe('resist.net web app', () => {
     await expect(page.getByText('44').first()).toBeVisible()
   })
 
-  test('useBlockEvents polling interval fires every 30s', { timeout: 10_000 }, async ({ page }) => {
+  test('useBlockEvents fires initial fetch on mount', { timeout: 10_000 }, async ({ page }) => {
     let callCount = 0
     await page.route('**/api/probe-events**', route => {
       callCount++

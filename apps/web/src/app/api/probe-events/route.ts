@@ -86,7 +86,8 @@ async function queryArkivProbeEvents(opts: {
             : r.nodewallet),
       reachable: r.reachable,
     }))
-  } catch {
+  } catch (err) {
+    console.error('[probe-events] queryArkivProbeEvents failed:', err)
     return null
   }
 }
@@ -236,7 +237,7 @@ export async function GET(request: NextRequest) {
         const regionSet = new Set(
           recentAll
             .filter((e) => e.geohash && e.geohash.length >= 4)
-            .map((e) => e.geohash.slice(0, 4))
+            .map((e) => e.geohash?.slice(0, 4))
         )
         // liveProbes uses raw wallets (includeRawWallets=true) so distinct-node
         // counting is exact — truncated wallets cause prefix/suffix collisions.
@@ -263,7 +264,7 @@ export async function GET(request: NextRequest) {
           volunteerCount = 3
         }
 
-        const statsResult = { liveProbes, rawActiveNodes, regions: regionSet.size, blocksToday, volunteerCount }
+        const statsResult = { liveProbes, regions: regionSet.size, blocksToday, volunteerCount }
         // Only cache from a real Arkiv response — zeros from a failed Arkiv would
         // mask recovery for up to 60 seconds.
         if (!arkivFailed) {
@@ -351,7 +352,7 @@ export async function GET(request: NextRequest) {
   for (const e of eventsForQuorum) {
     if (e.blockType !== null && e.geohash && e.geohash.length >= 4) {
       if (establishedWalletsForQuorum !== null && !establishedWalletsForQuorum.has(e.nodeWallet)) continue
-      const region = (e.geohash as string).slice(0, 4)
+      const region = e.geohash!.slice(0, 4)
       let regions = quorumRegionsByUrl.get(e.targetUrl)
       if (!regions) { regions = new Set(); quorumRegionsByUrl.set(e.targetUrl, regions) }
       regions.add(region)
@@ -398,7 +399,7 @@ export async function GET(request: NextRequest) {
     const statsFields = cachedStats
       ? { liveProbes: cachedStats.liveProbes, rawActiveNodes: cachedStats.rawActiveNodes, regions: cachedStats.regions, blocksToday: cachedStats.blocksToday, volunteerCount: cachedStats.volunteerCount ?? 0 }
       : null
-    return Response.json({ events: safeSlice, ...statsFields }, {
+    return Response.json({ events: safeSlice, ...(statsFields ? { liveProbes: statsFields.liveProbes, regions: statsFields.regions, blocksToday: statsFields.blocksToday, volunteerCount: statsFields.volunteerCount } : {}) }, {
       headers: { 'Cache-Control': 'public, max-age=30, stale-while-revalidate=30' },
     })
   }

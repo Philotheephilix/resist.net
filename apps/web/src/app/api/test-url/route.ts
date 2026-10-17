@@ -222,7 +222,7 @@ async function probeHttpUrl(url: string, region: string): Promise<TestUrlResult>
 }
 
 export async function POST(request: NextRequest) {
-  const connIp = (request as any).ip ?? request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? ''
+  const connIp = (request as any).ip ?? ''
   const validatedConn = /^(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d{2}|[1-9]?\d)){3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
   const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
   const ip = validatedConn || devFallback
@@ -245,7 +245,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Body must be a JSON object' }, { status: 400 })
   }
 
-  const { url, method = 'HTTP' } = body as Record<string, unknown>
+  const { url, method = 'HTTP', region } = body as Record<string, unknown>
 
   if (typeof url !== 'string' || !url.trim()) {
     return Response.json({ error: 'url is required' }, { status: 400 })
@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'method must be HTTP, DNS, or TCP' }, { status: 400 })
   }
 
-  const regionStr = 'Server'
+  const regionStr = typeof region === 'string' && region.trim() ? region.trim() : 'Server'
 
   // Mock mode: return fixture without making real outbound requests
   if (USE_DEV_FIXTURE) {

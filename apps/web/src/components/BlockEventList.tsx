@@ -76,7 +76,7 @@ export interface ProbeResultRow {
   id: string
   targetUrl: string
   blockType: BlockType
-  geohash: string
+  geohash: string | null
   timestamp: number
   nodeWallet: string
   reachable: boolean

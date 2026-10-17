@@ -37,12 +37,10 @@ function checkRateLimit(ip: string): boolean {
 }
 
 export async function GET(request: NextRequest) {
-  const rawIp = (request.headers.get('x-real-ip') ?? '').slice(0, 45).trim()
   const connIp = (request as any).ip ?? ''
-  const validatedRaw = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(rawIp) ? rawIp : ''
   const validatedConn = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-fA-F:]{2,39}$/.test(connIp) ? connIp : ''
   const devFallback = process.env['NODE_ENV'] === 'development' ? '127.0.0.1' : ''
-  const ip = validatedRaw || validatedConn || devFallback
+  const ip = validatedConn || devFallback
   if (!ip) {
     return new Response('Bad Request: client IP could not be determined', { status: 400 })
   }
@@ -80,7 +78,8 @@ export async function GET(request: NextRequest) {
       }))
 
     return Response.json(entries)
-  } catch {
-    return Response.json([])
+  } catch (err) {
+    console.error('[bootstrap] Arkiv RPC failed:', err)
+    return Response.json({ error: 'Volunteer backend unavailable' }, { status: 503 })
   }
 }

@@ -16,6 +16,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
   const [events, setEvents] = useState<ProbeResultRow[]>([])
   const [stats, setStats] = useState<ProbeStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [revalidating, setRevalidating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const seqRef = useRef(0)
   const fetchRef = useRef<() => void>(() => {})
@@ -39,20 +40,25 @@ export function useBlockEvents(filters: BlockEventFilters) {
 
   useEffect(() => {
     let cancelled = false
-    let abortController = new AbortController()
+    let currentAbortController: AbortController | null = null
 
     // Hold previous events (stale-while-revalidate) until the new fetch lands —
     // clearing them immediately causes a blank-screen flash during filter changes.
     // Only reset to empty if this is truly a fresh mount (events was already []).
     setError(null)
-    setLoading(true)
+    if (prevEventsRef.current.length === 0) {
+      setLoading(true)
+    } else {
+      setRevalidating(true)
+    }
 
     const fetchEvents = async () => {
       const seq = ++seqRef.current
       // Abort any in-flight request from a previous call — prevents stale requests
       // from piling up when filters change rapidly or the component unmounts.
-      abortController.abort()
-      abortController = new AbortController()
+      currentAbortController?.abort()
+      const abortController = new AbortController()
+      currentAbortController = abortController
       const signal = abortController.signal
 
       try {
@@ -77,7 +83,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
           if (statsSource !== null && statsSource !== undefined) {
             const { liveProbes, regions, blocksToday, volunteerCount } = statsSource
             if (typeof liveProbes === 'number' && typeof regions === 'number' && typeof blocksToday === 'number'
-                && (liveProbes !== 0 || regions !== 0 || blocksToday !== 0 || (volunteerCount ?? 0) !== 0)) {
+                && 'liveProbes' in statsSource) {
               parsedStats = { liveProbes, regions, blocksToday, volunteerCount }
             }
           }
@@ -101,7 +107,10 @@ export function useBlockEvents(filters: BlockEventFilters) {
           setError(err instanceof Error ? err.message : 'Failed to fetch events')
         }
       } finally {
-        if (!cancelled && seq === seqRef.current) setLoading(false)
+        if (!cancelled && seq === seqRef.current) {
+          setLoading(false)
+          setRevalidating(false)
+        }
       }
     }
 
@@ -136,7 +145,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
       } else {
         stopInterval()
         const myVisSeq = ++visibilityFetchSeq
-        setLoading(true)
+        if (prevEventsRef.current.length === 0) setLoading(true); else setRevalidating(true)
         fetchEvents().finally(() => {
           if (!cancelled && myVisSeq === visibilityFetchSeq) startInterval()
         })
@@ -145,7 +154,7 @@ export function useBlockEvents(filters: BlockEventFilters) {
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       cancelled = true
-      abortController.abort()
+      currentAbortController?.abort()
       stopInterval()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
@@ -153,5 +162,5 @@ export function useBlockEvents(filters: BlockEventFilters) {
 
   const retry = useCallback(() => { fetchRef.current() }, [])
 
-  return { events, stats, loading, error, retry }
+  return { events, stats, loading, revalidating, error, retry }
 }

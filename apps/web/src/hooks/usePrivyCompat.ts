@@ -27,7 +27,7 @@ function useTestOverride() {
   // Read the override once. Tests set this before the page loads via addInitScript.
   return useMemo(() => {
     if (typeof window === 'undefined') return null
-    if (process.env.NEXT_PUBLIC_E2E !== 'true') return null
+    if (process.env.NEXT_PUBLIC_E2E !== 'true' || process.env.NODE_ENV === 'production') return null
     return window.__PRIVY_TEST_USER__ ?? null
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

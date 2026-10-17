@@ -10,6 +10,7 @@ export default defineConfig({
     baseURL: 'http://localhost:3001',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    locale: 'en-US',
   },
   webServer: {
     command: 'cd apps/web && next dev -p 3001',
