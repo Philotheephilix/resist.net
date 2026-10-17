@@ -812,26 +812,172 @@ function Radar({ onTest, onConnect, onViewNetwork, liveProbes, regions, blocksTo
   )
 }
 
+// ─── URL health drawer ─────────────────────────────────────────────────────────
+
+function timeAgoShort(ms: number): string {
+  const s = Math.floor((Date.now() - ms) / 1000)
+  if (s < 60) return `${s}s ago`
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
+function UrlHealthDrawer({ targetUrl, onClose }: { targetUrl: string; onClose: () => void }) {
+  const panelRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(panelRef, onClose)
+  const [urlEvents, setUrlEvents] = useState<Array<{
+    id: string; timestamp: number; reachable: boolean; blockType: string | null; geohash: string | null; nodeWallet: string
+  }>>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const hostname = useMemo(() => { try { return new URL(targetUrl).hostname } catch { return targetUrl } }, [targetUrl])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    fetch(`/api/probe-events?targetUrl=${encodeURIComponent(targetUrl)}&includeStats=false`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(data => {
+        if (cancelled) return
+        const arr = Array.isArray(data) ? data : []
+        setUrlEvents(arr.sort((a: { timestamp: number }, b: { timestamp: number }) => b.timestamp - a.timestamp))
+        setLoading(false)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setError('Failed to load history')
+        setLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [targetUrl])
+
+  const upPct = useMemo(() => {
+    if (urlEvents.length === 0) return null
+    const up = urlEvents.filter(e => e.reachable).length
+    return Math.round((up / urlEvents.length) * 100)
+  }, [urlEvents])
+
+  const sparkBuckets = useMemo(() => {
+    const BUCKETS = 24
+    const windowMs = 24 * 3600 * 1000
+    const now = Date.now()
+    const up = new Array<number>(BUCKETS).fill(0)
+    const total = new Array<number>(BUCKETS).fill(0)
+    for (const e of urlEvents) {
+      const age = now - e.timestamp
+      if (age < 0 || age > windowMs) continue
+      const idx = Math.min(BUCKETS - 1, Math.floor(((windowMs - age) / windowMs) * BUCKETS))
+      total[idx]++
+      if (e.reachable) up[idx]++
+    }
+    return total.map((t, i) => t === 0 ? null : up[i] / t)
+  }, [urlEvents])
+
+  return (
+    <div
+      className="sheet-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="url-health-title"
+      onClick={onClose}
+    >
+      <div
+        ref={panelRef}
+        className="sheet"
+        style={{ maxHeight: '85vh', overflowY: 'auto' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="sheet-header">
+          <span id="url-health-title" style={{ fontWeight: 600, fontSize: 15 }}>{hostname}</span>
+          <button aria-label="Close" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        {/* Uptime badge */}
+        {upPct !== null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 4px' }}>
+            <span style={{
+              background: upPct >= 80 ? '#19b95522' : upPct >= 50 ? '#f3ad2422' : '#e8334122',
+              color: upPct >= 80 ? '#19b955' : upPct >= 50 ? '#f3ad24' : '#e83341',
+              borderRadius: 6, padding: '3px 10px', fontWeight: 700, fontSize: 13,
+            }}>{upPct}% reachable</span>
+            <span style={{ color: '#888', fontSize: 12 }}>{urlEvents.length} probe{urlEvents.length !== 1 ? 's' : ''} in last 24h</span>
+          </div>
+        )}
+
+        {/* 24-hour spark bar */}
+        <div style={{ display: 'flex', gap: 2, margin: '10px 0', height: 28, alignItems: 'flex-end' }}>
+          {sparkBuckets.map((v, i) => (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: v === null ? 4 : Math.max(4, Math.round(v * 28)),
+                borderRadius: 3,
+                background: v === null ? '#2a2a2a' : v >= 0.8 ? '#19b955' : v >= 0.5 ? '#f3ad24' : '#e83341',
+                opacity: v === null ? 0.3 : 1,
+              }}
+              title={v === null ? 'No data' : `${Math.round(v * 100)}% reachable`}
+            />
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', fontSize: 10, marginBottom: 8 }}>
+          <span>24h ago</span><span>Now</span>
+        </div>
+
+        {/* Probe history list */}
+        {loading && <p style={{ color: '#888', textAlign: 'center', padding: '20px 0' }}>Loading…</p>}
+        {error && <p style={{ color: '#e83341', textAlign: 'center', padding: '20px 0' }}>{error}</p>}
+        {!loading && !error && urlEvents.length === 0 && (
+          <p style={{ color: '#888', textAlign: 'center', padding: '20px 0' }}>No probe history found</p>
+        )}
+        {!loading && urlEvents.slice(0, 40).map(e => {
+          const color = e.reachable ? 'green' : e.blockType ? 'red' : 'amber'
+          const label = e.reachable ? 'Reachable' : (e.blockType ?? 'Unreachable')
+          return (
+            <div key={e.id} className="health-row" style={{ alignItems: 'flex-start', gap: 8 }}>
+              <span style={{ minWidth: 8, marginTop: 4 }}>
+                <span style={{
+                  display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+                  background: color === 'green' ? '#19b955' : color === 'red' ? '#e83341' : '#f3ad24',
+                }} />
+              </span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <b style={{ fontSize: 13, color: color === 'green' ? '#19b955' : color === 'red' ? '#e83341' : '#f3ad24' }}>{label.replace(/_/g, ' ')}</b>
+                {e.geohash && <span style={{ color: '#666', fontSize: 11, marginLeft: 6 }}>{e.geohash.slice(0, 4)}</span>}
+              </div>
+              <small style={{ color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>{timeAgoShort(e.timestamp)}</small>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Network tab ───────────────────────────────────────────────────────────────
 
-function NetworkPage({ events, stats, loading, error, onRetry }: {
+function NetworkPage({ events, stats, loading, error, onRetry, onOpenUrlHealth }: {
   events: ReturnType<typeof useBlockEvents>['events']
   stats: ReturnType<typeof useBlockEvents>['stats']
   loading: boolean
   error: string | null
   onRetry: () => void
+  onOpenUrlHealth: (url: string) => void
 }) {
   const affectedDomains = useMemo(() => {
-    const hostCount = new Map<string, number>()
+    const hostMap = new Map<string, { count: number; url: string }>()
     for (const e of events) {
       if (!e.reachable) {
         try {
           const host = new URL(e.targetUrl).hostname
-          hostCount.set(host, (hostCount.get(host) ?? 0) + 1)
+          const existing = hostMap.get(host)
+          hostMap.set(host, { count: (existing?.count ?? 0) + 1, url: e.targetUrl })
         } catch { /* skip */ }
       }
     }
-    return [...hostCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+    return [...hostMap.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, 5)
   }, [events])
 
   const healthStats = useMemo(() => [
@@ -875,14 +1021,21 @@ function NetworkPage({ events, stats, loading, error, onRetry }: {
       </section>
       <section className="section-block">
         <h2>Most affected services</h2>
-        {affectedDomains.length > 0 ? affectedDomains.map(([domain, count]) => (
-          <div className="service-row" key={domain}>
+        {affectedDomains.length > 0 ? affectedDomains.map(([domain, { count, url }]) => (
+          <button
+            key={domain}
+            className="service-row"
+            onClick={() => onOpenUrlHealth(url)}
+            aria-label={`View health history for ${domain}`}
+            style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+          >
             <span className="service-icon"><Globe2 size={19} aria-hidden="true" /></span>
-            <div>
+            <div style={{ flex: 1, minWidth: 0 }}>
               <b>{domain}</b>
               <small>{count} report{count !== 1 ? 's' : ''} of interference</small>
             </div>
-          </div>
+            <ChevronRight size={16} style={{ color: '#555', flexShrink: 0 }} aria-hidden="true" />
+          </button>
         )) : (
           <p style={{ color: '#666', margin: '12px 0' }}>No interference detected in the last 48 hours</p>
         )}
@@ -1040,11 +1193,12 @@ function ConnectPage({ onConnect, connected, onDisconnect, events, walletAddr, r
 
 // ─── Activity tab ──────────────────────────────────────────────────────────────
 
-function ActivityPage({ events, loading, error, onRetry }: {
+function ActivityPage({ events, loading, error, onRetry, onOpenUrlHealth }: {
   events: ReturnType<typeof useBlockEvents>['events']
   loading: boolean
   error: string | null
   onRetry: () => void
+  onOpenUrlHealth: (url: string) => void
 }) {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDeferredValue(search)
@@ -1140,16 +1294,14 @@ function ActivityPage({ events, loading, error, onRetry }: {
               const color = statusColor(event.blockType, event.reachable)
               const label = statusLabel(event.blockType, event.reachable)
               return (
-                <li key={event.id} className="activity-row">
+                <li key={event.id} className="activity-row" style={{ cursor: 'pointer' }} onClick={() => onOpenUrlHealth(event.targetUrl)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenUrlHealth(event.targetUrl) } }} aria-label={`View health history for ${event.hostname}`}>
                   <span className={`event-icon ${color === 'green' ? 'reachable' : color === 'amber' ? 'warning' : 'blocked'}`}>
                     {event.reachable ? <Shield size={19} aria-hidden="true" /> : <Zap size={19} aria-hidden="true" />}
                   </span>
                   <div>
                     <b>{label} detected</b>
                     <span>
-                      <a href={/^https?:\/\//i.test(event.targetUrl) ? event.targetUrl : '#'} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit' }} aria-label={`${event.hostname} (opens in new tab)`}>
-                        {event.hostname}
-                      </a>
+                      {event.hostname}
                       {event.geohash ? ` · ${event.geohash.slice(0, 4)}` : ''}
                     </span>
                     <small>{timeAgo(event.timestamp)}</small>
@@ -1330,6 +1482,7 @@ export default function Page() {
   const [walletOpen, setWalletOpen] = useState(false)
   const [connected, setConnected] = useState(false)
   const [comingSoon, setComingSoon] = useState('')
+  const [urlHealthTarget, setUrlHealthTarget] = useState<string | null>(null)
   useEffect(() => {
     if (!comingSoon) return
     const id = setTimeout(() => setComingSoon(''), 2500)
@@ -1348,7 +1501,10 @@ export default function Page() {
     scrollRef.current?.scrollTo({ top: 0, behavior: 'instant' })
   }, [tab])
 
-  const modalOpen = testOpen || walletOpen
+  const openUrlHealth = useCallback((url: string) => setUrlHealthTarget(url), [])
+  const closeUrlHealth = useCallback(() => setUrlHealthTarget(null), [])
+
+  const modalOpen = testOpen || walletOpen || urlHealthTarget !== null
   useEffect(() => {
     document.body.classList.toggle('modal-open', modalOpen)
     if (scrollRef.current) scrollRef.current.inert = modalOpen
@@ -1378,7 +1534,7 @@ export default function Page() {
   if (tab === 'radar') {
     content = <Radar onTest={() => openTest()} onConnect={goConnect} onViewNetwork={goNetwork} liveProbes={liveProbes} regions={regions} blocksToday={blocksToday} loading={loading} error={error} events={events} />
   } else if (tab === 'network') {
-    content = <NetworkPage events={events} stats={stats} loading={loading} error={error} onRetry={retry} />
+    content = <NetworkPage events={events} stats={stats} loading={loading} error={error} onRetry={retry} onOpenUrlHealth={openUrlHealth} />
   } else if (tab === 'connect') {
     content = <ConnectPage
       connected={connected}
@@ -1389,7 +1545,7 @@ export default function Page() {
       rpcUrl={rpcUrl}
     />
   } else if (tab === 'activity') {
-    content = <ActivityPage events={events} loading={loading} error={error} onRetry={retry} />
+    content = <ActivityPage events={events} loading={loading} error={error} onRetry={retry} onOpenUrlHealth={openUrlHealth} />
   } else {
     content = <MorePage onOpenWallet={openWallet} onComingSoon={setComingSoon} />
   }
@@ -1458,6 +1614,7 @@ export default function Page() {
 
         {testOpen && <TestUrlModal onClose={() => { setTestOpen(false); setTestInitialUrl(undefined) }} initialUrl={testInitialUrl} />}
         {walletOpen && <WalletSheet onClose={closeWallet} />}
+        {urlHealthTarget && <UrlHealthDrawer targetUrl={urlHealthTarget} onClose={closeUrlHealth} />}
         {comingSoon && (
           <div role="status" aria-live="polite" style={{
             position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',

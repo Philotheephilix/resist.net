@@ -16,12 +16,28 @@ function getDevFixture() {
   const now = Date.now()
   // Wallet addresses pre-truncated to match the truncation applied to real Arkiv data
   // in queryArkivProbeEvents. Ensures the fixture path can never leak full addresses.
+  // Multiple entries per URL create the per-URL health history visible in UrlHealthDrawer.
   return [
-    { id: '1', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning', geohash: 'u4pruyd', timestamp: now - 300_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: false },
-    { id: '2', targetUrl: 'https://instagram.com', blockType: 'http_block', geohash: 'tdr1w3j', timestamp: now - 600_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
-    { id: '3', targetUrl: 'https://wikipedia.org', blockType: null, geohash: 'w3gv2uk', timestamp: now - 900_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
-    { id: '4', targetUrl: 'https://youtube.com', blockType: 'tcp_rst', geohash: 'sp7fj5n', timestamp: now - 1_200_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
-    { id: '5', targetUrl: 'https://reddit.com', blockType: 'full_unreachable', geohash: '9q5cs2r', timestamp: now - 1_800_000, nodeWallet: truncateWallet('0x0000000000000000000000000000000000000005'), reachable: false },
+    // twitter.com — blocked at multiple timestamps from different nodes/regions
+    { id: '1',  targetUrl: 'https://twitter.com', blockType: 'dns_poisoning',   geohash: 'u4pruyd', timestamp: now - 300_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: false },
+    { id: '1b', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning',   geohash: 'tdr1w3j', timestamp: now - 900_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
+    { id: '1c', targetUrl: 'https://twitter.com', blockType: null,              geohash: 'w3gv2uk', timestamp: now - 1_800_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
+    { id: '1d', targetUrl: 'https://twitter.com', blockType: 'http_block',      geohash: 'sp7fj5n', timestamp: now - 3_600_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
+    { id: '1e', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning',   geohash: '9q5cs2r', timestamp: now - 7_200_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000005'), reachable: false },
+    // instagram.com — blocked
+    { id: '2',  targetUrl: 'https://instagram.com', blockType: 'http_block',    geohash: 'tdr1w3j', timestamp: now - 600_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
+    { id: '2b', targetUrl: 'https://instagram.com', blockType: 'http_block',    geohash: 'u4pruyd', timestamp: now - 2_400_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: false },
+    { id: '2c', targetUrl: 'https://instagram.com', blockType: null,            geohash: 'w3gv2uk', timestamp: now - 5_400_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
+    // wikipedia.org — mostly reachable
+    { id: '3',  targetUrl: 'https://wikipedia.org', blockType: null,            geohash: 'w3gv2uk', timestamp: now - 900_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
+    { id: '3b', targetUrl: 'https://wikipedia.org', blockType: null,            geohash: 'u4pruyd', timestamp: now - 2_700_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: true },
+    { id: '3c', targetUrl: 'https://wikipedia.org', blockType: 'tcp_rst',       geohash: 'sp7fj5n', timestamp: now - 5_100_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
+    // youtube.com
+    { id: '4',  targetUrl: 'https://youtube.com', blockType: 'tcp_rst',         geohash: 'sp7fj5n', timestamp: now - 1_200_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
+    { id: '4b', targetUrl: 'https://youtube.com', blockType: 'tcp_rst',         geohash: 'tdr1w3j', timestamp: now - 4_200_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
+    // reddit.com
+    { id: '5',  targetUrl: 'https://reddit.com', blockType: 'full_unreachable', geohash: '9q5cs2r', timestamp: now - 1_800_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000005'), reachable: false },
+    { id: '5b', targetUrl: 'https://reddit.com', blockType: null,               geohash: 'w3gv2uk', timestamp: now - 6_000_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
   ]
 }
 
@@ -38,6 +54,10 @@ let statsInFlight: Promise<object> | null = null
 
 const VALID_BLOCK_TYPES = new Set(['dns_poisoning', 'tcp_rst', 'http_block', 'full_unreachable'])
 const GEOHASH_RE = /^[0-9bcdefghjkmnpqrstuvwxyz]{1,9}$/
+
+function normalizeUrl(raw: string): string {
+  try { return new URL(raw).href } catch { return raw }
+}
 
 async function queryArkivProbeEvents(opts: {
   geohash?: string
@@ -170,6 +190,18 @@ export async function GET(request: NextRequest) {
     return new Response('Bad Request: invalid geohash', { status: 400 })
   }
   const geohashFilter = rawGeohash ?? undefined
+
+  const rawTargetUrl = searchParams.get('targetUrl')
+  let targetUrlFilter: string | undefined
+  if (rawTargetUrl !== null) {
+    try {
+      const u = new URL(rawTargetUrl)
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('protocol')
+      targetUrlFilter = u.href
+    } catch {
+      return new Response('Bad Request: invalid targetUrl', { status: 400 })
+    }
+  }
 
   // stats=true + geohash=X would silently return geohash-scoped stats, which
   // NodeCount and the global dashboard expect to be global. Reject the combo.
@@ -312,11 +344,17 @@ export async function GET(request: NextRequest) {
   // we're in dev-fixture mode (no real data on-chain yet during development).
   if (!events || (USE_DEV_FIXTURE && events.length === 0)) {
     let fixture = DEV_FIXTURE ?? []
-    // Apply filters to the dev fixture so tests that check blockType/geohash
+    // Apply filters to the dev fixture so tests that check blockType/geohash/targetUrl
     // filtering get the same behaviour as a real Arkiv-backed response.
     if (blockTypeFilter) fixture = fixture.filter(e => e.blockType === blockTypeFilter)
     if (geohashFilter) fixture = fixture.filter(e => e.geohash != null && e.geohash.startsWith(geohashFilter))
+    if (targetUrlFilter) fixture = fixture.filter(e => normalizeUrl(e.targetUrl) === targetUrlFilter)
     events = fixture
+  }
+
+  // Apply targetUrl filter to real Arkiv results (Arkiv doesn't support this server-side).
+  if (targetUrlFilter && events) {
+    events = events.filter(e => normalizeUrl(e.targetUrl) === targetUrlFilter)
   }
 
   // Build quorum-verified URL set: a URL is verified when 5+ distinct 4-char geohash
@@ -398,15 +436,10 @@ export async function GET(request: NextRequest) {
       ? statsCache.result as { liveProbes: number; regions: number; blocksToday: number; volunteerCount?: number }
       : null
 
-    // When cache is cold in dev-fixture mode, compute stats from the fixture events
-    // so the UI shows real-looking numbers without a separate stats request.
+    // When cache is cold in dev-fixture mode, return zero real stats — fixture
+    // wallets are synthetic and should not inflate the "Online nodes" counter.
     if (!cachedStats && USE_DEV_FIXTURE) {
-      const allEvents = getDevFixture() ?? []
-      const oneDayAgo = Date.now() - 24 * 3600 * 1000
-      const recent = allEvents.filter(e => e.timestamp > oneDayAgo)
-      const regionSet = new Set(recent.filter(e => e.geohash).map(e => e.geohash!.slice(0, 4)))
-      const walletSet = new Set(recent.map(e => e.nodeWallet))
-      cachedStats = { liveProbes: walletSet.size || 5, regions: regionSet.size || 5, blocksToday: 0, volunteerCount: 3 }
+      cachedStats = { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
     }
 
     const statsFields = cachedStats
