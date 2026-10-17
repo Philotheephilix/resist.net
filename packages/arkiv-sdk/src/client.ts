@@ -39,7 +39,7 @@ import type {
 export interface ArkivClientConfig {
   rpcUrl: string;
   privateKey: `0x${string}`;
-  canonicalTargetsHash: string;
+  canonicalTargetsHash?: string;
 }
 
 export class ArkivClient {

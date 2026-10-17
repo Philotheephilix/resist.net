@@ -17,6 +17,7 @@
     "@playwright/test": "^1.64.0",
     "@types/ngeohash": "^0.6.8",
     "@types/topojson-client": "^3.1.5",
+    "node-datachannel": "^0.33.4",
     "turbo": "^2.0.0",
     "typescript": "^5.4.0"
   },
@@ -28,5 +29,8 @@
     "react-globe.gl": "^2.38.0",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
+  },
+  "allowScripts": {
+    "node-datachannel@0.33.4": true
   }
 }
