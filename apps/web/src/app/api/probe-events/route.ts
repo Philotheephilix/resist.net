@@ -275,9 +275,11 @@ export async function GET(request: NextRequest) {
         // counting is exact — truncated wallets cause prefix/suffix collisions.
         // Apply the same establishedWallets filter used by blocksToday so the counter
         // is Sybil-resistant. rawActiveNodes exposes the unfiltered 24h count separately.
-        const rawActiveNodes = new Set(recentAll.map((e) => e.nodeWallet)).size
+        const thirtyMinAgo = Date.now() - 30 * 60_000
+        const recentThirtyMin = recentAll.filter((e) => e.timestamp > thirtyMinAgo)
+        const rawActiveNodes = new Set(recentThirtyMin.map((e) => e.nodeWallet)).size
         const liveProbes = establishedWallets !== null
-          ? new Set(recentAll.filter((e) => establishedWallets!.has(e.nodeWallet)).map((e) => e.nodeWallet)).size
+          ? new Set(recentThirtyMin.filter((e) => establishedWallets!.has(e.nodeWallet)).map((e) => e.nodeWallet)).size
           : rawActiveNodes
         // Fetch volunteer count alongside probe stats so VolunteerCount can share
         // this polling interval instead of running its own independent 120s loop.
