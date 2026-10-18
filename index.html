@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ResistNet — See what's blocked, everywhere, right now.</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ink: #111111;
+    --muted: #666666;
+    --subtle: #999999;
+    --line: #e0e0e0;
+    --soft: #f5f5f5;
+    --red: #e24a47;
+    --amber: #ffae00;
+    --green: #19c35c;
+    --dark: #0d0d0d;
+    --dark-surface: #161616;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, Helvetica, sans-serif;
+    --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    color: var(--ink);
+    background: #fff;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── NAV ─────────────────────────────────────────────── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+    padding: 0 40px;
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .nav-logo {
+    display: flex; align-items: center; gap: 10px;
+    font-weight: 700; font-size: 17px; letter-spacing: -0.4px;
+    text-decoration: none; color: var(--ink);
+  }
+  .nav-brandmark {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ink); color: #fff;
+    display: grid; place-items: center; font-size: 13px;
+    flex-shrink: 0;
+  }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a {
+    text-decoration: none; color: var(--muted); font-size: 14px;
+    transition: color 0.2s;
+  }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta {
+    background: var(--ink); color: #fff !important;
+    padding: 8px 18px; border-radius: 999px; font-size: 14px !important;
+    font-weight: 600; transition: opacity 0.2s !important;
+  }
+  .nav-cta:hover { opacity: 0.8; }
+
+  /* ── HERO ────────────────────────────────────────────── */
+  .hero {
+    min-height: calc(100vh - 64px);
+    display: grid; grid-template-columns: 1fr 1fr;
+    align-items: center; gap: 60px;
+    padding: 80px 40px 80px;
+    max-width: 1200px; margin: 0 auto;
+  }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: #fff0f0; border: 1px solid #ffd0d0;
+    color: var(--red); font-size: 12px; font-weight: 600;
+    padding: 5px 12px; border-radius: 999px;
+    margin-bottom: 28px; letter-spacing: 0.3px;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.85); }
+  }
+  .hero h1 {
+    font-size: clamp(42px, 5.5vw, 72px);
+    font-weight: 800;
+    letter-spacing: -2.5px;
+    line-height: 1.02;
+    margin-bottom: 10px;
+  }
+  .hero h1 .accent { color: var(--red); }
+  .hero-sub {
+    font-size: clamp(22px, 2.8vw, 34px);
+    font-weight: 700;
+    letter-spacing: -1px;
+    color: var(--muted);
+    margin-bottom: 20px;
+    line-height: 1.1;
+  }
+  .hero-body {
+    font-size: 17px; color: var(--muted); max-width: 480px;
+    margin-bottom: 36px; line-height: 1.65;
+  }
+  .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--ink); color: #fff;
+    padding: 14px 28px; border-radius: 999px;
+    font-size: 15px; font-weight: 600;
+    text-decoration: none; transition: opacity 0.2s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary:hover { opacity: 0.8; }
+  .btn-ghost {
+    background: transparent; color: var(--ink);
+    border: 1.5px solid var(--line);
+    padding: 13px 28px; border-radius: 999px;
+    font-size: 15px; font-weight: 600;
+    text-decoration: none; transition: border-color 0.2s, color 0.2s;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-ghost:hover { border-color: var(--ink); }
+
+  /* Hero SVG radar */
+  .hero-visual {
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+  }
+  .radar-svg {
+    width: min(420px, 90vw); height: min(420px, 90vw);
+  }
+  .radar-ring {
+    fill: none; stroke: var(--red);
+    transform-origin: 210px 210px;
+  }
+  @keyframes radar-ping {
+    0% { r: 12; opacity: 0.9; stroke-width: 2; }
+    100% { r: 160; opacity: 0; stroke-width: 0.5; }
+  }
+  .ring1 { animation: radar-ping 2.8s var(--ease) infinite; }
+  .ring2 { animation: radar-ping 2.8s var(--ease) 0.9s infinite; }
+  .ring3 { animation: radar-ping 2.8s var(--ease) 1.8s infinite; }
+
+  /* Globe-like ellipses for visual interest */
+  .globe-line { fill: none; stroke: #ddd; stroke-width: 1; }
+
+  /* Probe node dots on the radar */
+  @keyframes node-appear {
+    0%,40% { opacity: 0; transform: scale(0); }
+    60% { opacity: 1; transform: scale(1.3); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  .probe-node { transform-origin: center center; }
+  .probe-node.n1 { animation: node-appear 4s var(--spring) 0.2s infinite; }
+  .probe-node.n2 { animation: node-appear 4s var(--spring) 1.1s infinite; }
+  .probe-node.n3 { animation: node-appear 4s var(--spring) 2.0s infinite; }
+  .probe-node.n4 { animation: node-appear 4s var(--spring) 2.7s infinite; }
+
+  /* Arc draw-on */
+  .probe-arc {
+    fill: none; stroke-linecap: round;
+    stroke-dasharray: 200; stroke-dashoffset: 200;
+  }
+  @keyframes arc-draw {
+    0%,20% { stroke-dashoffset: 200; opacity: 0; }
+    40% { opacity: 1; }
+    60% { stroke-dashoffset: 0; opacity: 1; }
+    80%,100% { stroke-dashoffset: 0; opacity: 0; }
+  }
+  .arc1 { animation: arc-draw 4s var(--ease) 0.5s infinite; }
+  .arc2 { animation: arc-draw 4s var(--ease) 1.4s infinite; }
+  .arc3 { animation: arc-draw 4s var(--ease) 2.3s infinite; }
+
+  /* ── STAT BAND ────────────────────────────────────────── */
+  .stat-band {
+    background: var(--dark); color: #fff;
+    padding: 100px 40px;
+    text-align: center;
+  }
+  .stat-eyebrow {
+    font-size: 13px; font-weight: 600; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--red); margin-bottom: 20px;
+  }
+  .stat-number {
+    font-size: clamp(80px, 14vw, 160px);
+    font-weight: 900; letter-spacing: -6px;
+    line-height: 1; color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-label {
+    font-size: clamp(20px, 3vw, 28px);
+    font-weight: 600; letter-spacing: -0.5px;
+    color: rgba(255,255,255,0.7); margin-top: 16px;
+  }
+  .stat-sub {
+    font-size: 15px; color: rgba(255,255,255,0.35);
+    margin-top: 8px; letter-spacing: 0.5px;
+  }
+  .stat-row {
+    display: flex; justify-content: center; gap: 60px;
+    margin-top: 60px; flex-wrap: wrap;
+  }
+  .stat-item { text-align: center; }
+  .stat-item strong {
+    display: block; font-size: 32px; font-weight: 800;
+    letter-spacing: -1px; color: #fff;
+  }
+  .stat-item span {
+    display: block; font-size: 13px;
+    color: rgba(255,255,255,0.45); margin-top: 4px;
+  }
+
+  /* ── EVIDENCE ────────────────────────────────────────── */
+  .evidence {
+    padding: 100px 40px;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .section-eyebrow {
+    font-size: 12px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--red);
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-size: clamp(32px, 4vw, 48px); font-weight: 800;
+    letter-spacing: -1.5px; line-height: 1.1;
+    margin-bottom: 48px;
+  }
+  .timeline { position: relative; padding-left: 32px; }
+  .timeline::before {
+    content: '';
+    position: absolute; left: 8px; top: 8px; bottom: 8px;
+    width: 1px; background: var(--line);
+  }
+  .timeline-item {
+    position: relative; margin-bottom: 36px;
+    opacity: 0; transform: translateY(16px);
+    transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+  }
+  .timeline-item.visible { opacity: 1; transform: translateY(0); }
+  .timeline-dot {
+    position: absolute; left: -28px; top: 6px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--line); border: 2px solid #fff;
+  }
+  .timeline-item.critical .timeline-dot { background: var(--red); }
+  .timeline-year {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 4px;
+  }
+  .timeline-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .timeline-body { font-size: 14px; color: var(--muted); line-height: 1.6; }
+  .timeline-stat {
+    display: inline-block; margin-top: 6px;
+    background: #fff0f0; color: var(--red);
+    font-size: 12px; font-weight: 700;
+    padding: 3px 10px; border-radius: 6px;
+  }
+  .timeline-item.critical .timeline-stat {
+    background: var(--red); color: #fff;
+  }
+  .timeline-item.critical {
+    background: #fff8f8; border: 1px solid #fde0e0;
+    border-radius: 12px; padding: 16px 20px 16px 12px;
+    margin-left: -12px;
+  }
+
+  /* ── HOW IT WORKS ────────────────────────────────────── */
+  .how {
+    background: var(--soft); padding: 100px 40px;
+  }
+  .how-inner { max-width: 1100px; margin: 0 auto; }
+  .how-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 24px; margin-top: 48px;
+  }
+  .how-card {
+    background: #fff; border: 1px solid var(--line);
+    border-radius: 20px; padding: 32px 28px;
+    opacity: 0; transform: translateY(24px);
+    transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
+  }
+  .how-card.visible { opacity: 1; transform: translateY(0); }
+  .how-card:nth-child(2) { transition-delay: 0.1s; }
+  .how-card:nth-child(3) { transition-delay: 0.2s; }
+  .how-icon { width: 52px; height: 52px; margin-bottom: 20px; }
+  .how-card h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.3px; }
+  .how-card p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+  /* ── STACK ───────────────────────────────────────────── */
+  .stack { padding: 100px 40px; max-width: 1100px; margin: 0 auto; }
+  .stack-table { width: 100%; border-collapse: collapse; margin-top: 48px; }
+  .stack-table th {
+    text-align: left; padding: 12px 20px;
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    text-transform: uppercase; color: var(--subtle);
+    border-bottom: 2px solid var(--line);
+  }
+  .stack-table td {
+    padding: 16px 20px; border-bottom: 1px solid var(--line);
+    font-size: 15px; vertical-align: middle;
+  }
+  .stack-row-resist td {
+    background: #f0fdf5;
+    font-weight: 600;
+  }
+  .stack-row-resist td:first-child { color: var(--green); font-weight: 700; }
+  .stack-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+  }
+  .badge-green { background: #e6f9ec; color: #006621; }
+  .badge-muted { background: var(--soft); color: var(--muted); }
+  .stack-note {
+    margin-top: 28px; padding: 20px 24px;
+    background: #fffbeb; border: 1px solid #ffe58f;
+    border-radius: 12px; font-size: 14px; color: #7a5c00;
+    line-height: 1.65;
+  }
+
+  /* ── QUOTE ───────────────────────────────────────────── */
+  .quote-section {
+    background: var(--dark); padding: 100px 40px;
+    text-align: center;
+  }
+  .blockquote {
+    max-width: 760px; margin: 0 auto;
+    font-size: clamp(22px, 3vw, 32px);
+    font-weight: 700; letter-spacing: -0.8px;
+    line-height: 1.35; color: #fff;
+    position: relative;
+  }
+  .blockquote::before {
+    content: '"';
+    position: absolute; top: -20px; left: -10px;
+    font-size: 80px; color: var(--red); line-height: 1;
+    font-family: Georgia, serif;
+  }
+  .blockquote-attr {
+    margin-top: 28px; font-size: 13px;
+    color: rgba(255,255,255,0.4); letter-spacing: 0.5px;
+  }
+
+  /* ── CTA FOOTER ──────────────────────────────────────── */
+  .cta-section {
+    padding: 100px 40px; text-align: center;
+    border-top: 1px solid var(--line);
+  }
+  .cta-section h2 {
+    font-size: clamp(32px, 5vw, 54px); font-weight: 800;
+    letter-spacing: -1.5px; margin-bottom: 12px; line-height: 1.1;
+  }
+  .cta-section p { font-size: 17px; color: var(--muted); margin-bottom: 40px; }
+  .code-block {
+    display: inline-flex; align-items: center; gap: 16px;
+    background: #f8f8f8; border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px 20px;
+    font-family: "SF Mono", "Fira Code", Consolas, monospace;
+    font-size: 15px; margin-bottom: 36px;
+  }
+  .code-copy {
+    background: var(--ink); color: #fff;
+    border: none; cursor: pointer;
+    padding: 6px 14px; border-radius: 8px;
+    font-size: 12px; font-weight: 600;
+    transition: opacity 0.2s;
+    font-family: var(--font);
+  }
+  .code-copy:hover { opacity: 0.75; }
+  .cta-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* ── FOOTER ──────────────────────────────────────────── */
+  footer {
+    background: var(--dark); color: rgba(255,255,255,0.4);
+    padding: 32px 40px; text-align: center; font-size: 13px;
+  }
+  footer a { color: rgba(255,255,255,0.5); text-decoration: none; }
+  footer a:hover { color: #fff; }
+
+  /* ── RESPONSIVE ──────────────────────────────────────── */
+  @media (max-width: 800px) {
+    nav { padding: 0 20px; }
+    .nav-links a:not(.nav-cta) { display: none; }
+    .hero { grid-template-columns: 1fr; gap: 40px; padding: 48px 20px; }
+    .hero-visual { order: -1; }
+    .stat-band, .evidence, .how, .stack, .quote-section, .cta-section { padding: 70px 20px; }
+    .how-grid { grid-template-columns: 1fr; }
+    .stat-row { gap: 32px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .timeline-item, .how-card { opacity: 1 !important; transform: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">
+    <span class="nav-brandmark">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <circle cx="7" cy="7" r="2.5" fill="#fff"/>
+        <circle cx="7" cy="7" r="5" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" fill="none"/>
+      </svg>
+    </span>
+    ResistNet
+  </a>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#stack">The stack</a>
+    <a href="/pitch.html">Pitch deck</a>
+    <a href="/" class="nav-cta">Open Dashboard →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-content">
+    <div class="hero-badge">
+      <span class="live-dot"></span>
+      LIVE · 5 sites monitored · 15 min probes
+    </div>
+    <h1>The tools to fight censorship<br><span class="accent">exist.</span></h1>
+    <div class="hero-sub">Nobody knows when to use them.</div>
+    <p class="hero-body">
+      BitChat. Briar. Tor. Signal. Psiphon. The infrastructure is built.
+      ResistNet is the early warning system — real-time censorship detection,
+      from inside the country, signed on-chain, admissible as evidence.
+    </p>
+    <div class="hero-actions">
+      <a href="/" class="btn-primary">Open Dashboard →</a>
+      <a href="/pitch.html" class="btn-ghost">See the pitch deck</a>
+    </div>
+  </div>
+
+  <div class="hero-visual">
+    <svg class="radar-svg" viewBox="0 0 420 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <!-- Globe ellipses background -->
+      <ellipse cx="210" cy="210" rx="165" ry="165" class="globe-line"/>
+      <ellipse cx="210" cy="210" rx="165" ry="55" class="globe-line"/>
+      <ellipse cx="210" cy="210" rx="80" ry="165" class="globe-line"/>
+      <line x1="45" y1="210" x2="375" y2="210" class="globe-line"/>
+      <line x1="210" y1="45" x2="210" y2="375" class="globe-line"/>
+
+      <!-- Radar ping rings -->
+      <circle cx="210" cy="210" class="radar-ring ring1" r="12"/>
+      <circle cx="210" cy="210" class="radar-ring ring2" r="12"/>
+      <circle cx="210" cy="210" class="radar-ring ring3" r="12"/>
+
+      <!-- Center dot -->
+      <circle cx="210" cy="210" r="7" fill="#e24a47"/>
+      <circle cx="210" cy="210" r="4" fill="#fff"/>
+
+      <!-- Probe nodes: Mumbai, London, New York, Jakarta -->
+      <g class="probe-node n1" style="transform-origin:253px 255px">
+        <circle cx="253" cy="255" r="6" fill="#19c35c"/>
+        <circle cx="253" cy="255" r="10" fill="rgba(25,195,92,0.2)"/>
+      </g>
+      <g class="probe-node n2" style="transform-origin:192px 148px">
+        <circle cx="192" cy="148" r="6" fill="#19c35c"/>
+        <circle cx="192" cy="148" r="10" fill="rgba(25,195,92,0.2)"/>
+      </g>
+      <g class="probe-node n3" style="transform-origin:135px 200px">
+        <circle cx="135" cy="200" r="6" fill="#e24a47"/>
+        <circle cx="135" cy="200" r="10" fill="rgba(226,74,71,0.2)"/>
+      </g>
+      <g class="probe-node n4" style="transform-origin:290px 180px">
+        <circle cx="290" cy="180" r="6" fill="#19c35c"/>
+        <circle cx="290" cy="180" r="10" fill="rgba(25,195,92,0.2)"/>
+      </g>
+
+      <!-- Probe arcs -->
+      <path class="probe-arc arc1" d="M253,255 Q210,180 210,210" stroke="#19c35c" stroke-width="1.5"/>
+      <path class="probe-arc arc2" d="M135,200 Q160,180 210,210" stroke="#e24a47" stroke-width="1.5"/>
+      <path class="probe-arc arc3" d="M290,180 Q260,190 210,210" stroke="#19c35c" stroke-width="1.5"/>
+    </svg>
+  </div>
+</section>
+
+<!-- STAT BAND -->
+<section class="stat-band">
+  <div class="stat-eyebrow">India · 2016 – 2023 · Access Now #KeepItOn</div>
+  <div class="stat-number" id="count-771">0</div>
+  <div class="stat-label">Internet shutdowns. One country. Five years in a row.</div>
+  <div class="stat-sub">India — world's largest democracy. World's most prolific internet killer.</div>
+  <div class="stat-row">
+    <div class="stat-item"><strong>$2.8B</strong><span>economic damage, 2020 alone</span></div>
+    <div class="stat-item"><strong>50M+</strong><span>subscribers cut in one 12-hour NCR shutdown</span></div>
+    <div class="stat-item"><strong>35</strong><span>countries with documented shutdowns, 2022</span></div>
+    <div class="stat-item"><strong>7 yrs</strong><span>prison threat to Twitter employees for non-compliance</span></div>
+  </div>
+</section>
+
+<!-- EVIDENCE TIMELINE -->
+<section class="evidence" id="evidence">
+  <div class="section-eyebrow">The record</div>
+  <h2 class="section-title">They didn't just block the internet.<br>They tried to erase the tools built to survive it.</h2>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-year">Kashmir · August 2019</div>
+      <div class="timeline-title">Article 370 revoked. All internet killed simultaneously.</div>
+      <div class="timeline-body">213 consecutive days of complete blackout. 4G restored 17 months later. Journalists barred. Residents' phones searched for VPNs.</div>
+      <span class="timeline-stat">~$1B economic damage · year one</span>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-year">CAA Protests · December 2019</div>
+      <div class="timeline-title">121 shutdowns across 16 states in one year.</div>
+      <div class="timeline-body">Assam's High Court orders restoration — government ignores it, requiring a second ruling. Delhi's shutdown later ruled <strong>illegal</strong>.</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-year">Farmer Protests · January 2021</div>
+      <div class="timeline-title">50M subscribers cut off. Then: 1,474 accounts ordered removed.</div>
+      <div class="timeline-body">Twitter pushes back on free speech grounds. Government threatens employees with <strong>7 years imprisonment</strong>. Twitter complies.</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-year">Manipur · 2023</div>
+      <div class="timeline-title">Months-long blackout buries evidence of atrocity for weeks.</div>
+      <div class="timeline-body">A gang sexual assault is recorded on video. The blackout prevents it circulating. The Chief Minister later defends the shutdown as having prevented "similar incident documentation."</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-dot"></div>
+      <div class="timeline-year">India–Pakistan Conflict · May 2025</div>
+      <div class="timeline-title">8,000+ Twitter accounts removed. News sites blocked via TLS interference.</div>
+      <div class="timeline-body">Dawn. Geo TV. ARY News. The Wire. Kashmir Walla. All dark. Connections reset the instant the SNI header is read.</div>
+    </div>
+    <div class="timeline-item critical">
+      <div class="timeline-dot"></div>
+      <div class="timeline-year">BitChat · July 2026</div>
+      <div class="timeline-title">Government orders GitHub to delete the repository. Within 3 hours.</div>
+      <div class="timeline-body">Students protest exam leaks. Internet cut. 91,000 download BitChat in 5 days — Bluetooth mesh, no servers, no internet needed. Government's response: erase the source code. Jack Dorsey leaks the notice publicly. By October: removed from Indian App Store and Google Play.</div>
+      <span class="timeline-stat">85% of global downloads were from India that week</span>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="how-inner">
+    <div class="section-eyebrow">How ResistNet works</div>
+    <h2 class="section-title">Detection from the inside.<br>Evidence on-chain.</h2>
+    <div class="how-grid">
+      <!-- Card 1: Volunteer Nodes -->
+      <div class="how-card">
+        <svg class="how-icon" viewBox="0 0 52 52" fill="none">
+          <!-- Pulsing node -->
+          <circle cx="26" cy="26" r="22" fill="#f0fdf5" stroke="#19c35c" stroke-width="1.5"/>
+          <circle cx="26" cy="26" r="8" fill="#19c35c"/>
+          <circle cx="26" cy="26" r="4" fill="#fff"/>
+          <circle cx="26" cy="26" r="14" fill="none" stroke="#19c35c" stroke-width="1" stroke-dasharray="3 4" opacity="0.5">
+            <animateTransform attributeName="transform" type="rotate" from="0 26 26" to="360 26 26" dur="8s" repeatCount="indefinite"/>
+          </circle>
+          <!-- Three small satellite dots -->
+          <circle cx="26" cy="8" r="3" fill="#19c35c" opacity="0.6"/>
+          <circle cx="40" cy="38" r="3" fill="#19c35c" opacity="0.4"/>
+          <circle cx="12" cy="38" r="3" fill="#ffae00" opacity="0.7"/>
+        </svg>
+        <h3>Volunteer Nodes</h3>
+        <p>Run on any device. Probes originate from inside India, on Indian ISPs — catching ISP-level blocks that external monitors miss entirely.</p>
+      </div>
+      <!-- Card 2: On-Chain Record -->
+      <div class="how-card">
+        <svg class="how-icon" viewBox="0 0 52 52" fill="none">
+          <rect x="5" y="20" width="42" height="28" rx="6" fill="#fffbeb" stroke="#ffae00" stroke-width="1.5"/>
+          <!-- Chain links -->
+          <rect x="14" y="28" width="10" height="12" rx="3" fill="none" stroke="#ffae00" stroke-width="2"/>
+          <rect x="28" y="28" width="10" height="12" rx="3" fill="none" stroke="#ffae00" stroke-width="2"/>
+          <line x1="24" y1="34" x2="28" y2="34" stroke="#ffae00" stroke-width="2"/>
+          <!-- Shackle -->
+          <path d="M16 20 V14 a10 10 0 0 1 20 0 V20" stroke="#ffae00" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <!-- Checkmark -->
+          <path d="M21 34.5 L24.5 38 L31 31" stroke="#19c35c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <h3>On-Chain Evidence</h3>
+        <p>Every result signed by the node's wallet. Timestamped on Arkiv. Permanent. Government cannot delete the record of when a shutdown started, how long it ran, or what method was used.</p>
+      </div>
+      <!-- Card 3: Live Dashboard -->
+      <div class="how-card">
+        <svg class="how-icon" viewBox="0 0 52 52" fill="none">
+          <rect x="4" y="4" width="44" height="34" rx="6" fill="#f5f5f5" stroke="#ddd" stroke-width="1.5"/>
+          <!-- Bar chart bars -->
+          <rect x="10" y="22" width="5" height="12" rx="2" fill="#19c35c"/>
+          <rect x="18" y="14" width="5" height="20" rx="2" fill="#19c35c"/>
+          <rect x="26" y="18" width="5" height="16" rx="2" fill="#e24a47"/>
+          <rect x="34" y="10" width="5" height="22" rx="2" fill="#19c35c"/>
+          <!-- Baseline -->
+          <line x1="8" y1="34" x2="44" y2="34" stroke="#ddd" stroke-width="1"/>
+          <!-- Screen stand -->
+          <path d="M22 38 L20 48 M30 38 L32 48 M18 48 L34 48" stroke="#ddd" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <h3>Live Dashboard</h3>
+        <p>24-hour availability charts per site, per region, per ISP. Block type detection: DNS poisoning, TCP reset, HTTP block, TLS-SNI interference. Test any URL in seconds.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STACK -->
+<section class="stack" id="stack">
+  <div class="section-eyebrow">Where it fits</div>
+  <h2 class="section-title">The communication stack<br>has one missing layer.</h2>
+  <table class="stack-table">
+    <thead>
+      <tr>
+        <th>Layer</th>
+        <th>Tool</th>
+        <th>What it does</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="stack-row-resist">
+        <td>Evidence</td>
+        <td><strong>ResistNet</strong></td>
+        <td>Proves it was blocked — signed, timestamped, on-chain, admissible</td>
+        <td><span class="stack-badge badge-green">Missing piece</span></td>
+      </tr>
+      <tr class="stack-row-resist">
+        <td>Awareness</td>
+        <td><strong>ResistNet</strong></td>
+        <td>Tells you it's blocked right now, before you give up</td>
+        <td><span class="stack-badge badge-green">Missing piece</span></td>
+      </tr>
+      <tr>
+        <td>Messaging</td>
+        <td>BitChat / Briar</td>
+        <td>Peer-to-peer chat over Bluetooth/WiFi mesh</td>
+        <td><span class="stack-badge badge-muted">Built ✓</span></td>
+      </tr>
+      <tr>
+        <td>Routing</td>
+        <td>Tor / Psiphon</td>
+        <td>Traffic tunnelling around blocks</td>
+        <td><span class="stack-badge badge-muted">Built ✓</span></td>
+      </tr>
+      <tr>
+        <td>Publishing</td>
+        <td>IPFS / Nostr</td>
+        <td>Censorship-resistant content hosting</td>
+        <td><span class="stack-badge badge-muted">Built ✓</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="stack-note">
+    <strong>The legal angle:</strong> When the Assam High Court ordered the government to restore internet and the government ignored the order — requiring a second ruling — there was no tamper-proof record of exactly when the block started, how long it ran per ISP, or what method was used. ResistNet would have that record. Signed. On-chain. Undeniable.
+  </div>
+</section>
+
+<!-- QUOTE -->
+<section class="quote-section">
+  <blockquote class="blockquote">
+    They didn't just block the internet. They tried to erase the tool people built to survive the block.
+  </blockquote>
+  <div class="blockquote-attr">
+    India Ministry of Home Affairs takedown notice — GitHub / BitChat · July 23, 2026
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" id="node">
+  <h2>Run a node.<br>One command.</h2>
+  <p>Runs on any machine. Probes every 15 minutes. Signs results on-chain.</p>
+  <div>
+    <div class="code-block">
+      <code id="cmd-text">npx @resist/probe-node</code>
+      <button class="code-copy" onclick="copyCmd(this)">Copy</button>
+    </div>
+  </div>
+  <div class="cta-actions">
+    <a href="/" class="btn-primary">Open Dashboard →</a>
+    <a href="/pitch.html" class="btn-ghost">See the pitch deck</a>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p>
+    ResistNet &nbsp;·&nbsp;
+    <a href="/pitch.html">Pitch Deck</a> &nbsp;·&nbsp;
+    <a href="/">Dashboard</a> &nbsp;·&nbsp;
+    <a href="https://github.com/permissionlesstech/bitchat" target="_blank" rel="noopener">BitChat ↗</a>
+  </p>
+  <p style="margin-top:8px;font-size:11px;">Evidence-layer for the censorship-resistance stack. Probe data on Arkiv.</p>
+</footer>
+
+<script>
+  // ── Count-up animation ───────────────────────────────────────────────────────
+  function animateCount(el, target, duration) {
+    let start = null;
+    const step = ts => {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.floor(ease * target);
+      if (progress < 1) requestAnimationFrame(step);
+      else el.textContent = target;
+    };
+    requestAnimationFrame(step);
+  }
+
+  // ── Scroll-reveal ────────────────────────────────────────────────────────────
+  const revealItems = document.querySelectorAll('.timeline-item, .how-card');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15 });
+  revealItems.forEach(el => observer.observe(el));
+
+  // ── Count-up trigger ─────────────────────────────────────────────────────────
+  const countEl = document.getElementById('count-771');
+  let counted = false;
+  const countObs = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && !counted) {
+      counted = true;
+      animateCount(countEl, 771, 1800);
+    }
+  }, { threshold: 0.3 });
+  countObs.observe(countEl);
+
+  // ── Copy command ─────────────────────────────────────────────────────────────
+  function copyCmd(btn) {
+    navigator.clipboard.writeText('npx @resist/probe-node').then(() => {
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    });
+  }
+</script>
+</body>
+</html>
