@@ -4,7 +4,7 @@
  * the volunteer exit proxy.
  */
 
-import wrtc from "wrtc"
+import * as wrtc from "node-datachannel/polyfill"
 import net from "net"
 import dns from "dns"
 import os from "os"

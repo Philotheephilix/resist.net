@@ -4,7 +4,7 @@
  * On connection: acts as exit proxy forwarding HTTP requests over DataChannels.
  */
 
-import wrtc from "wrtc"
+import * as wrtc from "node-datachannel/polyfill"
 import net from "net"
 import dns from "dns/promises"
 import os from "os"

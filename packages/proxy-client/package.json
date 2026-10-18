@@ -10,7 +10,7 @@
     "@resist/arkiv-sdk": "*",
     "@resist/shared": "*",
     "ethers": "^6.0.0",
-    "wrtc": "^0.4.7"
+    "node-datachannel": "^0.33.4"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
