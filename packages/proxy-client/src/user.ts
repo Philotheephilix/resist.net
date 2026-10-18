@@ -235,10 +235,16 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
 
   const geohashPrefix = config.myGeohash.slice(0, 3)
 
-  // 1. Query Arkiv for volunteers in a different region
+  // 1. Query Arkiv for volunteers, preferring a different region but falling back to any
   let volunteers
   try {
-    volunteers = await arkiv.queryVolunteers(geohashPrefix)
+    const allVolunteers = await arkiv.queryVolunteers()
+    // Prefer out-of-region volunteers; fall back to same-region if none available
+    const outOfRegion = allVolunteers.filter((v) => !v.geohash.startsWith(geohashPrefix))
+    volunteers = outOfRegion.length > 0 ? outOfRegion : allVolunteers
+    if (outOfRegion.length === 0 && allVolunteers.length > 0) {
+      console.log("[user] No out-of-region volunteers found, using same-region volunteer")
+    }
     // Update bootstrap cache with fresh data
     const freshEntries: BootstrapEntry[] = volunteers
       .filter((v) => v.sdpoffer.length <= 131072 && !v.wallet.includes('…'))
@@ -253,10 +259,13 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
     saveBootstrapCache([...freshEntries, ...existingCache].slice(0, 50))
   } catch (err) {
     console.error("[user] Arkiv query failed, trying bootstrap cache:", (err as Error).message)
-    // Fall back to bootstrap cache, excluding same geohash prefix
-    let cached = loadBootstrapCache().filter(
-      (e) => !e.geohash.startsWith(geohashPrefix)
-    )
+    // Fall back to bootstrap cache, preferring different region but using any if needed
+    const allCached = loadBootstrapCache()
+    const outOfRegionCached = allCached.filter((e) => !e.geohash.startsWith(geohashPrefix))
+    let cached = outOfRegionCached.length > 0 ? outOfRegionCached : allCached
+    if (outOfRegionCached.length === 0 && allCached.length > 0) {
+      console.log("[user] No out-of-region cached volunteers, using same-region")
+    }
     if (cached.length === 0) {
       const bootstrapUrl = process.env["BOOTSTRAP_URL"]
       if (bootstrapUrl && new URL(bootstrapUrl).protocol === "https:") {
