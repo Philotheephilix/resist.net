@@ -1,4 +1,4 @@
-import { TARGETS, TARGETS_HASH } from '@resist/probe-node/src/probe'
+import { TARGETS, TARGETS_HASH } from '@resist/shared/src/targets'
 
 export const dynamic = 'force-dynamic'
 

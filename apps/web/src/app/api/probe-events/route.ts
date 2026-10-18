@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { TARGETS_HASH } from '@resist/probe-node/src/probe'
+import { TARGETS_HASH } from '@resist/shared/src/targets'
 
 // Stats cache with 60s TTL. Checked BEFORE calling queryArkivProbeEvents so the
 // expensive 10,000-row Arkiv query is genuinely skipped on cache hits.
