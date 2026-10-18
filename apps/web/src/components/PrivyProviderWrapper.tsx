@@ -5,6 +5,7 @@ import { PrivyProvider } from '@privy-io/react-auth'
 const appId = (process.env['NEXT_PUBLIC_PRIVY_APP_ID'] ?? '') as string
 
 export default function PrivyProviderWrapper({ children }: { children: React.ReactNode }) {
+  if (!appId) return <>{children}</>
   return (
     <PrivyProvider
       appId={appId}
