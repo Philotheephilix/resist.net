@@ -8,6 +8,10 @@
   <a href="https://resist-net.vercel.app/pitch.html">Pitch deck</a>
 </p>
 
+<p align="center">
+  <a href="docs/arkiv-expiry.md"><img src="https://img.shields.io/badge/on--chain%20evidence-how%20expiry%20works%20%26%20legal%20use-e24a47?style=flat-square&labelColor=1a1a1a" alt="Arkiv expiry & legal evidence"/></a>
+</p>
+
 <br/>
 
 **Decentralised internet censorship radar. Volunteer nodes probe monitored sites every 15 minutes, sign results on-chain, and surface them on a live dashboard.**
