@@ -158,3 +158,9 @@ USE_MOCK_DATA=true pnpm dev
 ## Configuration
 
 On first start a wallet and config file are created at `~/.resist-net/config.json` (mode `0600`). The wallet address and private key are generated locally and never transmitted. The config is updated on each startup with the latest geohash and ISP detected via ip-api.com.
+
+## Arkiv expiry and evidence retention
+
+Probe results are written to Arkiv with a 48-hour TTL. After expiry they no longer appear in live queries but remain accessible on-chain via direct RPC calls. Expired records retain their wallet signature and hash-chain linkage, making them valid for legal and forensic use.
+
+See [`docs/arkiv-expiry.md`](../../docs/arkiv-expiry.md) for the full expiry model, TTL table, and evidentiary properties.

@@ -13,7 +13,6 @@ package-lock.json
 cache/
 offline-cache/
 *.db
-docs/
 .agents/
 .claude/
 skills-lock.json

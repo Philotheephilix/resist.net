@@ -1,12 +1,18 @@
-# ResistNet
+<p align="center">
+  <img src="docs/resistnet-banner.svg" alt="ResistNet — censorship radar" width="100%"/>
+</p>
 
-**See what's blocked, everywhere, right now.**
+<p align="center">
+  <strong>🌐 <a href="https://resist-net.vercel.app">resist-net.vercel.app</a></strong> &nbsp;·&nbsp;
+  <a href="https://resist-net.vercel.app/landing.html">Landing page</a> &nbsp;·&nbsp;
+  <a href="https://resist-net.vercel.app/pitch.html">Pitch deck</a>
+</p>
 
-ResistNet is a decentralised internet censorship radar. Volunteer nodes probe monitored sites every 15 minutes, sign results on-chain, and surface them on a live dashboard — so activists, journalists, and ordinary people know within minutes whether a site is blocked, which ISP is blocking it, and how.
+<br/>
+
+**Decentralised internet censorship radar. Volunteer nodes probe monitored sites every 15 minutes, sign results on-chain, and surface them on a live dashboard.**
 
 > India has ordered 771 documented internet shutdowns in 7 years — more than any other country on earth. Each one starts with people reloading the page, assuming it's a glitch. ResistNet closes that gap.
-
-**Live demo:** [resist.net](https://resist.net) · **Landing page:** `/landing.html`
 
 ---
 
@@ -21,7 +27,38 @@ ResistNet is a decentralised internet censorship radar. Volunteer nodes probe mo
 
 ---
 
-## The stack
+## Architecture
+
+```mermaid
+flowchart TD
+    subgraph Volunteer["Volunteer Node (any ISP, any country)"]
+        PN["@resist/probe-node\nnpx @resist/probe-node"]
+        CHECKS["HTTP · DNS · TCP checks\nevery 15 min"]
+        WALLET["Auto-generated wallet\nsecp256k1 signing"]
+        PN --> CHECKS --> WALLET
+    end
+
+    subgraph Chain["Arkiv — on-chain storage"]
+        ARK["Arkiv ingest endpoint\nproject='resist-net'"]
+        RECORD["Signed probe result\ntargetUrl · blockType · geohash\ntargetsHash · timestamp · TTL"]
+        ARK --> RECORD
+    end
+
+    subgraph Dashboard["Vercel — resist-net.vercel.app"]
+        API["/api/probe-events\n/api/targets\n/api/test-url"]
+        SDK["@resist/arkiv-sdk\nArkivReadClient"]
+        UI["Next.js dashboard\nGlobe · Feed · Charts · URL tester"]
+        API --> SDK --> UI
+    end
+
+    WALLET -->|"POST signed result"| ARK
+    SDK -->|"RPC query by geohash/blockType"| RECORD
+    UI -->|"live poll every 30s"| API
+```
+
+---
+
+## The censorship-resistance stack
 
 | Layer | Tool | Status |
 |---|---|---|
@@ -39,15 +76,9 @@ ResistNet is a decentralised internet censorship radar. Volunteer nodes probe mo
 | `apps/web` | Next.js dashboard — globe, network tab, activity feed, URL tester |
 | `packages/probe-node` | Daemon: HTTP/DNS/TCP checks on a 15-min schedule, wallet-signed, writes to Arkiv |
 | `packages/arkiv-sdk` | Client library for the Arkiv ingest/query API |
-| `packages/shared` | Shared TypeScript types |
+| `packages/shared` | Shared types + target list |
+| `packages/map-ui` | Geohash decoding and marker helpers |
 | `packages/proxy-client` | Proxy client utilities |
-
----
-
-## Prerequisites
-
-- Node.js >= 18
-- npm >= 9
 
 ---
 
@@ -60,11 +91,11 @@ npm install
 Create `apps/web/.env.local`:
 
 ```sh
-ARKIV_RPC_URL=https://arkiv.resist.net
-NEXT_PUBLIC_ARKIV_RPC_URL=https://arkiv.resist.net
+ARKIV_RPC_URL=https://arkiv.resist-net.vercel.app
+NEXT_PUBLIC_ARKIV_RPC_URL=https://arkiv.resist-net.vercel.app
 ```
 
-Start the dev server:
+Start dev:
 
 ```sh
 npx turbo run dev
@@ -76,13 +107,13 @@ npx turbo run dev
 ## Run a probe node
 
 ```sh
-ARKIV_URL=https://arkiv.resist.net/ingest npx @resist/probe-node
+ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest npx @resist/probe-node
 ```
 
 Single tick:
 
 ```sh
-ARKIV_URL=https://arkiv.resist.net/ingest npx @resist/probe-node --once
+ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest npx @resist/probe-node --once
 ```
 
 See [`packages/probe-node/README.md`](packages/probe-node/README.md) for all options.
@@ -95,6 +126,12 @@ See [`packages/probe-node/README.md`](packages/probe-node/README.md) for all opt
 npx turbo run build   # build all packages
 npm test              # Playwright e2e
 ```
+
+---
+
+## Docs
+
+- [`docs/arkiv-expiry.md`](docs/arkiv-expiry.md) — how Arkiv TTL works and why expired records remain valid as legal evidence
 
 ---
 
