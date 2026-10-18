@@ -1,6 +1,6 @@
 # @resist/probe-node
 
-Probe node for resist.net. Runs HTTP, DNS, and TCP censorship checks against a fixed list of well-known URLs on a 15-minute schedule, signs results with an auto-generated wallet, and writes them to an Arkiv ingest endpoint. Falls back to a local SQLite cache when the endpoint is unreachable.
+Probe node for resist-net.vercel.app. Runs HTTP, DNS, and TCP censorship checks against a fixed list of well-known URLs on a 15-minute schedule, signs results with an auto-generated wallet, and writes them to an Arkiv ingest endpoint. Falls back to a local SQLite cache when the endpoint is unreachable.
 
 ## Installation
 
@@ -12,7 +12,7 @@ npm install -g @resist/probe-node
 
 | Variable            | Required | Description                                                                 |
 |---------------------|----------|-----------------------------------------------------------------------------|
-| `ARKIV_URL`         | Yes      | URL of the Arkiv ingest endpoint, e.g. `https://arkiv.resist.net/ingest`   |
+| `ARKIV_URL`         | Yes      | URL of the Arkiv ingest endpoint, e.g. `https://arkiv.resist-net.vercel.app/ingest`   |
 | `WALLET_PRIVATE_KEY`| No       | Override the auto-generated wallet private key                              |
 | `HEALTHZ_PORT`      | No       | Port for the `/healthz` HTTP health endpoint (default: `9090`)              |
 | `GEOHASH`           | No       | Fallback geohash when ip-api.com is unreachable (default: `ttnnm77`)        |
@@ -22,13 +22,13 @@ npm install -g @resist/probe-node
 
 ```sh
 # Run continuously on a 15-minute schedule (default mode)
-ARKIV_URL=https://arkiv.resist.net/ingest resist-probe
+ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest resist-probe
 
 # Run a single probe tick and exit
-ARKIV_URL=https://arkiv.resist.net/ingest resist-probe --once
+ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest resist-probe --once
 
 # Probe a single URL once and exit
-ARKIV_URL=https://arkiv.resist.net/ingest resist-probe --target=https://example.com
+ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest resist-probe --target=https://example.com
 
 # Print help
 resist-probe --help
@@ -57,14 +57,14 @@ Response:
 Run a single tick with `--once` and confirm exit code 0:
 
 ```sh
-ARKIV_URL=https://arkiv.resist.net/ingest resist-probe --once
+ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest resist-probe --once
 echo $?   # should print 0
 ```
 
 Probe a single URL to check connectivity to a specific target:
 
 ```sh
-ARKIV_URL=https://arkiv.resist.net/ingest resist-probe --once --target=https://example.com
+ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest resist-probe --once --target=https://example.com
 ```
 
 **Expected log output on a successful tick**
@@ -114,12 +114,12 @@ cat ~/.resist-net/config.json | grep walletAddress
 Then query the Arkiv API with that address:
 
 ```sh
-curl "https://arkiv.resist.net/results?wallet=0xYOUR_WALLET_ADDRESS&limit=5"
+curl "https://arkiv.resist-net.vercel.app/results?wallet=0xYOUR_WALLET_ADDRESS&limit=5"
 ```
 
 ## Testing
 
-End-to-end tests for the resist.net web app are written with [Playwright](https://playwright.dev/) and live in `e2e/app.spec.ts` at the repo root.
+End-to-end tests for the resist-net.vercel.app web app are written with [Playwright](https://playwright.dev/) and live in `e2e/app.spec.ts` at the repo root.
 
 **Run E2E tests**
 

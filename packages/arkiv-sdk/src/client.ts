@@ -1,11 +1,11 @@
 /**
- * Arkiv SDK client for resist.net
+ * Arkiv SDK client for resist-net.vercel.app
  *
  * Critical constraints (from skill references):
  *  - All attribute names MUST be lowercase only (node rejects uppercase with Ident32InvalidByte)
  *  - Use u64(BigInt(...)) for timestamps, NOT bare numbers (i32 range is too small for ms timestamps)
  *  - ne/exists/hasType predicates are NOT supported — use NOT (a = v) pattern instead
- *  - Always filter project='resist.net' first in queries
+ *  - Always filter project='resist-net' first in queries
  *  - Use ExpirationTime.fromHours/fromMinutes etc for TTL
  */
 
@@ -244,7 +244,7 @@ export class ArkivClient {
 
   /**
    * Query ProbeResults by geohash prefix (for map rendering).
-   * Filters: project=resist.net, entitytype=proberesult, optional geohash prefix, optional since timestamp.
+   * Filters: project=resist-net, entitytype=proberesult, optional geohash prefix, optional since timestamp.
    */
   async queryProbeResults(opts: {
     geohashPrefix?: string;

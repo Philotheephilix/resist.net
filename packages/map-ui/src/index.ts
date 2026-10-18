@@ -1,5 +1,5 @@
 /**
- * Shared map utilities for resist.net — geohash decoding and marker helpers.
+ * Shared map utilities for resist-net.vercel.app — geohash decoding and marker helpers.
  * Used by apps/web/src/components/CensorshipMap.tsx.
  */
 

@@ -3,13 +3,13 @@ const path = require('path')
 const isDev = process.env.NODE_ENV !== 'production'
 
 const arkivRpcOrigin = (() => {
-  const raw = process.env.NEXT_PUBLIC_ARKIV_RPC_URL || 'https://arkiv.resist.net'
-  if (!raw) return 'https://arkiv.resist.net'
+  const raw = process.env.NEXT_PUBLIC_ARKIV_RPC_URL || 'https://arkiv.resist-net.vercel.app'
+  if (!raw) return 'https://arkiv.resist-net.vercel.app'
   try {
     const u = new URL(raw)
     return u.origin
   } catch {
-    return 'https://arkiv.resist.net'
+    return 'https://arkiv.resist-net.vercel.app'
   }
 })()
 

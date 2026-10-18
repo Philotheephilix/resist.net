@@ -2,7 +2,7 @@
  * ICE configuration builder.
  *
  * Preferred: fetchIceConfig(baseUrl) — fetches short-lived Cloudflare TURN
- * credentials from /api/turn-credentials on the resist.net backend.
+ * credentials from /api/turn-credentials on the resist-net.vercel.app backend.
  * All traffic is relayed; neither peer exposes its own IP or port.
  *
  * Fallback: buildIceConfig() — reads static TURN_URLS/TURN_USERNAME/TURN_CREDENTIAL
@@ -22,7 +22,7 @@ export interface IceConfig {
 }
 
 /**
- * Fetch short-lived TURN credentials from the resist.net backend.
+ * Fetch short-lived TURN credentials from the resist-net.vercel.app backend.
  * Returns relay-only config on success; falls back to buildIceConfig() on error.
  */
 export async function fetchIceConfig(baseUrl: string): Promise<IceConfig> {
