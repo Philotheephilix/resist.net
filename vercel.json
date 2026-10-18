@@ -1,6 +1,6 @@
 {
   "buildCommand": "npx turbo run build --filter=@resist/web",
-  "outputDirectory": "apps/web/.next",
+  "outputDirectory": ".next",
   "installCommand": "npm install --ignore-scripts",
   "framework": "nextjs"
 }
