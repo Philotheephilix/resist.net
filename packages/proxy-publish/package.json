@@ -1,0 +1,25 @@
+{
+  "name": "resistnet-proxy",
+  "version": "0.1.4",
+  "description": "Volunteer proxy node for ResistNet — route censored traffic through WebRTC peer connections",
+  "bin": {
+    "resistnet-proxy": "./resistnet-proxy"
+  },
+  "files": [
+    "resistnet-proxy",
+    "README.md"
+  ],
+  "dependencies": {
+    "node-datachannel": "^0.33.4"
+  },
+  "keywords": ["censorship", "proxy", "webrtc", "internet-freedom", "resistnet"],
+  "license": "MIT",
+  "homepage": "https://resist-net.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Philotheephilix/resist.net"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

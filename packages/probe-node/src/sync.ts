@@ -1,4 +1,11 @@
-// Writes probe results directly to Arkiv. No local SQLite cache.
+// Writes probe results directly to Arkiv (Tiramisu testnet). No local cache.
+//
+// Arkiv write path per probe cycle:
+//   1. writeProbeResult()  → creates a "proberesult" entity (TTL 48h) per target
+//   2. writeNodeIdentity() → upserts a "nodeidentity" heartbeat entity (TTL 30min)
+//
+// If DEV_PRIVATE_KEY is absent the results are logged but not written to chain.
+// All entity attribute names MUST be lowercase — Tiramisu node rejects uppercase.
 
 import { ProbeResult } from "@resist/shared/src/types"
 import { ArkivClient } from "@resist/arkiv-sdk/src/client.js"
@@ -25,6 +32,9 @@ function buildClient(config: { privateKey?: string; rpcUrl?: string }): ArkivCli
   }
 }
 
+// Writes a "nodeidentity" heartbeat to Arkiv (TTL 30min). Called after every probe cycle.
+// The dashboard queries these to show live node count and filter probe results to
+// established wallets (active within the last hour) for quorum verification.
 async function writeHeartbeat(
   client: ArkivClient,
   config: { wallet: string; geohash: string; isp: string; networkType?: "wifi" | "mobile" | "unknown" },
@@ -67,8 +77,12 @@ export async function syncToArkiv(
   }
 
   for (const result of results) {
+    // Truncate geohash to 5 chars before writing — Arkiv str limit is 128 bytes
+    // but the dashboard only queries on up to 5-char prefixes anyway.
     const safeResult = { ...result, geohash: result.geohash.slice(0, 5) }
     try {
+      // Writes a "proberesult" entity to Arkiv with 48h TTL.
+      // Returns the entity key (0x + 64 hex chars) logged below.
       await client.writeProbeResult(safeResult)
       console.log(`[sync] wrote ${safeResult.targetUrl} reachable=${safeResult.reachable}`)
     } catch (err) {

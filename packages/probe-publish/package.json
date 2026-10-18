@@ -1,0 +1,20 @@
+{
+  "name": "resist-probe",
+  "version": "0.1.1",
+  "description": "Volunteer censorship probe node for ResistNet — probes sites every 15 min, signs results on-chain",
+  "bin": "cli.js",
+  "files": [
+    "cli.js",
+    "README.md"
+  ],
+  "keywords": ["censorship", "probe", "arkiv", "internet-freedom", "resistnet"],
+  "license": "MIT",
+  "homepage": "https://resist-net.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Philotheephilix/resist.net"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

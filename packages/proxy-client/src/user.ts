@@ -235,7 +235,9 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
 
   const geohashPrefix = config.myGeohash.slice(0, 3)
 
-  // 1. Query Arkiv for volunteers, preferring a different region but falling back to any
+  // 1. Query Arkiv for live "volunteerproxy" entities (TTL 5min, refreshed every 4min).
+  //    The Tiramisu node doesn't support ne/exists predicates so geohash exclusion
+  //    is done client-side: prefer out-of-region, fall back to same-region.
   let volunteers
   try {
     const allVolunteers = await arkiv.queryVolunteers()
@@ -522,6 +524,9 @@ export async function findAndConnect(config: UserConfig): Promise<ProxyConnectio
   }
 
   const sdpAnswerJson = JSON.stringify({ type: peer.localDescription?.type, sdp: safeAnswerSdp })
+  // 7b. Write a "signalexchange" entity to Arkiv (TTL 2min) so the volunteer can
+  //     read the user's SDP answer and complete the WebRTC handshake.
+  //     The entity is deleted immediately after ICE connects to minimise chain exposure.
   let signalExchangeKey: string | undefined
   try {
     signalExchangeKey = await arkiv.writeSignalExchange({

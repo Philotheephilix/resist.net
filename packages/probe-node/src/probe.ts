@@ -16,9 +16,10 @@ export const TARGETS = [
   "https://signal.org",
 ];
 
-// Stable content-hash of the canonical TARGETS list (sorted, newline-joined).
-// Included in every ProbeResult so Arkiv consumers can reject or flag results
-// produced with a tampered or cherry-picked target set.
+// Stable SHA-256 hash of the canonical TARGETS list (sorted, newline-joined).
+// Written as the `targetshash` attribute on every ProbeResult entity in Arkiv.
+// The dashboard API route rejects any row whose stored hash doesn't match this
+// value, preventing a modified probe binary from poisoning the results feed.
 export const TARGETS_HASH = createHash("sha256")
   .update([...TARGETS].sort().join("\n"))
   .digest("hex");
@@ -259,9 +260,11 @@ export async function runProbe(config: { wallet: string; geohash: string; isp: s
     .filter((r): r is PromiseFulfilledResult<ProbeResult> => r.status === "fulfilled")
     .map(r => r.value);
 
-  // Recompute the tamper-evidence hash chain over the collected results.
-  // Sort by targetUrl for deterministic ordering (parallel execution does not
-  // guarantee insertion order). Hash only stable, immutable fields.
+  // Build the per-node tamper-evidence hash chain before writing to Arkiv.
+  // Each result's `prevResultHash` is the SHA-256 of the previous result's
+  // (id:timestamp:blockType:prevHash). The dashboard's chain-gap detector flags
+  // any row whose stored prevresulthash doesn't match the preceding entityKey.
+  // Sort by targetUrl for deterministic ordering (parallel probes don't preserve order).
   results.sort((a, b) => a.targetUrl.localeCompare(b.targetUrl));
   let prevHash = config.prevHash;
   for (const result of results) {
