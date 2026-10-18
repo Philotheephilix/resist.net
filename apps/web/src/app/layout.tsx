@@ -16,7 +16,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'ResistNet — Network Radar',
     description: 'Live network observability, probe history, and resilient routing.',
-    url: 'https://resist.net',
+    url: 'https://resist-net.vercel.app',
     siteName: 'ResistNet',
     type: 'website',
     images: [{ url: '/og.png', width: 1200, height: 630 }],
