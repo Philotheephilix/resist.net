@@ -14,14 +14,12 @@
     "@resist/shared": "*",
     "ethers": "^6.0.0",
     "node-fetch": "^3.0.0",
-    "ngeohash": "^0.6.3",
-    "better-sqlite3": "^9.0.0"
+    "ngeohash": "^0.6.3"
   },
   "devDependencies": {
     "tsx": "^4.0.0",
     "typescript": "^5.4.0",
     "@types/node": "^20.0.0",
-    "@types/better-sqlite3": "^7.0.0",
     "@types/ngeohash": "^0.6.5"
   }
 }
