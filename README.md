@@ -111,13 +111,13 @@ npx turbo run dev
 ## Run a probe node
 
 ```sh
-ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest npx @resist/probe-node
+npx resist-probe
 ```
 
-Single tick:
+Single tick (exits after one probe cycle):
 
 ```sh
-ARKIV_URL=https://arkiv.resist-net.vercel.app/ingest npx @resist/probe-node --once
+npx resist-probe --once
 ```
 
 See [`packages/probe-node/README.md`](packages/probe-node/README.md) for all options.
