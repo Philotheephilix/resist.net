@@ -23,25 +23,50 @@ export const TARGETS_HASH = createHash("sha256")
   .update([...TARGETS].sort().join("\n"))
   .digest("hex");
 
+// RFC-1918 and loopback ranges that must not be reached via a redirect.
+// Censors could issue a 302 to an internal URL; we block that here.
+function isPrivateHost(hostname: string): boolean {
+  // Loopback
+  if (hostname === "localhost" || hostname === "::1") return true;
+  // IPv4 private/loopback ranges: 10.x, 172.16-31.x, 192.168.x, 127.x
+  const ipv4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+  if (ipv4) {
+    const [, a, b] = ipv4.map(Number);
+    if (a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 127) return true;
+    if (a === 169 && b === 254) return true; // link-local
+  }
+  return false;
+}
+
 async function httpCheck(url: string, signal?: AbortSignal): Promise<{ reachable: boolean; status: number | null; ms: number | null }> {
   const start = Date.now();
   try {
-    // redirect:'manual' prevents fetch from auto-following 3xx responses.
-    // A censor intercepting probe traffic could otherwise issue a 302 to an
-    // RFC-1918 URL, causing the probe node to reach internal network services.
-    const timeoutSignal = AbortSignal.timeout(8000);
+    // Follow redirects so that sites which canonically redirect their root
+    // (e.g. twitter.com → x.com, wikipedia.org → www.wikipedia.org) are not
+    // falsely reported as blocked. We guard against SSRF by rejecting any
+    // redirect that resolves to an RFC-1918 / loopback address.
+    const timeoutSignal = AbortSignal.timeout(10000);
     const combined = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
     const res = await fetch(url, {
       signal: combined,
-      redirect: "manual",
+      redirect: "follow",
     });
-    // Treat redirect as blocked/censored — censors commonly redirect blocked
-    // content to captive-portal or block pages; real servers serve content directly.
-    if (res.status >= 300 && res.status < 400) {
+    // Reject if the final URL landed on a private/loopback host (SSRF guard)
+    try {
+      const finalHost = new URL(res.url).hostname;
+      if (isPrivateHost(finalHost)) {
+        return { reachable: false, status: res.status, ms: Date.now() - start };
+      }
+    } catch {
+      // Malformed final URL — treat as unreachable
       return { reachable: false, status: res.status, ms: Date.now() - start };
     }
-    // Only 2xx is truly reachable — 4xx (403, 451) signals HTTP-level censorship
-    return { reachable: res.status >= 200 && res.status < 300, status: res.status, ms: Date.now() - start };
+    // 2xx and 3xx (e.g. opaque redirects fetch can't fully follow) are reachable.
+    // 4xx (403, 451 Legal Unavailable) and 5xx signal HTTP-level censorship or error.
+    return { reachable: res.status >= 200 && res.status < 400, status: res.status, ms: Date.now() - start };
   } catch {
     return { reachable: false, status: null, ms: null };
   }
@@ -82,16 +107,53 @@ async function dnsCheck(domain: string): Promise<{ expected: string | null; rece
     return { expected: null, received: null, poisoned: false };
   }
 
+  let received: string | null = null;
   try {
     const local = new dns.Resolver();
     // Use the same 2s window as baseline resolvers to keep worst-case dnsCheck
     // within 3×2s + 2s = 8s (matches httpCheck's AbortSignal.timeout(8000) limit).
-    const [received] = await withDnsTimeout(local.resolve4(domain), 2000);
-    return { expected, received: received ?? null, poisoned: expected !== received };
+    const [addr] = await withDnsTimeout(local.resolve4(domain), 2000);
+    received = addr ?? null;
   } catch {
     // Local resolver failed but baseline succeeded — treat as poisoned/blocked
     return { expected, received: null, poisoned: true };
   }
+
+  if (received === expected) {
+    return { expected, received, poisoned: false };
+  }
+
+  // IPs differ — could be legitimate CDN anycast (different IP, same service)
+  // or real DNS poisoning (redirected to a censor's block page).
+  // Disambiguate: if the received IP accepts TCP on port 443, it is likely a
+  // valid CDN edge node serving the same content from a different PoP.
+  // If TCP fails on the received IP but succeeds on the expected IP, the local
+  // resolver is redirecting to a dead/block IP → flag as poisoned.
+  const [receivedTcp, expectedTcp] = await Promise.all([
+    new Promise<boolean>(resolve => {
+      const sock = net.connect({ host: received!, port: 443, timeout: 3000 });
+      sock.on("connect", () => { sock.destroy(); resolve(true); });
+      sock.on("timeout", () => { sock.destroy(); resolve(false); });
+      sock.on("error", () => resolve(false));
+    }),
+    new Promise<boolean>(resolve => {
+      const sock = net.connect({ host: expected!, port: 443, timeout: 3000 });
+      sock.on("connect", () => { sock.destroy(); resolve(true); });
+      sock.on("timeout", () => { sock.destroy(); resolve(false); });
+      sock.on("error", () => resolve(false));
+    }),
+  ]);
+
+  // Both IPs are live → CDN anycast routing, not poisoning
+  if (receivedTcp && expectedTcp) {
+    return { expected, received, poisoned: false };
+  }
+  // Received IP dead but expected live → local resolver redirected to a block IP
+  if (!receivedTcp && expectedTcp) {
+    return { expected, received, poisoned: true };
+  }
+  // Both dead or only received live — inconclusive, don't flag as poisoned
+  return { expected, received, poisoned: false };
 }
 
 async function tcpCheck(host: string, port = 443, signal?: AbortSignal): Promise<{ connected: boolean; rstInjected: boolean; ms: number | null }> {

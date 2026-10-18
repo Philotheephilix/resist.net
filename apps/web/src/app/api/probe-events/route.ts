@@ -1,46 +1,6 @@
 import { NextRequest } from 'next/server'
 import { TARGETS_HASH } from '@resist/probe-node/src/probe'
 
-// Dev fixture — only served when NODE_ENV=development and USE_MOCK_DATA=true.
-// Never served in production; never substitute for real Arkiv data.
-// Timestamps are computed lazily at request time so fixtures never age past
-// the oneDayAgo filter regardless of how long the process has been running.
-const USE_DEV_FIXTURE = process.env['NODE_ENV'] === 'development' && process.env['USE_MOCK_DATA'] === 'true'
-
-function truncateWallet(w: string): string {
-  return w.length > 10 ? w.slice(0, 6) + '…' + w.slice(-4) : w
-}
-
-function getDevFixture() {
-  if (!USE_DEV_FIXTURE) return null
-  const now = Date.now()
-  // Wallet addresses pre-truncated to match the truncation applied to real Arkiv data
-  // in queryArkivProbeEvents. Ensures the fixture path can never leak full addresses.
-  // Multiple entries per URL create the per-URL health history visible in UrlHealthDrawer.
-  return [
-    // twitter.com — blocked at multiple timestamps from different nodes/regions
-    { id: '1',  targetUrl: 'https://twitter.com', blockType: 'dns_poisoning',   geohash: 'u4pruyd', timestamp: now - 300_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: false },
-    { id: '1b', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning',   geohash: 'tdr1w3j', timestamp: now - 900_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
-    { id: '1c', targetUrl: 'https://twitter.com', blockType: null,              geohash: 'w3gv2uk', timestamp: now - 1_800_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
-    { id: '1d', targetUrl: 'https://twitter.com', blockType: 'http_block',      geohash: 'sp7fj5n', timestamp: now - 3_600_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
-    { id: '1e', targetUrl: 'https://twitter.com', blockType: 'dns_poisoning',   geohash: '9q5cs2r', timestamp: now - 7_200_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000005'), reachable: false },
-    // instagram.com — blocked
-    { id: '2',  targetUrl: 'https://instagram.com', blockType: 'http_block',    geohash: 'tdr1w3j', timestamp: now - 600_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
-    { id: '2b', targetUrl: 'https://instagram.com', blockType: 'http_block',    geohash: 'u4pruyd', timestamp: now - 2_400_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: false },
-    { id: '2c', targetUrl: 'https://instagram.com', blockType: null,            geohash: 'w3gv2uk', timestamp: now - 5_400_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
-    // wikipedia.org — mostly reachable
-    { id: '3',  targetUrl: 'https://wikipedia.org', blockType: null,            geohash: 'w3gv2uk', timestamp: now - 900_000,    nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
-    { id: '3b', targetUrl: 'https://wikipedia.org', blockType: null,            geohash: 'u4pruyd', timestamp: now - 2_700_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000001'), reachable: true },
-    { id: '3c', targetUrl: 'https://wikipedia.org', blockType: 'tcp_rst',       geohash: 'sp7fj5n', timestamp: now - 5_100_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
-    // youtube.com
-    { id: '4',  targetUrl: 'https://youtube.com', blockType: 'tcp_rst',         geohash: 'sp7fj5n', timestamp: now - 1_200_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000004'), reachable: false },
-    { id: '4b', targetUrl: 'https://youtube.com', blockType: 'tcp_rst',         geohash: 'tdr1w3j', timestamp: now - 4_200_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000002'), reachable: false },
-    // reddit.com
-    { id: '5',  targetUrl: 'https://reddit.com', blockType: 'full_unreachable', geohash: '9q5cs2r', timestamp: now - 1_800_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000005'), reachable: false },
-    { id: '5b', targetUrl: 'https://reddit.com', blockType: null,               geohash: 'w3gv2uk', timestamp: now - 6_000_000,  nodeWallet: truncateWallet('0x0000000000000000000000000000000000000003'), reachable: true },
-  ]
-}
-
 // Stats cache with 60s TTL. Checked BEFORE calling queryArkivProbeEvents so the
 // expensive 10,000-row Arkiv query is genuinely skipped on cache hits.
 // Process-scoped — each serverless cold-start begins with a cache miss, which is
@@ -156,11 +116,10 @@ function ensureStatsInFlight() {
     let events = await queryArkivProbeEvents({ limit: 200, since: Date.now() - 24 * 3600 * 1000, includeRawWallets: true })
     const arkivFailed = events === null
     // usingRealData=true means Arkiv returned actual rows. When Arkiv returns an empty
-    // array we still consider it "real" — no events is a valid state. Only fall back to
-    // fixture when Arkiv itself failed (null), and in that case liveProbes must be 0.
+    // array we still consider it "real" — no events is a valid state. Only when Arkiv
+    // itself failed (null) do we treat it as no data; stats must be 0 in that case.
     const usingRealData = events !== null
-    const DEV_FIXTURE = getDevFixture()
-    if (!events) events = DEV_FIXTURE ?? []
+    if (!events) events = []
     const oneDayAgo = Date.now() - 24 * 3600 * 1000
     const recentAll = events.filter((e) => e.timestamp > oneDayAgo)
     let establishedWallets: Set<string> | null = null
@@ -199,8 +158,7 @@ function ensureStatsInFlight() {
       : new Set<string>()
     const thirtyMinAgo = Date.now() - 30 * 60_000
     const recentThirtyMin = recentAll.filter((e) => e.timestamp > thirtyMinAgo)
-    // All stats must be 0 when falling back to fixture — fixture data must never
-    // appear as real network activity in the dashboard.
+    // All stats must be 0 when Arkiv failed — we have no real data to count.
     const rawActiveNodes = usingRealData ? new Set(recentThirtyMin.map((e) => e.nodeWallet)).size : 0
     const liveProbes = usingRealData
       ? (establishedWallets !== null
@@ -218,8 +176,6 @@ function ensureStatsInFlight() {
       } catch {
         // best-effort — leave volunteerCount at 0
       }
-    } else if (USE_DEV_FIXTURE) {
-      volunteerCount = 3
     }
     const statsResult = { liveProbes, regions: regionSet.size, blocksToday, volunteerCount }
     if (!arkivFailed) {
@@ -331,18 +287,8 @@ export async function GET(request: NextRequest) {
     }
     events = null
   }
-  const DEV_FIXTURE = getDevFixture()
-  // Only fall back to dev fixture when Arkiv itself failed (returned null).
-  // Empty array from Arkiv means no probe events exist — show nothing, not fake data.
-  if (!events) {
-    let fixture = DEV_FIXTURE ?? []
-    // Apply filters to the dev fixture so tests that check blockType/geohash/targetUrl
-    // filtering get the same behaviour as a real Arkiv-backed response.
-    if (blockTypeFilter) fixture = fixture.filter(e => e.blockType === blockTypeFilter)
-    if (geohashFilter) fixture = fixture.filter(e => e.geohash != null && e.geohash.startsWith(geohashFilter))
-    if (targetUrlFilter) fixture = fixture.filter(e => normalizeUrl(e.targetUrl) === targetUrlFilter)
-    events = fixture
-  }
+  // When Arkiv fails (null), return empty array — never serve fake data.
+  if (!events) events = []
 
   // Apply targetUrl filter to real Arkiv results (Arkiv doesn't support this server-side).
   if (targetUrlFilter && events) {
@@ -433,7 +379,7 @@ export async function GET(request: NextRequest) {
     if (!cachedStats) {
       ensureStatsInFlight()
       try {
-        cachedStats = await statsInFlight
+        cachedStats = await statsInFlight as { liveProbes: number; regions: number; blocksToday: number; volunteerCount?: number } | null
       } catch {
         cachedStats = { liveProbes: 0, regions: 0, blocksToday: 0, volunteerCount: 0 }
       }

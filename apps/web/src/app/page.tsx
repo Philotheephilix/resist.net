@@ -4,15 +4,19 @@ import dynamic from 'next/dynamic'
 import { useMemo, useState, useCallback, useRef, useEffect, useDeferredValue, memo } from 'react'
 import {
   Activity,
+  AlertCircle,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Clock,
   Clock3,
   Copy,
   Globe2,
   Home,
   Loader2,
   LogOut,
+  MapPin,
   Menu,
   Network,
   Search,
@@ -21,6 +25,7 @@ import {
   Wallet,
   Wifi,
   X,
+  XCircle,
   Zap,
 } from 'lucide-react'
 import { usePrivy } from '../hooks/usePrivyCompat'
@@ -861,8 +866,8 @@ function UrlHealthDrawer({ targetUrl, onClose }: { targetUrl: string; onClose: (
     return Math.round((up / urlEvents.length) * 100)
   }, [urlEvents])
 
-  const sparkBuckets = useMemo(() => {
-    const BUCKETS = 24
+  const chartBuckets = useMemo(() => {
+    const BUCKETS = 48
     const windowMs = 24 * 3600 * 1000
     const now = Date.now()
     const up = new Array<number>(BUCKETS).fill(0)
@@ -874,8 +879,21 @@ function UrlHealthDrawer({ targetUrl, onClose }: { targetUrl: string; onClose: (
       total[idx]++
       if (e.reachable) up[idx]++
     }
-    return total.map((t, i) => t === 0 ? null : up[i] / t)
+    return total.map((t, i) => ({ pct: t === 0 ? null : up[i] / t, count: total[i] }))
   }, [urlEvents])
+
+  const nonNull = chartBuckets.filter(b => b.pct !== null)
+  const avgPct = nonNull.length > 0 ? nonNull.reduce((s, b) => s + (b.pct as number), 0) / nonNull.length : null
+  const strokeColor = avgPct === null ? '#aaa' : avgPct >= 0.8 ? '#19b955' : avgPct >= 0.5 ? '#f3ad24' : '#e83341'
+  const uptimeColor = upPct === null ? '#aaa' : upPct >= 80 ? '#19b955' : upPct >= 50 ? '#f3ad24' : '#e83341'
+
+  const SVG_W = 300, SVG_H = 80, BUCKETS = 48
+  const points = chartBuckets.map((b, i) => ({
+    x: (i / (BUCKETS - 1)) * SVG_W,
+    y: b.pct === null ? SVG_H : (1 - b.pct) * SVG_H,
+  }))
+  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const areaPath = linePath + ` L${SVG_W},${SVG_H} L0,${SVG_H} Z`
 
   return (
     <div
@@ -888,71 +906,151 @@ function UrlHealthDrawer({ targetUrl, onClose }: { targetUrl: string; onClose: (
       <div
         ref={panelRef}
         className="sheet"
-        style={{ maxHeight: '85vh', overflowY: 'auto' }}
+        style={{ maxHeight: '72vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="sheet-header">
-          <span id="url-health-title" style={{ fontWeight: 600, fontSize: 15 }}>{hostname}</span>
-          <button aria-label="Close" onClick={onClose}><X size={18} /></button>
-        </div>
-
-        {/* Uptime badge */}
-        {upPct !== null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 4px' }}>
-            <span style={{
-              background: upPct >= 80 ? '#19b95522' : upPct >= 50 ? '#f3ad2422' : '#e8334122',
-              color: upPct >= 80 ? '#19b955' : upPct >= 50 ? '#f3ad24' : '#e83341',
-              borderRadius: 6, padding: '3px 10px', fontWeight: 700, fontSize: 13,
-            }}>{upPct}% reachable</span>
-            <span style={{ color: '#888', fontSize: 12 }}>{urlEvents.length} probe{urlEvents.length !== 1 ? 's' : ''} in last 24h</span>
-          </div>
-        )}
-
-        {/* 24-hour spark bar */}
-        <div style={{ display: 'flex', gap: 2, margin: '10px 0', height: 28, alignItems: 'flex-end' }}>
-          {sparkBuckets.map((v, i) => (
-            <div
-              key={i}
-              style={{
-                flex: 1,
-                height: v === null ? 4 : Math.max(4, Math.round(v * 28)),
-                borderRadius: 3,
-                background: v === null ? '#2a2a2a' : v >= 0.8 ? '#19b955' : v >= 0.5 ? '#f3ad24' : '#e83341',
-                opacity: v === null ? 0.3 : 1,
-              }}
-              title={v === null ? 'No data' : `${Math.round(v * 100)}% reachable`}
-            />
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', color: '#555', fontSize: 10, marginBottom: 8 }}>
-          <span>24h ago</span><span>Now</span>
-        </div>
-
-        {/* Probe history list */}
-        {loading && <p style={{ color: '#888', textAlign: 'center', padding: '20px 0' }}>Loading…</p>}
-        {error && <p style={{ color: '#e83341', textAlign: 'center', padding: '20px 0' }}>{error}</p>}
-        {!loading && !error && urlEvents.length === 0 && (
-          <p style={{ color: '#888', textAlign: 'center', padding: '20px 0' }}>No probe history found</p>
-        )}
-        {!loading && urlEvents.slice(0, 40).map(e => {
-          const color = e.reachable ? 'green' : e.blockType ? 'red' : 'amber'
-          const label = e.reachable ? 'Reachable' : (e.blockType ?? 'Unreachable')
-          return (
-            <div key={e.id} className="health-row" style={{ alignItems: 'flex-start', gap: 8 }}>
-              <span style={{ minWidth: 8, marginTop: 4 }}>
-                <span style={{
-                  display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
-                  background: color === 'green' ? '#19b955' : color === 'red' ? '#e83341' : '#f3ad24',
-                }} />
-              </span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <b style={{ fontSize: 13, color: color === 'green' ? '#19b955' : color === 'red' ? '#e83341' : '#f3ad24' }}>{label.replace(/_/g, ' ')}</b>
-                {e.geohash && <span style={{ color: '#666', fontSize: 11, marginLeft: 6 }}>{e.geohash.slice(0, 4)}</span>}
-              </div>
-              <small style={{ color: '#666', whiteSpace: 'nowrap', flexShrink: 0 }}>{timeAgoShort(e.timestamp)}</small>
+        {/* ── Sticky header ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 20px 16px', flexShrink: 0, borderBottom: '1px solid #f0f0f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: '50%',
+              background: uptimeColor + '22',
+              display: 'grid', placeItems: 'center',
+              color: uptimeColor, flexShrink: 0,
+            }}>
+              <Activity size={18} />
             </div>
-          )
-        })}
+            <div>
+              <div id="url-health-title" style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-.3px' }}>{hostname}</div>
+              <div style={{ color: '#888', fontSize: 12, marginTop: 1 }}>24-hour availability</div>
+            </div>
+          </div>
+          <button
+            aria-label="Close"
+            onClick={onClose}
+            style={{ width: 36, height: 36, borderRadius: '50%', background: '#f5f5f5', display: 'grid', placeItems: 'center', color: '#555', flexShrink: 0 }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* ── Scrollable body ── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 0 32px' }}>
+
+        {/* ── Uptime hero number ── */}
+        <div style={{ padding: '24px 20px 0', display: 'flex', alignItems: 'flex-end', gap: 12 }}>
+          <div style={{ lineHeight: 1 }}>
+            <span style={{ fontSize: 48, fontWeight: 700, letterSpacing: '-2px', color: uptimeColor }}>
+              {upPct !== null ? `${upPct}%` : '—'}
+            </span>
+            <span style={{ fontSize: 14, color: '#888', marginLeft: 8 }}>reachable</span>
+          </div>
+          <div style={{ marginBottom: 6, marginLeft: 'auto', textAlign: 'right' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#222' }}>{urlEvents.length}</div>
+            <div style={{ fontSize: 11, color: '#888' }}>probe{urlEvents.length !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+
+        {/* ── Area chart ── */}
+        <div style={{ padding: '16px 20px 0' }}>
+          <svg
+            viewBox={`0 0 ${SVG_W} ${SVG_H}`}
+            width="100%"
+            height="80"
+            preserveAspectRatio="none"
+            style={{ display: 'block', borderRadius: 8 }}
+          >
+            <defs>
+              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={strokeColor} stopOpacity="0.35" />
+                <stop offset="100%" stopColor={strokeColor} stopOpacity="0.03" />
+              </linearGradient>
+            </defs>
+            <path d={areaPath} fill="url(#areaGrad)" />
+            <path d={linePath} fill="none" stroke={strokeColor} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#aaa', fontSize: 11, marginTop: 5 }}>
+            <span>24h ago</span><span>Now</span>
+          </div>
+        </div>
+
+        {/* ── Divider ── */}
+        <div style={{ height: 1, background: '#ededed', margin: '20px 0 0' }} />
+
+        {/* ── Probe history ── */}
+        <div style={{ padding: '4px 20px 0' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#aaa', letterSpacing: '.6px', textTransform: 'uppercase', padding: '14px 0 6px' }}>
+            Probe log
+          </div>
+
+          {loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '20px 0', color: '#888' }}>
+              <div className="skeleton" style={{ width: 20, height: 20, borderRadius: '50%', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div className="skeleton" style={{ width: '55%', marginBottom: 6 }} />
+                <div className="skeleton" style={{ width: '30%', height: 10 }} />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 0', color: '#e83341' }}>
+              <AlertCircle size={18} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 14 }}>{error}</span>
+            </div>
+          )}
+
+          {!loading && !error && urlEvents.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '28px 0', color: '#aaa' }}>
+              <Clock size={28} style={{ marginBottom: 8, opacity: .5 }} />
+              <div style={{ fontSize: 14 }}>No probes yet</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Check back after the next probe cycle</div>
+            </div>
+          )}
+
+          {!loading && urlEvents.slice(0, 40).map(e => {
+            const isUp = e.reachable
+            const isBlock = !isUp && !!e.blockType
+            const dotColor = isUp ? '#19b955' : isBlock ? '#e83341' : '#f3ad24'
+            const label = isUp ? 'Reachable' : (e.blockType?.replace(/_/g, ' ') ?? 'Unreachable')
+            const badgeBg = isUp ? '#eaf8ee' : isBlock ? '#fef2f2' : '#fffbeb'
+            const badgeColor = isUp ? '#19b955' : isBlock ? '#e83341' : '#c97c00'
+            return (
+              <div key={e.id} style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '13px 0', borderBottom: '1px solid #f2f2f2',
+              }}>
+                <div style={{
+                  width: 34, height: 34, borderRadius: '50%',
+                  background: dotColor + '18',
+                  display: 'grid', placeItems: 'center', flexShrink: 0,
+                }}>
+                  {isUp
+                    ? <CheckCircle2 size={16} color={dotColor} />
+                    : <XCircle size={16} color={dotColor} />
+                  }
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <span style={{
+                      background: badgeBg, color: badgeColor,
+                      borderRadius: 6, padding: '2px 8px', fontSize: 12, fontWeight: 600,
+                    }}>{label}</span>
+                    {e.geohash && (
+                      <span style={{ color: '#999', fontSize: 11 }}>
+                        <MapPin size={10} style={{ display: 'inline', marginRight: 2, verticalAlign: 'middle' }} />
+                        {e.geohash.slice(0, 5)}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#aaa', marginTop: 3 }}>{e.nodeWallet?.slice(0, 8)}…{e.nodeWallet?.slice(-4)}</div>
+                </div>
+                <div style={{ fontSize: 12, color: '#999', whiteSpace: 'nowrap', flexShrink: 0 }}>{timeAgoShort(e.timestamp)}</div>
+              </div>
+            )
+          })}
+        </div>
+        </div>{/* end scrollable body */}
       </div>
     </div>
   )
@@ -1130,10 +1228,9 @@ function ConnectPage({ onConnect, connected, onDisconnect, events, walletAddr, r
 
   const proxyCommand = useMemo(() => {
     const wallet = walletAddr || '<your-wallet-address>'
-    const rpc = rpcUrl || 'https://arkiv.network/rpc'
-    const geohash = 'u1hxr' // India default — probe-node will use real geohash
-    return `npx @resist/proxy-client \\\n  --wallet=${wallet} \\\n  --rpc-url=${rpc} \\\n  --geohash=${geohash}${route.region !== 'auto' ? ` \\\n  --region=${route.region}` : ''}`
-  }, [walletAddr, rpcUrl, route.region])
+    const geohash = 'u1hxr'
+    return `npx tsx packages/proxy-client/src/cli.ts volunteer \\\n  --wallet=${wallet} \\\n  --geohash=${geohash}${route.region !== 'auto' ? ` \\\n  --region=${route.region}` : ''}`
+  }, [walletAddr, route.region])
 
   const copyCmd = useCallback(() => {
     navigator.clipboard?.writeText(proxyCommand.replace(/\\\n\s+/g, ' '))

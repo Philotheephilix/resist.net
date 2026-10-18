@@ -62,7 +62,7 @@ export class ArkivClient {
       transport,
     })
 
-    this.canonicalTargetsHash = config.canonicalTargetsHash
+    this.canonicalTargetsHash = config.canonicalTargetsHash ?? ""
   }
 
   /**
