@@ -289,7 +289,6 @@ npm test              # Playwright e2e
 ## Docs
 
 - [`docs/arkiv-expiry.md`](docs/arkiv-expiry.md) — how Arkiv TTL works and why expired records remain valid as legal evidence
-- [`docs/PITCH_SCRIPT.md`](docs/PITCH_SCRIPT.md) — 2-minute speaking script for the hackathon demo
 
 ---
 
