@@ -416,8 +416,8 @@
   <div class="nav-links">
     <a href="#how">How it works</a>
     <a href="#stack">The stack</a>
-    <a href="/pitch.html">Pitch deck</a>
-    <a href="/" class="nav-cta">Open Dashboard →</a>
+    <a href="#node">Run a node</a>
+    <a href="https://resist-net.vercel.app" class="nav-cta">Try it live →</a>
   </div>
 </nav>
 
@@ -436,8 +436,8 @@
       from inside the country, signed on-chain, admissible as evidence.
     </p>
     <div class="hero-actions">
-      <a href="/" class="btn-primary">Open Dashboard →</a>
-      <a href="/pitch.html" class="btn-ghost">See the pitch deck</a>
+      <a href="https://resist-net.vercel.app" class="btn-primary">Try it live →</a>
+      <a href="#how" class="btn-ghost">How it works</a>
     </div>
   </div>
 
@@ -673,13 +673,13 @@
   <p>Runs on any machine. Probes every 15 minutes. Signs results on-chain.</p>
   <div>
     <div class="code-block">
-      <code id="cmd-text">npx @resist/probe-node</code>
+      <code id="cmd-text">npx resist-probe</code>
       <button class="code-copy" onclick="copyCmd(this)">Copy</button>
     </div>
   </div>
   <div class="cta-actions">
-    <a href="/" class="btn-primary">Open Dashboard →</a>
-    <a href="/pitch.html" class="btn-ghost">See the pitch deck</a>
+    <a href="https://resist-net.vercel.app" class="btn-primary">Try it live →</a>
+    <a href="https://github.com/Philotheephilix/resist.net" target="_blank" rel="noopener" class="btn-ghost">View on GitHub ↗</a>
   </div>
 </section>
 
@@ -687,11 +687,11 @@
 <footer>
   <p>
     ResistNet &nbsp;·&nbsp;
-    <a href="/pitch.html">Pitch Deck</a> &nbsp;·&nbsp;
-    <a href="/">Dashboard</a> &nbsp;·&nbsp;
+    <a href="https://resist-net.vercel.app">Dashboard ↗</a> &nbsp;·&nbsp;
+    <a href="https://github.com/Philotheephilix/resist.net" target="_blank" rel="noopener">GitHub ↗</a> &nbsp;·&nbsp;
     <a href="https://github.com/permissionlesstech/bitchat" target="_blank" rel="noopener">BitChat ↗</a>
   </p>
-  <p style="margin-top:8px;font-size:11px;">Evidence-layer for the censorship-resistance stack. Probe data on Arkiv.</p>
+  <p style="margin-top:8px;font-size:11px;">Evidence-layer for the censorship-resistance stack. Probe data on Arkiv Tiramisu testnet.</p>
 </footer>
 
 <script>
@@ -734,7 +734,7 @@
 
   // ── Copy command ─────────────────────────────────────────────────────────────
   function copyCmd(btn) {
-    navigator.clipboard.writeText('npx @resist/probe-node').then(() => {
+    navigator.clipboard.writeText('npx resist-probe').then(() => {
       btn.textContent = 'Copied!';
       setTimeout(() => btn.textContent = 'Copy', 2000);
     });
