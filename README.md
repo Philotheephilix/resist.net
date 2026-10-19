@@ -17,7 +17,7 @@
     <img src="docs/brag.jpg" alt="ResistNet launch video — click to play" width="100%"/>
   </a>
   <br/>
-  <sub>▶ <a href="https://github.com/Philotheephilix/resist.net/raw/main/docs/brag.mp4">Watch the 25-second launch video</a></sub>
+  <sub>▶ <a href="https://github.com/Philotheephilix/resist.net/raw/main/docs/brag.mp4">Watch the 30-second launch video</a></sub>
 </p>
 
 <br/>
