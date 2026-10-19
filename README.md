@@ -12,6 +12,14 @@
   <a href="docs/arkiv-expiry.md"><img src="https://img.shields.io/badge/on--chain%20evidence-how%20expiry%20works%20%26%20legal%20use-e24a47?style=flat-square&labelColor=1a1a1a" alt="Arkiv expiry & legal evidence"/></a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Philotheephilix/resist.net/raw/main/docs/brag.mp4">
+    <img src="docs/brag.jpg" alt="ResistNet launch video — click to play" width="100%"/>
+  </a>
+  <br/>
+  <sub>▶ <a href="https://github.com/Philotheephilix/resist.net/raw/main/docs/brag.mp4">Watch the 25-second launch video</a></sub>
+</p>
+
 <br/>
 
 **Decentralised internet censorship radar. Volunteer nodes probe monitored sites every 15 minutes, sign results on-chain via Arkiv, and surface them on a live dashboard.**
